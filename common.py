@@ -6,8 +6,7 @@ from sklearn.linear_model import LogisticRegression
 from os import system
 
 # Parameters
-params = { 'epsilon_min': 0.0001,
-           'output_folder': 'figs' }
+params = { 'output_folder': 'figs' }
 
 
 # Wrapper for common GraphViz output
@@ -39,11 +38,12 @@ def neg_log_likelihood(A, z, Theta, alpha, beta, x):
 
 # Use SEM to infer a stochastic blockmodel fit
 def infer_block(A, x, K = 1,
-                steps = 10, sweeps = 5, miters = 50, epsilon = 0.1, term = 0.05,
-                zero_alpha = False, zero_beta = False,
+                steps = 10, sweeps = 5,
+                zero_alpha = False,
                 true_z = None, init_z = None,
                 init_theta = None, init_alpha = None, init_beta = None):
     N = A.shape[0]
+    B = x.shape[2]
 
     if not init_theta is None:
         Theta = init_theta.copy()
@@ -58,7 +58,7 @@ def infer_block(A, x, K = 1,
     if not init_beta is None:
         beta = init_beta.copy()
     else:
-        beta = np.zeros(x.shape[2])
+        beta = np.zeros(B)
         
     if not true_z is None:
         z = true_z.copy()
@@ -84,78 +84,48 @@ def infer_block(A, x, K = 1,
         init_nll = neg_log_likelihood(A, z, Theta, alpha, beta, x)
     
         # M-step
-        T_theta = np.zeros((K,K))
-        T_beta = np.zeros(x.shape[2])
-        for i in range(N):
-            a = z[i]
-            for j in range(N):
-                b = z[j]
-                if A[i,j]:
-                    T_theta[a,b] += 1.0
-                    T_beta += x[i,j]
-
-        T_alpha = np.zeros((2,N))
-        T_alpha[0] = np.sum(A, axis = 1)
-        T_alpha[1] = np.sum(A, axis = 0)
-        
-        for miter in range(miters):
-            ET_theta = np.zeros((K,K))
-            ET_alpha = np.zeros((2,N))
-            ET_beta = np.zeros(x.shape[2])
+        if zero_alpha:
+            lr = LogisticRegression(C = 1.0, penalty = 'l2')
+            y = A.reshape((N*N,))
+            X = np.zeros((N*N,(K**2 + B)))
             for i in range(N):
-                a = z[i]
                 for j in range(N):
-                    b = z[j]
-                    logit_P = (Theta[a,b] +
-                               alpha[0,i] + alpha[1,j] +
-                               np.dot(x[i,j], beta))
-                    P = 1.0 / (np.exp(-logit_P) + 1.0)
-                    ET_theta[a,b] += P
-                    ET_alpha[0,i] += P
-                    ET_alpha[1,j] += P
-                    ET_beta += P * x[i,j]
+                    X[N*i + j, K*z[i] + z[j]] = 1.0
+            for b in range(B):
+                X[:,K**2 + b] = x[:,:,b].reshape((N**2,))
 
-            grad_theta = T_theta - ET_theta
-            grad_alpha = T_alpha - ET_alpha
-            grad_beta = T_beta - ET_beta
+            lr.fit(X, y)
+            fit = lr.coef_[0]
+        
+            Theta = fit[0:(K**2)].reshape((K,K))
+            beta = fit[(K**2):(K**2 + B)]
+        else:
+            lr = LogisticRegression(C = 1.0, penalty = 'l2')
+            y = A.reshape((N*N,))
+            X = np.zeros((N*N,(K**2 + 2*N + B)))
+            for i in range(N):
+                for j in range(N):
+                    X[N*i + j, K*z[i] + z[j]] = 1.0
+            for i in range(N):
+                x_row = np.zeros((N,N))
+                x_row[i,:] = 1.0
+                X[:,K**2 + i] = x_row.reshape((N**2,))
+            for j in range(N):
+                x_col = np.zeros((N,N))
+                x_col[:,j] = 1.0
+                X[:,K**2 + N + j] = x_col.reshape((N**2,))
+            for b in range(B):
+                X[:,K**2 + 2*N + b] = x[:,:,b].reshape((N**2,))
 
-            # Adaptively set scale of gradient moves
-            if miter == 0:
-                curr_epsilon = np.min([epsilon,
-                                       1.0 / np.max(np.abs(grad_theta)),
-                                       1.0 / np.max(np.abs(grad_alpha)),
-                                       1.0 / np.max(np.abs(grad_beta))])
-                while True:
-                    new_nll = \
-                        neg_log_likelihood(A, z,
-                                           Theta + curr_epsilon * grad_theta,
-                                           alpha + curr_epsilon * grad_alpha,
-                                           beta + curr_epsilon * grad_beta,
-                                           x)
-                    if new_nll < init_nll or \
-                        curr_epsilon < params['epsilon_min']:
-                        break
-                    curr_epsilon /= 2.0
-            
-            diff_theta = curr_epsilon * grad_theta
-            diff_alpha = curr_epsilon * grad_alpha
-            diff_beta = curr_epsilon * grad_beta
-
-            max_diff = np.max(np.abs(diff_theta))
-            Theta += diff_theta
-            if not zero_alpha:
-                max_diff = max(max_diff, np.max(np.abs(diff_alpha)))
-                alpha += diff_alpha
-                alpha_mean = np.mean(alpha, axis = 1)
-                alpha[0] -= alpha_mean[0]
-                alpha[1] -= alpha_mean[1]
-                Theta += (alpha_mean[0] + alpha_mean[1])
-            if not zero_beta:
-                max_diff = max(max_diff, np.max(np.abs(diff_beta)))
-                beta += diff_beta
-
-            if max_diff < term:
-                break
+            lr.fit(X, y)
+            fit = lr.coef_[0]
+            # print 'alpha-out sum: %.2f' % np.sum(fit[K**2:(K**2 + N)])
+            # print 'alpha-in sum: %.2f' % np.sum(fit[(K**2 + N):(K**2 + 2*N)])
+        
+            Theta = fit[0:(K**2)].reshape((K,K))
+            alpha[0] = fit[(K**2):(K**2 + N)]
+            alpha[1] = fit[(K**2 + N):(K**2 + 2*N)]
+            beta = fit[(K**2 + 2*N):(K**2 + 2*N + B)]
 
     return { 'z': z, 'Theta': Theta, 'alpha': alpha, 'beta': beta }
 
