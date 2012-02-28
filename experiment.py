@@ -7,24 +7,22 @@ from sklearn.linear_model import LogisticRegression
 from common import infer_block, plot_block, neg_log_likelihood
 
 # Parameters
-params = { 'N': 20,
-           'N_subs': range(2,16,2),
-           'K': 5,
+params = { 'N': 100,
+           'N_subs': range(5,100,5),
+           'K': 3,
            'conc': 10.0,
-           'alpha_sd': 3.0,
+           'alpha_sd': 10.0,
            'beta_shank': 2.0,
-           'beta_self': 5.0,
+           'beta_self': 3.0,
            'num_shanks': 8,
            'Theta_mean': -1.0,
            'Theta_sd': 3.0,
-           'num_fits': 6,
-           'K_fit': 5,
+           'num_fits': 5,
+           'K_fit': 3,
            'steps': 20,
            'sweeps': 5,
-           'miters': 20,
-           'epsilon': 0.05,
-           'term': 0.5,
-           'init_from_true': False,
+           'C': 10.0,
+           'init_from_true': True,
            'true_z': True,
            'full_network_fit': False,
            'subnetwork_fit': True }
@@ -76,7 +74,7 @@ if params['full_network_fit']:
             init_z, init_theta, init_alpha, init_beta = z, Theta, alpha, beta
         fit = infer_block(A, x,
                           params['K_fit'], params['steps'], params['sweeps'],
-                          params['miters'], params['epsilon'], params['term'],
+                          params['C'],
                           zero_alpha = False, true_z = None, init_z = init_z,
                           init_alpha = init_alpha, init_beta = init_beta,
                           init_theta = init_theta)
@@ -120,8 +118,7 @@ if params['subnetwork_fit']:
             # Fit with alpha free
             fit = infer_block(A_sub, x_sub,
                               params['K_fit'], params['steps'],
-                              params['sweeps'], params['miters'],
-                              params['epsilon'], params['term'],
+                              params['sweeps'], params['C'],
                               zero_alpha = False,
                               true_z = true_z, init_z = init_z,
                               init_alpha = init_alpha, init_beta = init_beta,
@@ -136,8 +133,7 @@ if params['subnetwork_fit']:
             # Fit with alpha fixed to zero
             fit = infer_block(A_sub, x_sub,
                               params['K_fit'], params['steps'],
-                              params['sweeps'], params['miters'],
-                              params['epsilon'], params['term'],
+                              params['sweeps'], params['C'],
                               zero_alpha = True,
                               true_z = true_z, init_z = init_z,
                               init_alpha = None, init_beta = init_beta,
@@ -183,7 +179,7 @@ if params['subnetwork_fit']:
             plt.plot(params['N_subs'], variance[metric,2], 'y-.')
             plt.plot(params['N_subs'], mse[metric,2], 'y')
         plt.plot(params['N_subs'], [val ** 2] * len(params['N_subs']), 'k:')
-        plt.ylim(ymax = 1.5 * val ** 2)
+        plt.ylim(ymax = 1.2 * val ** 2)
         plt.title(name)
     plt.show()
 

@@ -38,7 +38,7 @@ def neg_log_likelihood(A, z, Theta, alpha, beta, x):
 
 # Use SEM to infer a stochastic blockmodel fit
 def infer_block(A, x, K = 1,
-                steps = 10, sweeps = 5,
+                steps = 10, sweeps = 5, C = 1.0,
                 zero_alpha = False,
                 true_z = None, init_z = None,
                 init_theta = None, init_alpha = None, init_beta = None):
@@ -85,7 +85,7 @@ def infer_block(A, x, K = 1,
     
         # M-step
         if zero_alpha:
-            lr = LogisticRegression(C = 1.0, penalty = 'l2')
+            lr = LogisticRegression(C = C, penalty = 'l2')
             y = A.reshape((N*N,))
             X = np.zeros((N*N,(K**2 + B)))
             for i in range(N):
@@ -100,7 +100,7 @@ def infer_block(A, x, K = 1,
             Theta = fit[0:(K**2)].reshape((K,K))
             beta = fit[(K**2):(K**2 + B)]
         else:
-            lr = LogisticRegression(C = 1.0, penalty = 'l2')
+            lr = LogisticRegression(C = C, penalty = 'l2')
             y = A.reshape((N*N,))
             X = np.zeros((N*N,(K**2 + 2*N + B)))
             for i in range(N):
@@ -119,8 +119,8 @@ def infer_block(A, x, K = 1,
 
             lr.fit(X, y)
             fit = lr.coef_[0]
-            # print 'alpha-out sum: %.2f' % np.sum(fit[K**2:(K**2 + N)])
-            # print 'alpha-in sum: %.2f' % np.sum(fit[(K**2 + N):(K**2 + 2*N)])
+            # print 'alpha-out mean: %.2f' % np.mean(fit[K**2:(K**2 + N)])
+            # print 'alpha-in mean: %.2f' % np.mean(fit[(K**2 + N):(K**2 + 2*N)])
         
             Theta = fit[0:(K**2)].reshape((K,K))
             alpha[0] = fit[(K**2):(K**2 + N)]
