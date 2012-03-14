@@ -69,6 +69,11 @@ if params['plot_heatmap']:
     plt.imshow(A[o][:,o])
     plt.title('Ordered by alpha_in')
 
+    plt.figure()
+    o = np.argsort(np.sum(alpha, axis = 0))
+    plt.imshow(A[o][:,o])
+    plt.title('Ordered by alpha_total')
+
 # Fit model to subset of data, displaying beta posterior
 fig = plt.figure()
 inds = np.arange(params['N'])
