@@ -127,6 +127,9 @@ def infer_block(A, x, K = 1,
             alpha[1] = fit[(K**2 + N):(K**2 + 2*N)]
             beta = fit[(K**2 + 2*N):(K**2 + 2*N + B)]
 
+        if not true_z is None:
+            break
+
     return { 'z': z, 'Theta': Theta, 'alpha': alpha, 'beta': beta }
 
 # Plot block assignments
