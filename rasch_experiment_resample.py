@@ -54,7 +54,6 @@ def infer(A, x, fit_alpha = False):
         Phi = np.zeros((N*N,(B + 2*N)))
     else:
         Phi = np.zeros((N*N,B))
-    Phi[:,0] = 1.0
     for b in range(B):
         Phi[:,b] = x[:,:,b].reshape((N*N,))
     if fit_alpha:
