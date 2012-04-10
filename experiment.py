@@ -7,25 +7,26 @@ from sklearn.linear_model import LogisticRegression
 from common import infer_block, plot_block, neg_log_likelihood
 
 # Parameters
-params = { 'N': 100,
-           'N_subs': range(5,100,5),
+params = { 'N': 50,
+           'N_subs': range(5,50,5),
            'K': 3,
            'conc': 10.0,
-           'alpha_sd': 10.0,
+           'alpha_sd': 0.5,
            'beta_shank': 2.0,
            'beta_self': 3.0,
            'num_shanks': 8,
            'Theta_mean': -1.0,
            'Theta_sd': 3.0,
-           'num_fits': 5,
+           'num_fits': 30,
            'K_fit': 3,
-           'steps': 20,
-           'sweeps': 5,
-           'C': 10.0,
-           'init_from_true': True,
-           'true_z': True,
+           'steps': 50,
+           'sweeps': 2,
+           'C': 100.0,
+           'init_from_true': False,
+           'true_z': False,
            'full_network_fit': False,
-           'subnetwork_fit': True }
+           'subnetwork_fit': True,
+           'plot': False }
 
 
 # Set random seed for reproducible output
@@ -64,7 +65,8 @@ z, x, alpha, beta, P, A = make_network(Theta)
 print 'True NLL: %.2f' % neg_log_likelihood(A, z, Theta, alpha, beta, x)
 
 # Plot network with true blocking
-plot_block('true_blocking', A, z, params['K'], alpha = alpha)
+if params['plot']:
+    plot_block('true_blocking', A, z, params['K'], alpha = alpha)
 
 # Repeatedly fit and plot inferred blocking
 if params['full_network_fit']:
@@ -83,8 +85,9 @@ if params['full_network_fit']:
                                      fit['alpha'], fit['beta'], x)
         print 'Fit NLL: %.2f' % fit_nll
 
-        plot_block('fit_blocking_%d' % num_fit, A, fit['z'], params['K_fit'],
-                   alpha = fit['alpha'])
+        if params['plot']:
+            plot_block('fit_blocking_%d' % num_fit, A, fit['z'], params['K_fit'],
+                       alpha = fit['alpha'])
 
 # Fit model on subnetworks and assess performance
 if params['subnetwork_fit']:
