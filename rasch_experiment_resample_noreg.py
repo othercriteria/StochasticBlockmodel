@@ -10,12 +10,12 @@ import scipy.linalg as la
 params = { 'N': 400,
            'alpha_sd': 0.0,
            'alpha_unif': 0.0,
-           'beta_shank': 0.0,
-           'num_shank': 8,
-           'beta_self': 2.0,
-           'target': ('degree', 2),
-           'N_subs': range(10, 120, 10),
-           'num_fits': 10,
+           'beta_shank': 1.0,
+           'num_shank': 2,
+           'beta_self': 1.0,
+           'target': ('density', 0.2),
+           'N_subs': range(10, 50, 5),
+           'num_fits': 20,
            'do_inference': True }
 
 
@@ -61,71 +61,95 @@ def infer(A, x, fit_alpha = False):
     B = x.shape[2]
 
     if fit_alpha:
-        # Screen for data associated with infinite alphas
-        r_act = range(N)
-        c_act = range(N)
-        change = True
-        while change:
-            change = False
+        # (Separately) sort rows and columns of A by increasing sums
+        r_ord = np.argsort(np.sum(A, axis = 1))
+        c_ord = np.argsort(np.sum(A, axis = 0))
+        A = A[r_ord][:,c_ord]
+        x = x[r_ord][:,c_ord]
+        
+        # Recursively examine for submatrices that will send
+        # corresponding EMLE parameter estimates to infinity and
+        # assemble list of "active" submatrices to retain
+        to_screen = [(np.arange(N), np.arange(N))]
+        act = []
+        while len(to_screen) > 0:
+            r_act, c_act = to_screen.pop()
 
-            # Check for c_act-extreme rows
-            unmarked = A[r_act][:,c_act]
-            r_max = unmarked.shape[1]
-            r_sums = np.sum(unmarked, axis = 1)
-            for i, r in enumerate(r_act):
-                if r_sums[i] in [0, r_max]:
-                    r_act.remove(r)
-                    change = True
+            A_act = A[r_act][:,c_act]
+            n_act = A_act.shape
+            violation = False
+            trivial = [(0,0), (0,n_act[1]), (n_act[0],0), (n_act[0],n_act[1])]
+            for i,j in [(i,j)
+                        for i in range(n_act[0] + 1)
+                        for j in range(n_act[1] + 1)]:
+                if (i,j) in trivial: continue
+                if np.any(A_act[:i][:,:j]): continue
+                if not np.all(A_act[i:][:,j:]): continue
+                if i > 0 and j < n_act[1]:
+                    A_sub = A_act[:i][:,j:]
+                    if (np.any(A_sub) and (not np.all(A_sub))):
+                        to_screen.append((r_act[np.arange(i)],
+                                          c_act[np.arange(j, n_act[1])]))
+                if i < n_act[0] and j > 0:
+                    A_sub = A_act[i:][:,:j]
+                    if (np.any(A_sub) and (not np.all(A_sub))):
+                        to_screen.append((r_act[np.arange(i, n_act[0])],
+                                          c_act[np.arange(j)]))
+                violation = True
+                break
 
-            # Check for r_act-extreme columns
-            unmarked = A[r_act][:,c_act]
-            c_max = unmarked.shape[0]
-            c_sums = np.sum(unmarked, axis = 0)
-            for j, c in enumerate(c_act):
-                if c_sums[j] in [0, c_max]:
-                    c_act.remove(c)
-                    change = True
+            if not violation:
+                act.append((r_act, c_act))
 
-        if len(r_act) == 0 and len(c_act) == 0:
-            return { 'beta': np.zeros(B), 'N_act': 0 }
+        if len(act) == 0:
+            return { 'beta': np.zeros(B), 'N_act_r': 0, 'N_act_c': 0 }
 
-        A_act = A[r_act][:,c_act]
-        x_act = x[r_act][:,c_act]
-        N_act_r, N_act_c = A_act.shape
-        N_act = N_act_r * N_act_c
+        # Calculate size of design matrix and outcome vector, then
+        # construct them
+        N_act_r, N_act_c = 0, B
+        for r_act, c_act in act:
+            N_act_r += len(r_act) * len(c_act)
+            N_act_c += len(r_act) + len(c_act)
+        y = np.zeros((N_act_r,))
+        Phi = np.zeros((N_act_r, N_act_c))
+        i_offset, j_offset = 0, B
+        for r_act, c_act in act:
+            i_inc = len(r_act) * len(c_act)
+            j_inc_r, j_inc_c = len(r_act), len(c_act)
 
-        # Screen for data associated with infinite betas
-        for b in range(B):
-            if np.sum(A_act * x_act[:,:,b]) in [0, N_act]:
-                return { 'beta': np.zeros(B), 'N_act': 0 }
+            A_act = A[r_act][:,c_act]
+            x_act = x[r_act][:,c_act]
 
-        y = A_act.reshape((N_act,))
-        Phi = np.zeros((N_act,B + N_act_r + N_act_c))
-        for b in range(B):
-            Phi[:,b] = x_act[:,:,b].reshape((N_act,))
-        for i in range(N_act_r):
-            phi_row = np.zeros((N_act_r,N_act_c))
-            phi_row[i,:] = 1.0
-            Phi[:,B + i] = phi_row.reshape((N_act,))
-        for j in range(N_act_c):
-            phi_col = np.zeros((N_act_r,N_act_c))
-            phi_col[:,j] = 1.0
-            Phi[:,B + N_act_r + j] = phi_col.reshape((N_act,))
+            y[i_offset:(i_offset + i_inc)] = A_act.reshape((i_inc,))
 
-        # Screen for non-identifiability
-        if Phi.shape[1] > Phi.shape[0]:
-            return { 'beta': np.zeros(B), 'N_act': 0 }
-        R = la.qr(Phi, mode = 'r')[0]
-        # if np.diag(R)[-1] < 0.001:
-        #    return { 'beta': np.zeros(B), 'N_act': 0 }
+            for b in range(B):
+                Phi[i_offset:(i_offset + i_inc), b] = \
+                    x_act[:,:,b].reshape((i_inc,))
+
+            for r in range(j_inc_r):
+                phi_row = np.zeros((j_inc_r,j_inc_c))
+                phi_row[r,:] = 1.0
+                Phi[i_offset:(i_offset + i_inc), j_offset + r] = \
+                    phi_row.reshape((i_inc,))
+            j_offset += j_inc_r
+
+            for c in range(j_inc_c):
+                phi_col = np.zeros((j_inc_r,j_inc_c))
+                phi_col[:,c] = 1.0
+                Phi[i_offset:(i_offset + i_inc), j_offset + c] = \
+                    phi_col.reshape((i_inc,))
+            j_offset += j_inc_c
+            
+            i_offset += i_inc
 
         try:
             coefs = sm.Logit(y, Phi).fit().params
         except:
             print y
             print Phi
-            return { 'beta': np.zeros(B), 'N_act': 0 }
-        return { 'beta': coefs[0:B], 'N_act': N_act }
+            print Phi.shape
+            return { 'beta': np.zeros(B), 'N_act_r': 0, 'N_act_c': 0 }
+        return { 'beta': coefs[0:B], 'N_act_r': N_act_r, 'N_act_c': N_act_c }
         
     else:
         y = A.reshape((N*N,))
@@ -134,7 +158,7 @@ def infer(A, x, fit_alpha = False):
         for b in range(B):
             Phi[:,b] = x[:,:,b].reshape((N*N,))
         coefs = sm.Logit(y, Phi).fit().params
-        return { 'beta': coefs[0:B], 'N_act': N*N }
+        return { 'beta': coefs[0:B], 'N_act_r': N*N, 'N_act_c': B }
     
 # Generate latent parameters
 if params['alpha_sd'] > 0.0:
@@ -176,7 +200,7 @@ for field in params:
 # Fit model on partially observed subnetworks and assess performance
 bias = np.empty((2,2,len(params['N_subs'])))
 variance = np.empty((2,2,len(params['N_subs'])))
-num_act = np.empty((len(params['N_subs']),params['num_fits']))
+act_ratio = np.empty((len(params['N_subs']),params['num_fits']))
 network = np.empty((4,len(params['N_subs'])))
 kappas = np.empty((len(params['N_subs']),params['num_fits']))
 for n, N_sub in enumerate(params['N_subs']):
@@ -201,7 +225,10 @@ for n, N_sub in enumerate(params['N_subs']):
             fit = infer(A_sub, x_sub, fit_alpha = True)
             estimate[0,0,num_fit] = fit['beta'][0]
             estimate[1,0,num_fit] = fit['beta'][1]
-            num_act[n,num_fit] = fit['N_act']
+            if fit['N_act_r'] > 0:
+                act_ratio[n,num_fit] = fit['N_act_r'] / fit['N_act_c']
+            else:
+                act_ratio[n,num_fit] = 0
 
             # Fit model with zero alpha, i.e., stationary model
             fit = infer(A_sub, x_sub, fit_alpha = False)
@@ -233,8 +260,8 @@ if params['do_inference']:
 
     plt.subplot(8,1,3)
     for n in range(params['num_fits']):
-        plt.plot(params['N_subs'], num_act[:,n], 'k.', hold = True)
-    plt.ylabel('N_act')
+        plt.plot(params['N_subs'], act_ratio[:,n], 'k.', hold = True)
+    plt.ylabel('N_act_r / N_act_c')
 
 for metric, name in enumerate(['average degree',
                                'max out-degree',
