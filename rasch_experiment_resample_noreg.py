@@ -10,12 +10,12 @@ import scipy.linalg as la
 params = { 'N': 400,
            'alpha_sd': 0.0,
            'alpha_unif': 0.0,
-           'beta_shank': 1.0,
-           'num_shank': 2,
-           'beta_self': 1.0,
+           'B': 5,
+           'beta_sd': 1.0,
+           'x_discrete': False,
            'target': ('density', 0.2),
-           'N_subs': range(10, 50, 5),
-           'num_fits': 20,
+           'N_subs': range(15, 60, 5),
+           'num_fits': 25,
            'do_inference': True }
 
 
@@ -158,7 +158,7 @@ def infer(A, x, fit_alpha = False):
         for b in range(B):
             Phi[:,b] = x[:,:,b].reshape((N*N,))
         coefs = sm.Logit(y, Phi).fit().params
-        return { 'beta': coefs[0:B], 'N_act_r': N*N, 'N_act_c': B }
+        return { 'beta': coefs[0:B], 'N_act_r': N*N, 'N_act_c': (B + 1) }
     
 # Generate latent parameters
 if params['alpha_sd'] > 0.0:
@@ -170,13 +170,11 @@ else:
     alpha = np.zeros((2,params['N']))
 alpha[0] -= np.mean(alpha[0])
 alpha[1] -= np.mean(alpha[1])
-beta = np.array([params['beta_shank'], params['beta_self']])
-shank = np.random.randint(0, params['num_shank'], params['N'])
-x = np.empty((params['N'],params['N'],2))
-for i in range(params['N']):
-    for j in range(params['N']):
-        x[i,j,0] = (shank[i] == shank[j])
-        x[i,j,1] = (i == j)
+beta = np.random.normal(0, params['beta_sd'], params['B'])
+if params['x_discrete']:
+    x = 2 * np.random.binomial(1, 0.5, (params['N'], params['N'], params['B']))
+else:
+    x = np.random.normal(0, 1, (params['N'], params['N'], params['B']))
 
 # Procedure for generating random subnetwork
 def subnetwork(n):
@@ -198,14 +196,14 @@ for field in params:
     print '%s: %s' % (field, str(params[field]))
 
 # Fit model on partially observed subnetworks and assess performance
-bias = np.empty((2,2,len(params['N_subs'])))
-variance = np.empty((2,2,len(params['N_subs'])))
+bias = np.empty((params['B'],2,len(params['N_subs'])))
+variance = np.empty((params['B'],2,len(params['N_subs'])))
 act_ratio = np.empty((len(params['N_subs']),params['num_fits']))
 network = np.empty((4,len(params['N_subs'])))
 kappas = np.empty((len(params['N_subs']),params['num_fits']))
 for n, N_sub in enumerate(params['N_subs']):
     print 'N_sub = %d' % N_sub
-    estimate = np.empty((3,2,params['num_fits']))
+    estimate = np.empty((params['B'],2,params['num_fits']))
     network_obs = np.empty((4,params['num_fits']))
     for num_fit in range(params['num_fits']):
         alpha_sub, kappa_sub, A_sub, x_sub = subnetwork(N_sub)
@@ -223,8 +221,8 @@ for n, N_sub in enumerate(params['N_subs']):
 
             # Fit full model
             fit = infer(A_sub, x_sub, fit_alpha = True)
-            estimate[0,0,num_fit] = fit['beta'][0]
-            estimate[1,0,num_fit] = fit['beta'][1]
+            for b in range(params['B']):
+                estimate[b,0,num_fit] = fit['beta'][b]
             if fit['N_act_r'] > 0:
                 act_ratio[n,num_fit] = fit['N_act_r'] / fit['N_act_c']
             else:
@@ -232,47 +230,46 @@ for n, N_sub in enumerate(params['N_subs']):
 
             # Fit model with zero alpha, i.e., stationary model
             fit = infer(A_sub, x_sub, fit_alpha = False)
-            estimate[0,1,num_fit] = fit['beta'][0]
-            estimate[1,1,num_fit] = fit['beta'][1]
+            for b in range(params['B']):
+                estimate[b,1,num_fit] = fit['beta'][b]
                     
     if params['do_inference']:
-        for metric, true_val in enumerate([beta[0], beta[1]]):
+        for b, true_val in enumerate(beta):
             for m in range(2):
-                bias[metric,m,n] = np.mean(estimate[metric,m] - true_val)
-                variance[metric,m,n] = np.var(estimate[metric,m])
+                bias[b,m,n] = np.mean(estimate[b,m] - true_val)
+                variance[b,m,n] = np.var(estimate[b,m])
     for metric in range(4):
         network[metric,n] = np.mean(network_obs[metric])
 if params['do_inference']:
     bias_sq = bias ** 2
     mse = variance + bias_sq
 
-plt.figure()
+# Plot inference performace, as well as data/parameter ratio
 if params['do_inference']:
-    for metric, (name, max_val) in enumerate([('beta_shank', beta[0]),
-                                              ('beta_self', beta[1])]):
-        plt.subplot(8,1,(metric+1))
-        plt.plot(params['N_subs'], mse[metric,0], 'b')
-        plt.plot(params['N_subs'], variance[metric,0], 'b--')
-        plt.plot(params['N_subs'], mse[metric,1], 'r')
-        plt.plot(params['N_subs'], variance[metric,1], 'r--')
-        plt.ylim(0, 1.5 * max_val ** 2)
-        plt.title(name)
+    plt.figure()
+    plt.subplot(2,1,1)
+    for b, true_val in enumerate(beta):
+        plt.plot(params['N_subs'], mse[b,0] / abs(true_val), 'b')
+        plt.plot(params['N_subs'], mse[b,1] / abs(true_val), 'r')
+        plt.ylim(0, 3.0)
+        plt.title('Scaled MSE of beta')
 
-    plt.subplot(8,1,3)
+    plt.subplot(2,1,2)
     for n in range(params['num_fits']):
         plt.plot(params['N_subs'], act_ratio[:,n], 'k.', hold = True)
     plt.ylabel('N_act_r / N_act_c')
 
+# Plot network statistics as well as sparsity parameter
+plt.figure()
 for metric, name in enumerate(['average degree',
                                'max out-degree',
                                'max in-degree',
                                'self-edge probability']):
-    plt.subplot(8,1,(metric+4))
+    plt.subplot(5,1,(metric+1))
     plt.plot(params['N_subs'], network[metric], '-')
     plt.ylabel(name)
     plt.ylim(ymin = 0)
-
-plt.subplot(8,1,8)
+plt.subplot(5,1,5)
 for n in range(params['num_fits']):
     plt.plot(params['N_subs'], kappas[:,n], 'k.', hold = True)
 plt.ylabel('kappa_sub')
