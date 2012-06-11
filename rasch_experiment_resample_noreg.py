@@ -10,13 +10,16 @@ import scipy.linalg as la
 params = { 'N': 400,
            'alpha_sd': 0.0,
            'alpha_unif': 0.0,
-           'B': 5,
+           'B': 0,
            'beta_sd': 1.0,
            'x_discrete': False,
-           'target': ('density', 0.2),
+           'target': ('degree', 2),
            'N_subs': range(15, 60, 5),
-           'num_fits': 25,
-           'do_inference': True }
+           'num_fits': 2,
+           'do_inference': True,
+           'external_regression': False,
+           'use_BFGS': False,
+           'perturb_Phi': 0.0 }
 
 
 # Set random seed for reproducible output
@@ -54,6 +57,24 @@ def target_to_kappa(d, alpha, beta, x):
             exp_density = exp_edges / (1.0 * N ** 2)
             return abs(exp_density - val)
     return opt.golden(obj)
+
+# Logistic regression solver relying on BFGS minimizer
+def log_reg(y, Phi):
+    if params['use_BFGS']:
+        T = np.dot(y, Phi)
+        def nll_prime(beta):
+            P = 1.0 / (np.exp(-np.dot(Phi, beta)) + 1.0)
+            return np.dot(P, Phi) - T
+
+    beta_shape = Phi.shape[1]
+    def nll(beta):
+        P = 1.0 / (np.exp(-np.dot(Phi, beta)) + 1.0)
+        return -np.sum(np.log(P ** y) + np.log((1.0 - P) ** (1.0 - y)))
+
+    if params['use_BFGS']:
+        return opt.fmin_bfgs(nll, np.zeros(beta_shape), fprime = nll_prime)
+    else:
+        return opt.fmin(nll, np.zeros(beta_shape))
 
 # Procedure to find MLE via logistic regression
 def infer(A, x, fit_alpha = False):
@@ -143,11 +164,21 @@ def infer(A, x, fit_alpha = False):
             i_offset += i_inc
 
         try:
-            coefs = sm.Logit(y, Phi).fit().params
+            Phi += params['perturb_Phi'] * \
+                np.random.normal(size = (N_act_r, N_act_c))
+            if params['external_regression']:
+                coefs = sm.Logit(y, Phi).fit().params
+            else:
+                coefs = log_reg(y, Phi)
         except:
             print y
             print Phi
             print Phi.shape
+            for r_act, c_act in act:
+                A_act = A[r_act][:,c_act]
+                print A_act
+                print np.sum(A_act, axis = 1)
+                print np.sum(A_act, axis = 0)
             return { 'beta': np.zeros(B), 'N_act_r': 0, 'N_act_c': 0 }
         return { 'beta': coefs[0:B], 'N_act_r': N_act_r, 'N_act_c': N_act_c }
         
@@ -157,7 +188,11 @@ def infer(A, x, fit_alpha = False):
         Phi[:,B] = 1.0
         for b in range(B):
             Phi[:,b] = x[:,:,b].reshape((N*N,))
-        coefs = sm.Logit(y, Phi).fit().params
+        Phi += params['perturb_Phi'] * np.random.normal(size = (N*N, B+1))
+        if params['external_regression']:
+            coefs = sm.Logit(y, Phi).fit().params
+        else:
+            coefs = log_reg(y, Phi)
         return { 'beta': coefs[0:B], 'N_act_r': N*N, 'N_act_c': (B + 1) }
     
 # Generate latent parameters
