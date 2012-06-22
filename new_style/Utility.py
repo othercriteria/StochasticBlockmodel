@@ -17,7 +17,7 @@ def inv_logit(x):
 #   http://scikit-learn.org/stable/auto_examples/plot_lda_qda.html
 try:
     from matplotlib.patches import Ellipse
-catch:
+except:
     print 'Failed import of matplotlib.patches.Ellipse.'
 def draw_ellipse(a, m, S):
     v, w = np.linalg.eigh(S)
