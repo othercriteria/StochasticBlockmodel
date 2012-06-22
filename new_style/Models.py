@@ -8,6 +8,7 @@ import scipy.optimize as opt
 import scipy.sparse as sparse
 
 from Utility import inv_logit
+from BinaryMatrix import arbitrary_from_margins
 
 # It's a bit weird to have NonstationaryLogistic as a subclass of strictly
 # less general StationaryLogistic model, but I believe this is how
@@ -176,10 +177,11 @@ class StationaryLogistic(Stationary):
             self.beta[b_n] = coefs[b]
         self.kappa = coefs[B]
 
-    # Doing this fit endows the model with a posterior covariance
-    # matrix estimated via the Laplace approximation (see Bishop for
-    # details)
-    def fit_logistic_l2(self, network, prior_precision = None):
+    # Doing this fit endows the model with a posterior
+    # variance/covariance matrix estimated via the Laplace
+    # approximation (see Bishop for details)
+    def fit_logistic_l2(self, network, prior_precision = 1.0,
+                        variance_covariance = False):
         from sklearn.linear_model import LogisticRegression
 
         N = network.N
@@ -198,7 +200,7 @@ class StationaryLogistic(Stationary):
             self.beta[b_n] = coefs[b]
         self.kappa = intercept
 
-        if prior_precision:
+        if variance_covariance:
             S_0_inv = prior_precision * np.eye(B + 1)
             Phi_kappa = np.hstack([Phi, np.ones((N*N,1))])
             w = np.empty(B + 1)
@@ -406,6 +408,7 @@ class StationaryLogisticMargins(StationaryLogistic):
                     gen[ij_prop] = self.adiag
 
         return gen
+
     
 # Generate alpha_out/in for an existing Network
 def center(x):
@@ -438,71 +441,3 @@ def alpha_gamma(network, alpha_loc, alpha_scale):
     
     network.new_node_covariate('alpha_out')[:] = a[0]
     network.new_node_covariate('alpha_in')[:] = a[1]
-
-# Adapting a Matlab routine provided by Jeff Miller
-# (jeffrey_miller@brown.edu), which implements an algorithm suggested
-# in Manfred Krause's "A Simple Proof of the Gale-Ryser Theorem".
-#
-# Eliminating the column margin nonincreasing condition by sorting and
-# then undoing the sorting after the target matrix is generated.
-#
-# Return an arbitrary binary matrix with specified margins.
-# Inputs:
-#   r: row margins, length m
-#   c: column margins, length n
-# Output:
-#   (m x n) binary matrix
-def arbitrary_from_margins(r, c):
-    m = len(r)
-    n = len(c)
-
-    # Check for conforming input
-    assert(np.all(r >= 0))
-    assert(np.all(c >= 0))
-    assert(r.dtype.kind == 'i')
-    assert(c.dtype.kind == 'i')
-
-    # Sort column margins and prepare for unsorting
-    o = np.argsort(-c)
-    oo = np.argsort(o)
-    c = c[o]
-    c_unsorted = c[oo]
-    assert(np.all(np.diff(c) <= 0))
-
-    # Construct the maximal matrix and the conjugate
-    A = np.zeros((m,n), dtype = np.bool)
-    for i in range(m):
-        A[i,0:r[i]] = True
-    col = np.sum(A, axis = 0)
-
-    # Check whether a satisfying matrix exists (Gale-Ryser conditions)
-    assert(np.sum(c) == np.sum(col))
-    assert(np.all(np.cumsum(c) <= np.cumsum(col)))
-
-    # Convert the maximal matrix into one with column sums c
-    # (This procedure is guaranteed to terminate.)
-    while not np.all(col == c):
-        j = np.where(col > c)[0][0]
-        k = np.where(col < c)[0][0]
-        i = np.where(A[:,j] > A[:,k])[0][0]
-        A[i,j] = False
-        A[i,k] = True
-        col[j] -= 1
-        col[k] += 1
-
-    # Undo the sort
-    A = A[:,oo]
- 
-    # Verify that the procedure found a satisfying matrix
-    assert(np.all(r == np.sum(A, axis = 1)))
-    assert(np.all(c_unsorted == np.sum(A, axis = 0)))
-
-    return A
- 
-if __name__ == '__main__':
-    # Test of binary matrix generation code
-    m = np.random.random(size=(12,10)) < 0.3
-    r, c = np.sum(m, axis = 1), np.sum(m, axis = 0)
-    print r, c
-    A = arbitrary_from_margins(r, c)
-    print np.sum(A, axis = 1), np.sum(A, axis = 0)
