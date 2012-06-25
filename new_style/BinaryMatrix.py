@@ -64,7 +64,64 @@ def arbitrary_from_margins(r, c):
     assert(np.all(c_unsorted == np.sum(A, axis = 0)))
 
     return A
- 
+
+##############################################################################
+# Adapting Matlab code provided by Matt Harrison (matt_harrison@brown.edu).
+##############################################################################
+
+# Find row and column scalings to balance a matrix, using the
+# Sinkhorn(-Knopp) algorithm
+def canonical_scalings(w):
+    tol = 1e-8;
+
+    # Balancing is only meaningful for a nonnegative matrix
+    assert(np.all(w >= 0.0))
+
+    m, n = w.shape
+    M, N = n * np.ones((m,1)), m * np.ones((1,n))
+    r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
+
+    a = M / r
+    a /= np.mean(a)
+    b = N / (a * w).sum(0)
+
+    tol_check = np.Inf
+    while tol_check > tol:
+        a_new = M / (w * b).sum(1, keepdims = True)
+        a_new /= np.mean(a_new)
+        b_new = N / (a_new * w).sum(0, keepdims = True)
+
+        # "L1"-ish tolerance in change during the last iteration
+        tol_check = np.sum(np.abs(a - a_new)) + np.sum(np.abs(b - b_new))
+        a, b = a_new, b_new
+
+    return a, b
+
+# Suppose c is a sequence of nonnegative integers. Returns c_conj where:
+#   c_conj(k) := sum(c > k),    k = 0, ..., (n-1)
+def conjugate(c, n):
+    cc = np.zeros(n, dtype = np.int);
+
+    for j, k in enumerate(c):
+        if k >= n:
+            cc[n-1] += 1
+        elif k >= 1:
+            cc[k-1] += 1
+
+    s = cc[n-1]
+    for j in range(n-2,-1,-1):
+        s += cc[j]
+        cc[j] = s
+
+    return cc
+
+
+
+##############################################################################
+# End of adapted code
+##############################################################################
+
+
 if __name__ == '__main__':
     # Test of binary matrix generation code
     m = np.random.random(size=(12,10)) < 0.3
@@ -72,3 +129,13 @@ if __name__ == '__main__':
     print r, c
     A = arbitrary_from_margins(r, c)
     print np.sum(A, axis = 1), np.sum(A, axis = 0)
+
+    # Test of Sinkhorn balancing
+    m = np.random.normal(10, 1, size = (6,5))
+    a, b = canonical_scalings(m)
+    m_canonical = a * m * b
+    print m_canonical.sum(1)
+    print m_canonical.sum(0)
+
+    # Test of conjugate
+    print conjugate([1,1,1,1,2,8], 10)
