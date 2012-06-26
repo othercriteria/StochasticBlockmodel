@@ -15,15 +15,15 @@ import numpy as np
 # Necessary and sufficient check for the existence of a binary matrix
 # with the specified row and column margins.
 #
-# Since this code is relatively distant from the parts that are
-# directly called by a user, a problem here is probably due to
-# programmer error. Hence, "assert" is appropriate.
+# Failure here throws an exception that should stop the calling
+# function before anything weird happens.
 def check_margins(r, c):
     # Check for conforming input
     assert(np.all(r >= 0))
     assert(np.all(c >= 0))
     assert(r.dtype.kind == 'i')
     assert(c.dtype.kind == 'i')
+    assert(np.sum(r) == np.sum(c))
 
     # Check whether a satisfying matrix exists (Gale-Ryser conditions)
     cc = conjugate(c, len(c))
