@@ -54,6 +54,9 @@ class Stationary(IndependentBernoulli):
         P = self.edge_probabilities(network)
         pass
 
+    def fit(self, network):
+        self.fit_convex_opt(network)
+
     # Mechanical specialization of the StationaryLogistic code, so not
     # really ideal for this one-dimensional problem.
     def fit_convex_opt(self, network):
@@ -126,6 +129,9 @@ class StationaryLogistic(Stationary):
                 exp_density = exp_edges / (1.0 * N ** 2)
                 return abs(exp_density - val)
         self.kappa = opt.golden(obj)
+
+    def fit(self, network):
+        self.fit_convex_opt(network)
 
     def fit_convex_opt(self, network):
         B = len(self.beta)
@@ -238,6 +244,9 @@ class NonstationaryLogistic(StationaryLogistic):
         logit_P += self.kappa
 
         return inv_logit(logit_P)
+
+    def fit(self, network):
+        self.fit_convex_opt(network)
 
     def fit_convex_opt(self, network):
         N = network.N
