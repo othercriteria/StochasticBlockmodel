@@ -166,6 +166,9 @@ def conjugate(c, n):
 def approximate_from_margins_weights(r, c, w):
     check_margins(r, c)
 
+    # Make a copy of the margins as they are mutated below...
+    r, c = r.copy(), c.copy()
+
     ### Preprocessing
 
     # (If re-enabling repeated samples, everything from here until
