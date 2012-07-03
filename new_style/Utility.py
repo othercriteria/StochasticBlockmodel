@@ -20,7 +20,7 @@ try:
     from matplotlib.patches import Ellipse
 except:
     print 'Failed import of matplotlib.patches.Ellipse.'
-def draw_confidence(a, m, S, levels = [0.5, 0.95]):
+def draw_confidence(a, m, S, levels = [0.95]):
     # Convert levels into ellipse scale multipliers
     d = norm()
     multipliers = [d.ppf(l / 2.0 + 0.5) for l in levels]
