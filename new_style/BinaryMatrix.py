@@ -101,9 +101,9 @@ def canonical_scalings(w):
 
     tol_check = np.Inf
     while tol_check > tol:
-        a_new = M / (w * b).sum(1, keepdims = True)
+        a_new = M / ((w * b).sum(1).reshape((m,1)))
         a_new /= np.mean(a_new)
-        b_new = N / (a_new * w).sum(0, keepdims = True)
+        b_new = N / ((a_new * w).sum(0).reshape((1,n)))
 
         # "L1"-ish tolerance in change during the last iteration
         tol_check = np.sum(np.abs(a - a_new)) + np.sum(np.abs(b - b_new))
