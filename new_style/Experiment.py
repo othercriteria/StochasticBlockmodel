@@ -30,10 +30,11 @@ class RandomSubnetworks:
 # expedite such experiments.
 
 class Results:
-    def __init__(self, sub_sizes, num_reps):
+    def __init__(self, sub_sizes, num_reps, title = None):
         self.sub_sizes = sub_sizes
         self.N_subs = len(sub_sizes)
         self.N_reps = num_reps
+        self.title = title
         self.results = {}
 
         self.sub_size_to_ind = {}
@@ -78,6 +79,8 @@ class Results:
             requests = self.results.keys()
         
         plt.figure()
+        if self.title:
+            plt.title(self.title)
 
         num_plots = len(requests)
         for i, request in enumerate(requests):
