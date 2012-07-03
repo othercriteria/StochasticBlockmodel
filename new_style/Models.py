@@ -8,7 +8,7 @@ import scipy.optimize as opt
 import scipy.sparse as sparse
 
 from Utility import inv_logit
-from BinaryMatrix import arbitrary_from_margins
+from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weights
 
 # It's a bit weird to have NonstationaryLogistic as a subclass of strictly
 # less general StationaryLogistic model, but I believe this is how
@@ -348,19 +348,35 @@ class NonstationaryLogistic(StationaryLogistic):
 # a degree of "cover" and then ensure that the sampler makes a
 # non-trivial proposal on average "cover" many times concerning each
 # possible edge.
+#
+# Initializing the Gibbs sampler from the approximate conditional
+# distribution requires a bit more time initially but takes many fewer
+# steps to reach the stationary distribution, so it is enabled by
+# default.
 class StationaryLogisticMargins(StationaryLogistic):
     # Precomputing for diagonal/anti-diagonal check
     diag = np.array([[True,False],[False,True]])
     adiag = np.array([[False,True],[True,False]])
     valid = set([diag.data[0:4], adiag.data[0:4]])
     
-    def generate(self, network, r, c, coverage = 100):
+    def generate(self, network, r, c, coverage = 100, arbitrary_init = False):
         N = network.N
         windows = N // 2
         coverage_target = coverage * N**2 / 4
         
-        # Initialize from an arbitrary matrix with the requested margins
-        gen = arbitrary_from_margins(r, c)
+        if arbitrary_init:
+            # Initialize from an arbitrary matrix with the requested margins
+            gen = arbitrary_from_margins(r, c)
+        else:
+            # Initialize from an approximate sample from the
+            # conditional distribution
+            p = self.edge_probabilities(network)
+            w = p / (1.0 - p)
+            gen_sparse = approximate_from_margins_weights(r, c, w)
+            gen = np.zeros((N,N), dtype=np.bool)
+            for i, j in gen_sparse:
+                if i == -1: break 
+                gen[i,j] = 1
 
         # Gibbs sampling to match the "location" of the edges to where
         # they are likely under the conditional distribution
