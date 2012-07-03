@@ -27,7 +27,6 @@ def draw_confidence(a, m, S, levels = [0.5, 0.95]):
     multipliers.sort()
     multipliers.reverse()
     alphas = np.linspace(1.0, 0.0, len(multipliers) + 2)[1:-1]
-    print multipliers
 
     v, w = np.linalg.eigh(S)
     u = w[0] / np.linalg.norm(w[0])
