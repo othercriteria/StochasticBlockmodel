@@ -4,6 +4,7 @@
 # Daniel Klein, 5/21/2012
 
 import numpy as np
+from scipy.stats import norm
 
 def logit(x):
     return np.log(x / (1.0 - x))
@@ -19,12 +20,21 @@ try:
     from matplotlib.patches import Ellipse
 except:
     print 'Failed import of matplotlib.patches.Ellipse.'
-def draw_ellipse(a, m, S):
+def draw_confidence(a, m, S, levels = [0.5, 0.95]):
+    # Convert levels into ellipse scale multipliers
+    d = norm()
+    multipliers = [d.ppf(l / 2.0 + 0.5) for l in levels]
+    multipliers.sort()
+    multipliers.reverse()
+    alphas = np.linspace(1.0, 0.0, len(multipliers) + 2)[1:-1]
+    print multipliers
+
     v, w = np.linalg.eigh(S)
     u = w[0] / np.linalg.norm(w[0])
     angle = (180.0 / np.pi) * np.arctan(u[1] / u[0])
-    e = Ellipse(m, 2.0 * np.sqrt(v[0]), 2.0 * np.sqrt(v[1]),
-                180.0 + angle, color = 'k')
-    a.add_artist(e)
-    e.set_clip_box(ax.bbox)
-    e.set_alpha(0.5)
+    for alpha, multiplier in zip(alphas, multipliers):
+        e = Ellipse(m, multiplier * np.sqrt(v[0]), multiplier * np.sqrt(v[1]),
+                    180.0 + angle, color = 'k')
+        a.add_artist(e)
+        e.set_clip_box(a.bbox)
+        e.set_alpha(alpha)
