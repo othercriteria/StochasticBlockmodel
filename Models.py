@@ -63,7 +63,7 @@ class Stationary(IndependentBernoulli):
         # Calculate observed sufficient statistic
         T = np.zeros(1)
         A = network.adjacency_matrix()
-        T[0] = np.sum(A)
+        T[0] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(1)
         def obj(theta):
@@ -141,7 +141,7 @@ class StationaryLogistic(Stationary):
         A = network.adjacency_matrix()
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
-        T[B] = np.sum(A)
+        T[B] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(B + 1)
         def obj(theta):
@@ -256,13 +256,13 @@ class NonstationaryLogistic(StationaryLogistic):
         # Calculate observed sufficient statistics
         T = np.zeros(B + 1 + 2*(N-1))
         A = np.array(network.adjacency_matrix())
-        r = np.sum(A, axis = 1)[0:(N-1)]
-        c = np.sum(A, axis = 0)[0:(N-1)]
+        r = np.sum(A, axis = 1, dtype=np.int)[0:(N-1)]
+        c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
         T[(B + 1):(B + 1 + (N-1))] = r
         T[(B + 1 + (N-1)):(B + 1 + 2*(N-1))] = c
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
-        T[B] = np.sum(A)
+        T[B] = np.sum(A, dtype=np.int)
             
         theta = np.zeros(B + 1 + 2*(N-1))
         alpha_out = network.node_covariates['alpha_out']
