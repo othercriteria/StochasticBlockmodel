@@ -153,6 +153,20 @@ class Network:
         plt.title(title)
         plt.show()
 
+    def show_degree_histograms(self):
+        # Messy since otherwise row/column sums can overflow...
+        r = np.array(self.network.asfptype().sum(1),dtype=np.int).flatten()
+        c = np.array(self.network.asfptype().sum(0),dtype=np.int).flatten()
+        
+        plt.figure()
+        plt.subplot(2,1,1)
+        plt.title('out-degree')
+        plt.hist(r, bins = max(r))
+        plt.subplot(2,1,2)
+        plt.title('in-degree')
+        plt.hist(c, bins = max(c))
+        plt.show()
+
 # Some "tests"
 if __name__ == '__main__':
     net = Network()
