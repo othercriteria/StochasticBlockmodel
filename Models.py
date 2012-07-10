@@ -18,7 +18,7 @@ from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weight
 # class) inside the objective function. This is inelegant and seems
 # error-prone, and so should probably be fixed...
 
-# P_{ij} = o_{ij}
+# P_{ij} = Logit^{-1}(o_{ij})
 class IndependentBernoulli:
     def edge_probabilities(self, network):
         N = network.N
@@ -50,7 +50,7 @@ class IndependentBernoulli:
         P = self.edge_probabilities(network)
         return np.random.random((N,N)) < P
 
-# P_{ij} = Logit^{-1}(kappa) + o_{ij}
+# P_{ij} = Logit^{-1}(kappa + o_{ij})
 class Stationary(IndependentBernoulli):
     def __init__(self):
         self.kappa = 0.0
@@ -111,7 +111,7 @@ class Stationary(IndependentBernoulli):
 
         self.kappa = coefs[0]
 
-# P_{ij} = Logit^{-1}(\sum_b x_{bij}*beta_b + kappa)
+# P_{ij} = Logit^{-1}(\sum_b x_{bij}*beta_b + kappa + o_{ij}) 
 class StationaryLogistic(Stationary):
     def __init__(self):
         Stationary.__init__(self)
@@ -255,7 +255,8 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
-# P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa)
+# P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
+#                     o_{ij})
 # Constraints: \sum_i alpha_out_i = 0, \sum_j alpha_in_j = 0
 class NonstationaryLogistic(StationaryLogistic):
     def edge_probabilities(self, network):
