@@ -5,7 +5,6 @@
 
 import numpy as np
 import scipy.optimize as opt
-import scipy.sparse as sparse
 
 from Utility import inv_logit
 from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weights
@@ -19,16 +18,30 @@ from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weight
 # class) inside the objective function. This is inelegant and seems
 # error-prone, and so should probably be fixed...
 
-# P_{ij} arbitrary, given by some function of the Network
+# P_{ij} = o_{ij}
 class IndependentBernoulli:
-    def __init__(self, edge_probabilities):
-        self.edge_probabilities = edge_probabilities
+    def edge_probabilities(self, network):
+        N = network.N
+
+        if network.offset:
+            logit_P = np.zeros((N,N))
+            logit_P += network.offset.matrix()
+            return inv_logit(logit_P)
+        else:
+            return np.tile(0.5, (N,N))
     
     def nll(self, network):
         P = self.edge_probabilities(network)
-        if np.any(P == 0) or np.any(P == 1):
-            return np.Inf
         A = network.adjacency_matrix()
+
+        # Check for impossible data for the cells with 0/1 probabilities
+        ind_P_zero, ind_P_one = (P == 0.0), (P == 1.0)
+        if np.any(A[ind_P_zero]) or not np.all(A[ind_P_one]):
+            return np.Inf
+
+        # Compute the negative log-likelihood for the rest of the cells
+        ind_P_rest = -(ind_P_zero + ind_P_one)
+        P, A = P[ind_P_rest], A[ind_P_rest]
         return -np.sum(np.log(P ** A) + np.log((1.0 - P) ** (1.0 - A)))
 
     def generate(self, network):
@@ -37,7 +50,7 @@ class IndependentBernoulli:
         P = self.edge_probabilities(network)
         return np.random.random((N,N)) < P
 
-# P_{ij} = Logit^{-1}(kappa)
+# P_{ij} = Logit^{-1}(kappa) + o_{ij}
 class Stationary(IndependentBernoulli):
     def __init__(self):
         self.kappa = 0.0
@@ -46,6 +59,8 @@ class Stationary(IndependentBernoulli):
         N = network.N
 
         logit_P = np.zeros((N,N))
+        if network.offset:
+            logit_P += network.offset.matrix()
         logit_P += self.kappa
 
         return inv_logit(logit_P)
@@ -88,7 +103,11 @@ class Stationary(IndependentBernoulli):
         y = network.adjacency_matrix().reshape((N*N,))
         Phi = np.zeros((N*N,1))
         Phi[:,0] = 1.0
-        coefs = sm.Logit(y, Phi).fit().params
+        if network.offset:
+            offset = network.offset.matrix().reshape((N*N,))
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
+        else:
+            coefs = sm.Logit(y, Phi).fit().params
 
         self.kappa = coefs[0]
 
@@ -102,6 +121,8 @@ class StationaryLogistic(Stationary):
         N = network.N
         
         logit_P = np.zeros((N,N))
+        if network.offset:
+            logit_P += network.offset.matrix()
         for b in self.beta:
             logit_P += self.beta[b] * network.edge_covariates[b].matrix()
         logit_P += self.kappa
@@ -177,7 +198,11 @@ class StationaryLogistic(Stationary):
         Phi[:,B] = 1.0
         for b, b_n in enumerate(self.beta):
             Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
-        coefs = sm.Logit(y, Phi).fit().params
+        if network.offset:
+            offset = network.offset.matrix().reshape((N*N,))
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
+        else:
+            coefs = sm.Logit(y, Phi).fit().params
 
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = coefs[b]
@@ -188,6 +213,10 @@ class StationaryLogistic(Stationary):
     # approximation (see Bishop for details)
     def fit_logistic_l2(self, network, prior_precision = 1.0,
                         variance_covariance = False):
+        if network.offset:
+            print 'Regularized logistic regression with offset not supported.'
+            raise
+        
         from sklearn.linear_model import LogisticRegression
 
         N = network.N
@@ -235,6 +264,8 @@ class NonstationaryLogistic(StationaryLogistic):
         alpha_in = network.node_covariates['alpha_in']
         
         logit_P = np.zeros((N,N))
+        if network.offset:
+            logit_P += network.offset.matrix()
         for i in range(N):
             logit_P[i,:] += alpha_out[i]
         for j in range(N):
@@ -323,8 +354,9 @@ class NonstationaryLogistic(StationaryLogistic):
             phi_col = np.zeros((N,N))
             phi_col[:,c] = 1.0
             Phi[:,B + 1 + (N-1) + c] = phi_col.reshape((N*N,))
-        # Dealing with weird bug in scikits?
-        # dummy_val = np.where(Phi.var(0) == 0)[0][0] == B
+        if network.offset:
+            offset = network.offset.matrix().reshape((N*N,))
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
         coefs = sm.Logit(y, Phi).fit().params
 
         alpha_out = network.node_covariates['alpha_out']
