@@ -182,7 +182,7 @@ class Network:
 # Some "tests"
 if __name__ == '__main__':
     net = Network()
-    net.network_from_file_gexf('test.gexf')
+    net.network_from_file_gexf('data/test.gexf')
     net.new_node_covariate('x_0')
     net.node_covariates['x_0'].from_pairs([str(i) for i in range(10)],
                                           [i**2 for i in range(10)])
