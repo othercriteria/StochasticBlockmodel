@@ -20,7 +20,11 @@ class Network:
             self.N = 0
             self.network = None
             self.names = None
-            
+
+        # Offset intitially set to None so simpler offset-free model
+        # code can be used by default
+        self.offset = None
+             
         # Maps from names to 1-D and 2-D arrays, respectively
         self.node_covariates = {}
         self.edge_covariates = {}
@@ -40,6 +44,10 @@ class Network:
         self.edge_covariates[name] = EdgeCovariate(self.names)
         return self.edge_covariates[name]
 
+    def initialize_offset(self):
+        self.offset = EdgeCovariate(self.names)
+        return self.offset
+
     def subnetwork(self, inds):
         sub_N = len(inds)
         sub = Network()
@@ -58,9 +66,13 @@ class Network:
         for edge_covariate in self.edge_covariates:
             src = self.edge_covariates[edge_covariate]
             sub.new_edge_covariate(edge_covariate).from_existing(src, inds)
+
+        if self.offset:
+            sub.initialize_offset().from_existing(self.offset, inds)
             
         return sub
 
+    # Syntactic sugar to make network generation look like object mutation
     def generate(self, model, *opts):
         self.network = model.generate(self, *opts)
 
