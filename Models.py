@@ -58,7 +58,7 @@ class Stationary(IndependentBernoulli):
         N = network.N
 
         if network.offset:
-            logit_P = network.offset.matrix()
+            logit_P = network.offset.matrix().copy()
         else:
             logit_P = np.zeros((N,N))
         logit_P += self.kappa
@@ -121,7 +121,7 @@ class StationaryLogistic(Stationary):
         N = network.N
         
         if network.offset:
-            logit_P = network.offset.matrix()
+            logit_P = network.offset.matrix().copy()
         else:
             logit_P = np.zeros((N,N))            
         for b in self.beta:
@@ -266,7 +266,7 @@ class NonstationaryLogistic(StationaryLogistic):
         alpha_in = network.node_covariates['alpha_in']
         
         if network.offset:
-            logit_P = network.offset.matrix()
+            logit_P = network.offset.matrix().copy()
         else:
             logit_P = np.zeros((N,N))
         for i in range(N):
@@ -360,7 +360,8 @@ class NonstationaryLogistic(StationaryLogistic):
         if network.offset:
             offset = network.offset.matrix().reshape((N*N,))
             coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
-        coefs = sm.Logit(y, Phi).fit().params
+        else:
+            coefs = sm.Logit(y, Phi).fit().params
 
         alpha_out = network.node_covariates['alpha_out']
         alpha_in = network.node_covariates['alpha_in']
