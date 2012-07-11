@@ -105,7 +105,7 @@ class Stationary(IndependentBernoulli):
         Phi[:,0] = 1.0
         if network.offset:
             offset = network.offset.matrix().reshape((N*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
 
@@ -201,7 +201,7 @@ class StationaryLogistic(Stationary):
             Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
         if network.offset:
             offset = network.offset.matrix().reshape((N*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
 
@@ -359,7 +359,7 @@ class NonstationaryLogistic(StationaryLogistic):
             Phi[:,B + 1 + (N-1) + c] = phi_col.reshape((N*N,))
         if network.offset:
             offset = network.offset.matrix().reshape((N*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset)
+            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
 
