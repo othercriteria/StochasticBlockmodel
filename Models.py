@@ -24,8 +24,7 @@ class IndependentBernoulli:
         N = network.N
 
         if network.offset:
-            logit_P = np.zeros((N,N))
-            logit_P += network.offset.matrix()
+            logit_P = network.offset.matrix()
             return inv_logit(logit_P)
         else:
             return np.tile(0.5, (N,N))
@@ -58,9 +57,10 @@ class Stationary(IndependentBernoulli):
     def edge_probabilities(self, network):
         N = network.N
 
-        logit_P = np.zeros((N,N))
         if network.offset:
-            logit_P += network.offset.matrix()
+            logit_P = network.offset.matrix()
+        else:
+            logit_P = np.zeros((N,N))
         logit_P += self.kappa
 
         return inv_logit(logit_P)
@@ -120,9 +120,10 @@ class StationaryLogistic(Stationary):
     def edge_probabilities(self, network):
         N = network.N
         
-        logit_P = np.zeros((N,N))
         if network.offset:
-            logit_P += network.offset.matrix()
+            logit_P = network.offset.matrix()
+        else:
+            logit_P = np.zeros((N,N))            
         for b in self.beta:
             logit_P += self.beta[b] * network.edge_covariates[b].matrix()
         logit_P += self.kappa
@@ -264,9 +265,10 @@ class NonstationaryLogistic(StationaryLogistic):
         alpha_out = network.node_covariates['alpha_out']
         alpha_in = network.node_covariates['alpha_in']
         
-        logit_P = np.zeros((N,N))
         if network.offset:
-            logit_P += network.offset.matrix()
+            logit_P = network.offset.matrix()
+        else:
+            logit_P = np.zeros((N,N))
         for i in range(N):
             logit_P[i,:] += alpha_out[i]
         for j in range(N):
