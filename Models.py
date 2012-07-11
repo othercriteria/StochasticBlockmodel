@@ -160,7 +160,7 @@ class StationaryLogistic(Stationary):
 
         # Calculate observed sufficient statistics
         T = np.zeros(B + 1)
-        A = network.adjacency_matrix()
+        A = np.array(network.adjacency_matrix())
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
