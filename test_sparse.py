@@ -10,7 +10,7 @@ from Models import Stationary, StationaryLogistic, NonstationaryLogistic
 
 # Parameters
 params = { 'file_network': 'data/cit-HepTh/cit-HepTh.txt',
-           'import_limit_edges': 1200,
+           'import_limit_edges': 200,
            'file_dates': 'data/cit-HepTh/cit-HepTh-dates.txt',
            'pub_diff_classes': [30, 60, 90, 180, 360, 720] }
 
@@ -22,7 +22,8 @@ for line in open(params['file_dates'], 'r').readlines():
     if line[0] == '#': continue
     if line == '': continue
     n, d = line.split('\t')
-    if n[:2] == '11':
+    if len(n) == 9:
+        assert(n[:2] == '11')
         n = n[2:]
     d_1, d_2, d_3 = d.split('-')
     dates[n] = date(int(d_1), int(d_2), int(d_3))
@@ -39,12 +40,22 @@ for line in open(params['file_network'], 'r').readlines():
     edges.append((n_1, n_2))
     if len(edges) >= params['import_limit_edges']: break
 
-# Initialize full network
+# Plot the raw data
+import matplotlib.pyplot as plt
+plt.figure()
+x, y = [], []
+for n_1, n_2 in edges:
+    x.append(dates[n_1].toordinal())
+    y.append(dates[n_2].toordinal())
+plt.plot(x, y, '.')
+plt.show()
+
+# Initialize network from citation data
 net = Network()
 net.network_from_edges(edges)
 net.show_degree_histograms()
 
-# Convert covariate data to covariates
+# Process publication date data in covariates
 cov_names = []
 for l, u in zip([0] + params['pub_diff_classes'], params['pub_diff_classes']):
     cov_name = 'pub_diff_%d-%d' % (l, u)
