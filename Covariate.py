@@ -33,6 +33,13 @@ class NodeCovariate:
             if not n in n_to_ind: continue
             self.data[n_to_ind[n]] = v
 
+    def show_histogram(self):
+        import matplotlib.pyplot as plt
+
+        plt.figure()
+        plt.hist(self.data, bins = 50)
+        plt.show()
+
 class EdgeCovariate:
     def __init__(self, names):
         self.names = names
