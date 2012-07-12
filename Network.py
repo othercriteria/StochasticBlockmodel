@@ -36,8 +36,9 @@ class Network:
             print 'Attempting CSR conversion of a non-sparse network.'
             raise
             
-    def new_node_covariate(self, name):
-        self.node_covariates[name] = NodeCovariate(self.names)
+    def new_node_covariate(self, name, as_int = False):
+        dtype = as_int and np.int or np.float
+        self.node_covariates[name] = NodeCovariate(self.names, dtype)
         return self.node_covariates[name]
 
     def new_edge_covariate(self, name):
