@@ -7,9 +7,10 @@ import numpy as np
 import scipy.sparse as sparse
 
 class NodeCovariate:
-    def __init__(self, names):
+    def __init__(self, names, dtype = np.float):
         self.names = names
-        self.data = np.zeros(len(names))
+        self.dtype = dtype
+        self.data = np.zeros(len(names), dtype = dtype)
 
     def __repr__(self):
         return 'NodeCovariate\n%s\n%s' % (repr(self.names),repr(self.data))
@@ -22,6 +23,8 @@ class NodeCovariate:
 
     def from_existing(self, node_covariate, inds):
         self.names = node_covariate.names[inds]
+        self.dtype = node_covariate.dtype
+        self.data.dtype = self.dtype
         self.data[:] = node_covariate.data[inds]
 
     def from_pairs(self, names, values):
