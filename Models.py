@@ -65,9 +65,27 @@ class Stationary(IndependentBernoulli):
 
         return inv_logit(logit_P)
 
-    def snll_part(self, network, train, test):
-        P = self.edge_probabilities(network)
-        pass
+    def match_kappa(self, network, kappa_target):
+        N = network.N
+
+        # kappa_target should be a tuple of the following form:
+        #  ('edges', 0 < x)
+        #  ('degree', 0 < x)
+        #  ('density', 0 < x < 1) 
+        target, val = kappa_target
+        def obj(kappa):
+            self.kappa = kappa
+            P = self.edge_probabilities(network)
+            exp_edges = np.sum(P)
+            if target == 'edges':
+                return abs(exp_edges - val)
+            elif target == 'degree':
+                exp_degree = exp_edges / (1.0 * N)
+                return abs(exp_degree - val)
+            elif target == 'density':
+                exp_density = exp_edges / (1.0 * N ** 2)
+                return abs(exp_density - val)
+        self.kappa = opt.golden(obj)
 
     def fit(self, network):
         self.fit_convex_opt(network)
@@ -129,28 +147,6 @@ class StationaryLogistic(Stationary):
         logit_P += self.kappa
 
         return inv_logit(logit_P)
-
-    def match_kappa(self, network, kappa_target):
-        N = network.N
-
-        # kappa_target should be a tuple of the following form:
-        #  ('edges', 0 < x)
-        #  ('degree', 0 < x)
-        #  ('density', 0 < x < 1) 
-        target, val = kappa_target
-        def obj(kappa):
-            self.kappa = kappa
-            P = self.edge_probabilities(network)
-            exp_edges = np.sum(P)
-            if target == 'edges':
-                return abs(exp_edges - val)
-            elif target == 'degree':
-                exp_degree = exp_edges / (1.0 * N)
-                return abs(exp_degree - val)
-            elif target == 'density':
-                exp_density = exp_edges / (1.0 * N ** 2)
-                return abs(exp_density - val)
-        self.kappa = opt.golden(obj)
 
     def fit(self, network):
         self.fit_convex_opt(network)
@@ -470,7 +466,106 @@ class StationaryLogisticMargins(StationaryLogistic):
 
         return gen
 
-    
+# P_{ij} = Logit^{-1}(base_model(i,j) + Theta_{z_i,z_j})
+# Constraints: \sum_{i,j} z_{i,j} = 0
+class Blockmodel(IndependentBernoulli):
+    def __init__(self, base_model, K, block_name = 'z'):
+        self.base_model = base_model
+        self.K = K
+        self.Theta = np.zeros((K,K))
+        self.block_name = block_name
+
+    def apply_to_offset(self, network):
+        N = network.N
+        z = network.node_covariates[self.block_name]
+        for i in range(N):
+            for j in range(N):
+                network.offset[i,j] += self.Theta[z[i], z[j]]
+
+    def edge_probabilities(self, network):
+        if network.offset:
+            old_offset = network.offset.copy()
+        else:
+            network.initialize_offset()
+            old_offset = None
+        self.apply_to_offset(network)
+
+        P = self.base_model.edge_probabilities(network)
+
+        if old_offset:
+            network.offset = old_offset
+        else:
+            network.offset = None
+
+        return P
+
+    def match_kappa(self, network, kappa_target):
+        if network.offset:
+            old_offset = network.offset.copy()
+        else:
+            network.initialize_offset()
+            old_offset = None
+        self.apply_to_offset(network)
+
+        self.base_model.match_kappa(network, kappa_target)
+
+        if old_offset:
+            network.offset = old_offset
+        else:
+            network.offset = None
+
+    def fit(self, network):
+        self.fit_sem(network)
+
+    # Stochastic EM fitting with `sweeps` Gibbs sweeps in the E-step
+    # and `cycles` repetitions of the entire E-step/M-step operation
+    #
+    # This fitting procedure requires that `base_model` can handle
+    # edge covariate effects and a kappa term.
+    def fit_sem(self, network, cycles = 20, sweeps = 5):        
+        # Local aliases for convenience
+        K, Theta = self.K, self.Theta
+        N = network.N
+        z = network.node_covariates[self.block_name]
+        A = network.adjacency_matrix()
+        
+        for cycle in range(cycles):
+            # Stochastic E-step
+            for gibbs_step in range(sweeps * N):
+                l = np.random.randint(N)
+                logprobs = np.empty(K)
+                for k in range(K):
+                    logprobs[k] = (np.dot(Theta[z[:],k], A[:,l]) +
+                                   np.dot(Theta[k,z[:]], A[l,:]) +
+                                   (Theta[k,k] * A[l,l]))
+                    logprobs -= np.max(logprobs)
+                    probs = np.exp(logprobs)
+                    probs /= np.sum(probs)
+                    z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
+
+            # M-step
+            cov_name_to_inds = {}
+            for s in range(K):
+                for t in range(K):
+                    cov_name = '_%d_%d' % (s,t)
+                    cov_name_to_inds[cov_name] = (s,t)
+                    cov = network.new_edge_covariate(cov_name)
+                    def f_edge_class(i_1, i_2):
+                        return (z[i_1] == s) and (z[i_2] == t)
+                    cov.from_binary_function_ind(f_edge_class)
+                    self.base_model.beta[cov_name] = None
+
+            self.base_model.fit(network)
+
+            for cov_name in cov_name_to_inds:
+                s, t = cov_name_to_inds[cov_name]
+                self.Theta[s,t] = self.base_model.beta[cov_name]
+                network.edge_covariates.pop(cov_name)
+                self.base_model.beta.pop(cov_name)
+            Theta_mean = np.mean(Theta)
+            Theta -= Theta_mean
+            self.base_model.kappa += Theta_mean
+     
 # Generate alpha_out/in for an existing Network
 def center(x):
     return x - np.mean(x)
