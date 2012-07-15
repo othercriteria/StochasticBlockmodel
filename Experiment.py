@@ -3,6 +3,7 @@
 # Code used for testing and quantifying network inference
 # Daniel Klein, 5/15/2012
 
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -41,7 +42,20 @@ class Results:
         for i, sub_size in enumerate(sub_sizes):
             self.sub_size_to_ind[sub_size] = i
 
+    # Return a copy of the result structure, with new allocated storage
+    def copy(self):
+        dup = Results(self.sub_sizes, self.N_reps, title = self.title)
+
+        for result_name in self.results:
+            result = self.results[result_name]
+            f, f_type = result['f'], result['f_type']
+
+            dup.new(result_name, f_type, f)
+
+        return dup
+
     # Values expected for "f_type": 'a' (adjacency)
+    #                               'n' (network)
     #                               'm' (models),
     #                               'nm' (network and models)
     def new(self, name, f_type, f):
@@ -56,6 +70,8 @@ class Results:
             f_type = self.results[result]['f_type']
             if f_type == 'a':
                 val = f(network.adjacency_matrix())
+            elif f_type == 'n':
+                val = f(network)
             elif f_type == 'm':
                 val = f(data_model, fit_model)
             elif f_type == 'nm':
@@ -125,3 +141,30 @@ def add_network_stats(results):
     results.new('Max in-degree', 'a', lambda a: np.max(a.sum(0)))
     results.new('Min in-degree', 'a', lambda a: np.min(a.sum(0)))
     results.new('Self-loop density', 'a', lambda a: np.mean(np.diagonal(a)))
+
+# Find the minimum of a disagreement function from true class labels
+# over distinct relabelings of the estimated class labels
+#
+# Eventually should add option to use Hungarian algorithm, although
+# this is probably unnecessary for, say, K <= 6.
+def minimum_disagreement(z_true, z_est, f = None):
+    from itertools import permutations
+
+    assert(len(z_true) == len(z_est))
+
+    if not f:
+        N = len(z_true)
+        def f(x, y):
+            return np.sum(x != y) / N
+
+    true_classes = list(set(z_true))
+    est_classes = list(set(z_est))
+    if len(est_classes) < len(true_classes):
+        est_classes += [-1] * (len(true_classes) - len(est_classes))
+    best = np.inf
+    for est_permutation in permutations(est_classes, len(true_classes)):
+        z_est_perm = np.tile(-1, len(z_est))
+        for s, t in zip(est_permutation, true_classes):
+            z_est_perm[z_est == s] = t
+        best = min(best, f(z_true, z_est_perm))
+    return best
