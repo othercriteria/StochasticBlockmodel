@@ -59,6 +59,7 @@ class Results:
     #                               'm' (models),
     #                               'nm' (network and models)
     def new(self, name, f_type, f):
+        assert(f_type in ['a', 'n', 'm', 'nm'])
         self.results[name] = { 'f': f, 'f_type': f_type,
                                'data': np.empty((self.N_subs, self.N_reps)) }
 
