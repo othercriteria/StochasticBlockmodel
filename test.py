@@ -12,21 +12,19 @@ from Experiment import RandomSubnetworks, Results, add_network_stats
 from Utility import logit
 
 # Parameters
-params = { 'N': 200,
+params = { 'N': 300,
            'B': 5,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
-           'alpha_unif': 0.0,
+           'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
            'kappa_target': ('degree', 5),
-           'fit_nonstationary': False,
+           'fit_nonstationary': True,
            'fit_method': 'convex_opt',
            'num_reps': 10,
-           'sub_sizes': range(10, 150, 10),
-           'N_test': 5,
+           'sub_sizes': range(10, 60, 10),
            'plot_mse': True,
-           'plot_oos': False,
            'plot_network': True }
 
 
@@ -44,8 +42,8 @@ net = Network(params['N'])
 # Generate node-level propensities to extend and receive edges
 if params['alpha_norm_sd'] > 0.0:
     alpha_norm(net, params['alpha_norm_sd'])
-elif params['alpha_unif'] > 0.0:
-    alpha_unif(net, params['alpha_unif'])
+elif params['alpha_unif_sd'] > 0.0:
+    alpha_unif(net, params['alpha_unif_sd'])
 elif params['alpha_gamma_sd'] > 0.0:
     # Choosing location somewhat arbitrarily to give unit skewness
     alpha_gamma(net, 4.0, params['alpha_gamma_sd'])
@@ -76,7 +74,7 @@ for c in covariates:
 # Set up recording of results from experiment
 results = Results(params['sub_sizes'], params['num_reps'])
 add_network_stats(results)
-results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
+results.new('Sample kappa', 'm', lambda d, f: d.kappa)
 def f_c(c):
     return (lambda d, f: d.beta[c]), (lambda d, f: f.beta[c])
 for c in covariates:
@@ -84,19 +82,19 @@ for c in covariates:
     f_true, f_estimated = f_c(c)
     results.new('True beta_{%s}' % c, 'm', f_true)
     results.new('Estimated beta_{%s}' % c, 'm', f_estimated)
-results.new('MSE(P_{ij})', 'nm',
+results.new('MSE(P_ij)', 'nm',
             lambda n, d, f: np.mean((d.edge_probabilities(n) - \
                                      f.edge_probabilities(n))**2))
-results.new('MSE(logit_P_{ij})', 'nm',
+results.new('MSE(logit_P_ij)', 'nm',
             lambda n, d, f: np.mean((logit(d.edge_probabilities(n)) - \
                                      logit(f.edge_probabilities(n)))**2))
 
 for sub_size in params['sub_sizes']:
     print 'subnetwork size = %d' % sub_size
     
-    gen = RandomSubnetworks(net, sub_size, params['N_test'])
+    gen = RandomSubnetworks(net, sub_size)
     for rep in range(params['num_reps']):
-        subnet, subnet_test = gen.sample()
+        subnet = gen.sample()
         data_model.match_kappa(subnet, params['kappa_target'])
         subnet.generate(data_model)
 
@@ -121,9 +119,9 @@ for c in covariates:
 if params['plot_mse']:
     results.plot([(['MSE(beta_i)'] + covariate_mses,
                    {'ymin': 0, 'ymax': 3.0, 'plot_mean': True}),
-                  ('MSE(P_{ij})', {'ymin': 0, 'ymax': 1}),
-                  ('MSE(logit_P_{ij})', {'ymin': 0, 'ymax': 5}),
-                  'Subnetwork kappa'])
+                  ('MSE(P_ij)', {'ymin': 0, 'ymax': 1}),
+                  ('MSE(logit_P_ij)', {'ymin': 0, 'ymax': 5}),
+                  'Sample kappa'])
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
