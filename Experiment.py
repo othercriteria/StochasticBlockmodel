@@ -94,14 +94,14 @@ class Results:
     def plot(self, requests = None):
         if requests == None:
             requests = self.results.keys()
-        
-        plt.figure()
-        if self.title:
-            plt.title(self.title)
-
         num_plots = len(requests)
+        
+        f, axarr = plt.subplots(num_plots, sharex = True)
+        if self.title:
+            axarr[0].set_title(self.title)
+
         for i, request in enumerate(requests):
-            plt.subplot(num_plots, 1, (i+1))
+            ax = axarr[i]
 
             if type(request) != str:
                 names, options = request
@@ -115,22 +115,22 @@ class Results:
                 result = self.results[name]
                 data = result['data']
                 if 'plot_mean' in options and options['plot_mean']:
-                    plt.plot(self.sub_sizes, data.mean(1), hold = True)
+                    ax.plot(self.sub_sizes, data.mean(1))
                 else:
                     for rep in range(data.shape[1]):
-                        plt.plot(self.sub_sizes, data[:,rep],
-                                 'k.', hold = True)
+                        ax.scatter(self.sub_sizes, data[:,rep])
 
-            plt.ylabel(plot_name)
+            ax.set_ylabel(plot_name)
             if 'ymin' in options and 'ymax' in options:
-                plt.ylim(options['ymin'], options['ymax'])
+                ax.set_ylim(options['ymin'], options['ymax'])
             elif 'ymin' in options:
-                plt.ylim(ymin = options['ymin'])
+                ax.set_ylim(ymin = options['ymin'])
             elif 'ymax' in options:
-                plt.ylim(ymax = options['ymax'])
+                ax.set_ylim(ymax = options['ymax'])
 
-            if (i+1) == num_plots:
-                plt.xlabel('N_sub')
+        axarr[-1].set_xlabel('N_sub')
+        f.subplots_adjust(hspace = 0)
+        plt.setp([a.get_xticklabels() for a in axarr[:-1]], visible = False)
 
         plt.show()
 
