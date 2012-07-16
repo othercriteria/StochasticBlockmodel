@@ -154,16 +154,25 @@ class Network:
 
     def show_heatmap(self, order_by = None):
         if order_by:
-            title = 'Ordered by node covariate "%s"' % order_by
+            title = 'Ordered by node covariate\n"%s"' % order_by
             o = np.argsort(self.node_covariates[order_by][:])
         else:
             title, o = 'Unordered', np.arange(self.N)
 
-        plt.figure()
+        f, (ax_im, ax_ord) = plt.subplots(2, sharex = True)
+        f.set_figwidth(3)
+        f.set_figheight(6)
         A = self.adjacency_matrix()
-        plt.imshow(A[o][:,o])
-        plt.set_cmap('binary')
-        plt.title(title)
+        ax_im.imshow(A[o][:,o]).set_cmap('binary')
+        ax_im.set_ylim(0, self.N - 1)
+        ax_im.set_yticks([])
+        ax_im.set_title(title)
+        plt.setp([ax_im.get_xticklabels(), ax_im.get_yticklabels()],
+                 visible = False)
+        ax_ord.scatter(np.arange(self.N), self.node_covariates[order_by][o])
+        ax_ord.set_xlim(0, self.N - 1)
+        ax_ord.set_ylim(self.node_covariates[order_by][o[0]],
+                        self.node_covariates[order_by][o[-1]])
         plt.show()
 
     def show_degree_histograms(self):
