@@ -582,8 +582,9 @@ def alpha_norm(network, alpha_sd):
     network.new_node_covariate('alpha_out')[:] = a[0]
     network.new_node_covariate('alpha_in')[:] = a[1]
 
-def alpha_unif(network, alpha_max):
-    a = np.random.uniform(-alpha_max, alpha_max, (2,network.N))
+def alpha_unif(network, alpha_sd):
+    c = np.sqrt(12) / 2
+    a = np.random.uniform(-alpha_sd * c, alpha_sd * c, (2,network.N))
     a[0] = center(a[0])
     a[1] = center(a[1])
     
