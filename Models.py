@@ -538,10 +538,10 @@ class Blockmodel(IndependentBernoulli):
                     logprobs[k] = (np.dot(Theta[z[:],k], A[:,l]) +
                                    np.dot(Theta[k,z[:]], A[l,:]) +
                                    (Theta[k,k] * A[l,l]))
-                    logprobs -= np.max(logprobs)
-                    probs = np.exp(logprobs)
-                    probs /= np.sum(probs)
-                    z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
+                logprobs -= np.max(logprobs)
+                probs = np.exp(logprobs)
+                probs /= np.sum(probs)
+                z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
 
             # M-step
             cov_name_to_inds = {}
