@@ -49,6 +49,101 @@ class IndependentBernoulli:
         P = self.edge_probabilities(network)
         return np.random.random((N,N)) < P
 
+    # Generate sample (approximately) from the conditional
+    # distribution with fixed margins.
+    #
+    # There's no obvious stopping criterion for the Gibbs sampler used
+    # to generate random networks conditioned on the degree sequence,
+    # i.e., the adjacency matrix margins. As a heuristic, I let the
+    # user specify a degree of "cover" and then ensure that the
+    # sampler makes a non-trivial proposal on average "cover" many
+    # times concerning each possible edge.
+    #
+    # Initializing the Gibbs sampler from the approximate conditional
+    # distribution requires a bit more time initially but takes many
+    # fewer steps to reach the stationary distribution, so it is
+    # enabled by default.
+    def generate_margins(self, network, r, c,
+                         coverage = 1, arbitrary_init = False):
+        N = network.N
+        windows = N // 2
+        coverage_target = coverage * N**2 / 4
+
+        # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
+        diag = np.array([[True,False],[False,True]])
+        adiag = np.array([[False,True],[True,False]])
+        valid = set([diag.data[0:4], adiag.data[0:4]])
+        
+        if arbitrary_init:
+            # Initialize from an arbitrary matrix with the requested margins
+            gen = arbitrary_from_margins(r, c)
+        else:
+            # Initialize from an approximate sample from the
+            # conditional distribution
+            p = self.edge_probabilities(network)
+            w = p / (1.0 - p)
+            gen_sparse = approximate_from_margins_weights(r, c, w)
+            gen = np.zeros((N,N), dtype=np.bool)
+            for i, j in gen_sparse:
+                if i == -1: break 
+                gen[i,j] = 1
+
+        # Gibbs sampling to match the "location" of the edges to where
+        # they are likely under the conditional distribution
+        #
+        # Scheduling Gibbs sweeps in a checkerboard-like manner to
+        # simplify picking distinct random indices.
+        coverage_attained = 0
+        inds = np.arange(N)
+        while coverage_attained < coverage_target:
+            # Pick i-ranges and j-ranges of the randomly chosen 2x2
+            # subnetworks in which to propose moves
+            np.random.shuffle(inds)
+            i_props = [inds[2*window:2*(window+1)] for window in range(windows)]
+            np.random.shuffle(inds)
+            j_props = [inds[2*window:2*(window+1)] for window in range(windows)]
+
+            active = []
+            for i_prop in i_props:
+                gen_prop_i = gen[i_prop]
+                for j_prop in j_props:
+                    gen_prop = gen_prop_i[:,j_prop]
+
+                    # Margin-preserving moves only possible if
+                    # n_proposal is diagonal or anti-diagonal
+                    if not (gen_prop.data[0:4] in valid): continue
+                    active.append(np.ix_(i_prop, j_prop))
+            A = len(active)
+            coverage_attained += A
+
+            # Calculate individual edge probabilities; because of
+            # normalization, only beta/covariate contribution matters
+            logit_P = np.zeros((2*A,2))
+            for b in self.beta:
+                cov = network.edge_covariates[b].matrix()
+                for a, ij_prop in enumerate(active):
+                    logit_P[2*a:2*(a+1)] += self.beta[b] * cov[ij_prop]
+            P = inv_logit(logit_P)
+
+            # Normalize probabilities of allowed configurations to get
+            # conditional probabilities
+            l_diag, l_adiag = np.empty(A), np.empty(A)
+            for a in range(A):
+                P_a = P[2*a:2*(a+1)]
+                l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
+                l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
+            p_diag = l_diag / (l_diag + l_adiag)
+
+            # Update n according to calculated probabilities
+            to_diag = np.random.random(A) < p_diag
+            for diag, ij_prop in zip(to_diag, active):
+                if diag:
+                    gen[ij_prop] = diag
+                else:
+                    gen[ij_prop] = adiag
+
+        return gen
+
 # P_{ij} = Logit^{-1}(kappa + o_{ij})
 class Stationary(IndependentBernoulli):
     def __init__(self):
@@ -371,101 +466,6 @@ class NonstationaryLogistic(StationaryLogistic):
             self.beta[b_n] = coefs[b]
         self.kappa = coefs[B] + alpha_out_mean + alpha_in_mean
 
-# Identical to StationaryLogistic for inference, but generated
-# (approximately) from the conditional distribution with fixed margins.
-#
-# There's no obvious stopping criterion for the Gibbs sampler used to
-# generate random networks conditioned on the degree sequence, i.e.,
-# the adjacency matrix margins. As a heuristic, I let the user specify
-# a degree of "cover" and then ensure that the sampler makes a
-# non-trivial proposal on average "cover" many times concerning each
-# possible edge.
-#
-# Initializing the Gibbs sampler from the approximate conditional
-# distribution requires a bit more time initially but takes many fewer
-# steps to reach the stationary distribution, so it is enabled by
-# default.
-class StationaryLogisticMargins(StationaryLogistic):
-    # Precomputing for diagonal/anti-diagonal check
-    diag = np.array([[True,False],[False,True]])
-    adiag = np.array([[False,True],[True,False]])
-    valid = set([diag.data[0:4], adiag.data[0:4]])
-    
-    def generate(self, network, r, c, coverage = 1, arbitrary_init = False):
-        N = network.N
-        windows = N // 2
-        coverage_target = coverage * N**2 / 4
-        
-        if arbitrary_init:
-            # Initialize from an arbitrary matrix with the requested margins
-            gen = arbitrary_from_margins(r, c)
-        else:
-            # Initialize from an approximate sample from the
-            # conditional distribution
-            p = self.edge_probabilities(network)
-            w = p / (1.0 - p)
-            gen_sparse = approximate_from_margins_weights(r, c, w)
-            gen = np.zeros((N,N), dtype=np.bool)
-            for i, j in gen_sparse:
-                if i == -1: break 
-                gen[i,j] = 1
-
-        # Gibbs sampling to match the "location" of the edges to where
-        # they are likely under the conditional distribution
-        #
-        # Scheduling Gibbs sweeps in a checkerboard-like manner to
-        # simplify picking distinct random indices.
-        coverage_attained = 0
-        inds = np.arange(N)
-        while coverage_attained < coverage_target:
-            # Pick i-ranges and j-ranges of the randomly chosen 2x2
-            # subnetworks in which to propose moves
-            np.random.shuffle(inds)
-            i_props = [inds[2*window:2*(window+1)] for window in range(windows)]
-            np.random.shuffle(inds)
-            j_props = [inds[2*window:2*(window+1)] for window in range(windows)]
-
-            active = []
-            for i_prop in i_props:
-                gen_prop_i = gen[i_prop]
-                for j_prop in j_props:
-                    gen_prop = gen_prop_i[:,j_prop]
-
-                    # Margin-preserving moves only possible if
-                    # n_proposal is diagonal or anti-diagonal
-                    if not (gen_prop.data[0:4] in self.valid): continue
-                    active.append(np.ix_(i_prop, j_prop))
-            A = len(active)
-            coverage_attained += A
-
-            # Calculate individual edge probabilities; because of
-            # normalization, only beta/covariate contribution matters
-            logit_P = np.zeros((2*A,2))
-            for b in self.beta:
-                cov = network.edge_covariates[b].matrix()
-                for a, ij_prop in enumerate(active):
-                    logit_P[2*a:2*(a+1)] += self.beta[b] * cov[ij_prop]
-            P = inv_logit(logit_P)
-
-            # Normalize probabilities of allowed configurations to get
-            # conditional probabilities
-            l_diag, l_adiag = np.empty(A), np.empty(A)
-            for a in range(A):
-                P_a = P[2*a:2*(a+1)]
-                l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
-                l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
-            p_diag = l_diag / (l_diag + l_adiag)
-
-            # Update n according to calculated probabilities
-            to_diag = np.random.random(A) < p_diag
-            for diag, ij_prop in zip(to_diag, active):
-                if diag:
-                    gen[ij_prop] = self.diag
-                else:
-                    gen[ij_prop] = self.adiag
-
-        return gen
-
 # P_{ij} = Logit^{-1}(base_model(i,j) + Theta_{z_i,z_j})
 # Constraints: \sum_{i,j} z_{i,j} = 0
 class Blockmodel(IndependentBernoulli):
@@ -565,6 +565,19 @@ class Blockmodel(IndependentBernoulli):
             Theta_mean = np.mean(Theta)
             Theta -= Theta_mean
             self.base_model.kappa += Theta_mean
+
+# Endow an existing model with fixed row and column margins
+class FixedMargins(IndependentBernoulli):
+    def __init__(self, base_model, r_name = 'r', c_name = 'c'):
+        self.base_model = base_model
+        self.r_name = r_name
+        self.c_name = c_name
+
+    def generate(self, network, *opts):
+        r = network.node_covariates[self.r_name][:]
+        c = network.node_covariates[self.c_name][:]
+
+        return self.base_model.generate_margins(network, r, c, *opts)
      
 # Generate alpha_out/in for an existing Network
 def center(x):
