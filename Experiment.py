@@ -95,8 +95,11 @@ class Results:
         if requests == None:
             requests = self.results.keys()
         num_plots = len(requests)
-        
+
         f, axarr = plt.subplots(num_plots, sharex = True)
+        if num_plots == 1:
+            axarr = [axarr]
+            
         if self.title:
             axarr[0].set_title(self.title)
 
