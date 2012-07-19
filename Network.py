@@ -37,8 +37,11 @@ class Network:
             raise
             
     def new_node_covariate(self, name, as_int = False):
-        dtype = as_int and np.int or np.float
-        self.node_covariates[name] = NodeCovariate(self.names, dtype)
+        self.node_covariates[name] = NodeCovariate(self.names)
+        return self.node_covariates[name]
+
+    def new_node_covariate_int(self, name):
+        self.node_covariates[name] = NodeCovariate(self.names, dtype = np.int)
         return self.node_covariates[name]
 
     def new_edge_covariate(self, name):
@@ -169,10 +172,11 @@ class Network:
         ax_im.set_title(title)
         plt.setp([ax_im.get_xticklabels(), ax_im.get_yticklabels()],
                  visible = False)
-        ax_ord.scatter(np.arange(self.N), self.node_covariates[order_by][o])
-        ax_ord.set_xlim(0, self.N - 1)
-        ax_ord.set_ylim(self.node_covariates[order_by][o[0]],
-                        self.node_covariates[order_by][o[-1]])
+        if order_by:
+            ax_ord.scatter(np.arange(self.N), self.node_covariates[order_by][o])
+            ax_ord.set_xlim(0, self.N - 1)
+            ax_ord.set_ylim(self.node_covariates[order_by][o[0]],
+                            self.node_covariates[order_by][o[-1]])
         plt.show()
 
     def show_degree_histograms(self):
