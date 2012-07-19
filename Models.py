@@ -391,7 +391,7 @@ class StationaryLogisticMargins(StationaryLogistic):
     adiag = np.array([[False,True],[True,False]])
     valid = set([diag.data[0:4], adiag.data[0:4]])
     
-    def generate(self, network, r, c, coverage = 100, arbitrary_init = False):
+    def generate(self, network, r, c, coverage = 1, arbitrary_init = False):
         N = network.N
         windows = N // 2
         coverage_target = coverage * N**2 / 4
@@ -458,7 +458,7 @@ class StationaryLogisticMargins(StationaryLogistic):
 
             # Update n according to calculated probabilities
             to_diag = np.random.random(A) < p_diag
-            for diag, ij_prob in zip(to_diag, active):
+            for diag, ij_prop in zip(to_diag, active):
                 if diag:
                     gen[ij_prop] = self.diag
                 else:
