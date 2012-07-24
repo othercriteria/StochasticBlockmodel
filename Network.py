@@ -77,8 +77,8 @@ class Network:
         return sub
 
     # Syntactic sugar to make network generation look like object mutation
-    def generate(self, model, *opts):
-        self.network = model.generate(self, *opts)
+    def generate(self, model, **opts):
+        self.network = model.generate(self, **opts)
 
     def network_from_file_gexf(self, path):
         in_network = nx.read_gexf(path)
@@ -134,6 +134,23 @@ class Network:
         else:
             print 'Asked for sparse adjacency matrix of non-sparse network.'
             raise
+
+    def offset_extremes(self):
+        if not self.offset:
+            self.initialize_offset()
+        
+        r_sums, c_sums = self.network.sum(1), self.network.sum(0)
+
+        for i, r_sum in enumerate(r_sums):
+            if r_sum == 0:
+                self.offset[i,:] = -np.inf
+            elif r_sum == self.N:
+                self.offset[i,:] = np.inf
+        for j, c_sum in enumerate(c_sums):
+            if c_sum == 0:
+                self.offset[:,j] = -np.inf
+            elif c_sum == self.N:
+                self.offset[:,j] = np.inf
 
     def show(self):
         graph = nx.DiGraph()
