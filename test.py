@@ -12,18 +12,19 @@ from Experiment import RandomSubnetworks, Results, add_network_stats
 from Utility import logit
 
 # Parameters
-params = { 'N': 300,
+params = { 'N': 200,
            'B': 5,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
-           'alpha_unif_sd': 0.0,
+           'alpha_unif_sd': 1.0,
            'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('degree', 5),
+           'kappa_target': ('degree', 2),
+           'offset_extreme': True,
            'fit_nonstationary': True,
            'fit_method': 'convex_opt',
            'num_reps': 10,
-           'sub_sizes': range(10, 60, 10),
+           'sub_sizes': range(10, 110, 10),
            'plot_mse': True,
            'plot_network': True }
 
@@ -85,9 +86,6 @@ for c in covariates:
 results.new('MSE(P_ij)', 'nm',
             lambda n, d, f: np.mean((d.edge_probabilities(n) - \
                                      f.edge_probabilities(n))**2))
-results.new('MSE(logit_P_ij)', 'nm',
-            lambda n, d, f: np.mean((logit(d.edge_probabilities(n)) - \
-                                     logit(f.edge_probabilities(n)))**2))
 
 for sub_size in params['sub_sizes']:
     print 'subnetwork size = %d' % sub_size
@@ -97,6 +95,7 @@ for sub_size in params['sub_sizes']:
         subnet = gen.sample()
         data_model.match_kappa(subnet, params['kappa_target'])
         subnet.generate(data_model)
+        if params['offset_extreme']: subnet.offset_extremes()
 
         if params['fit_method'] == 'convex_opt':
             fit_model.fit_convex_opt(subnet)
@@ -120,7 +119,6 @@ if params['plot_mse']:
     results.plot([(['MSE(beta_i)'] + covariate_mses,
                    {'ymin': 0, 'ymax': 3.0, 'plot_mean': True}),
                   ('MSE(P_ij)', {'ymin': 0, 'ymax': 1}),
-                  ('MSE(logit_P_ij)', {'ymin': 0, 'ymax': 5}),
                   'Sample kappa'])
   
 # Plot network statistics as well as sparsity parameter
