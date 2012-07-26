@@ -138,19 +138,54 @@ class Network:
     def offset_extremes(self):
         if not self.offset:
             self.initialize_offset()
-        
-        r_sums, c_sums = self.network.sum(1), self.network.sum(0)
 
-        for i, r_sum in enumerate(r_sums):
-            if r_sum == 0:
-                self.offset[i,:] = -np.inf
-            elif r_sum == self.N:
-                self.offset[i,:] = np.inf
-        for j, c_sum in enumerate(c_sums):
-            if c_sum == 0:
-                self.offset[:,j] = -np.inf
-            elif c_sum == self.N:
-                self.offset[:,j] = np.inf
+        # (Separately) sort rows and columns of adjacency matrix by
+        # increasing sum
+        A = np.asarray(self.adjacency_matrix())
+        r_ord = np.argsort(A.sum(1))
+        c_ord = np.argsort(A.sum(0))
+        A = A[r_ord][:,c_ord]
+
+        # Convenience function to set blocks of the offset
+        def set_offset_block(r, c, val):
+            self.offset[r_ord[r],c_ord[c]] = val
+
+        # Recursively examine for submatrices that will send
+        # corresponding EMLE parameter estimates to infinity
+        to_screen = [(np.arange(self.N), np.arange(self.N))]
+        while len(to_screen) > 0:
+            r_act, c_act = to_screen.pop()
+
+            A_act = A[r_act][:,c_act]
+            n_act = A_act.shape
+            trivial = [(0,0), (0,n_act[1]), (n_act[0],0), (n_act[0],n_act[1])]
+            for (i,j) in [(i,j)
+                         for i in range(n_act[0] + 1)
+                         for j in range(n_act[1] + 1)]:
+                if (i,j) in trivial: continue
+                if np.any(A_act[:i][:,:j]): continue
+                if not np.all(A_act[i:][:,j:]): continue
+                set_offset_block(r_act[:i], c_act[:j], -np.inf)
+                set_offset_block(r_act[i:], c_act[j:], np.inf)
+                if i > 0 and j < n_act[1]:
+                    A_sub = A_act[:i][:,j:]
+                    if not np.any(A_sub):
+                        set_offset_block(r_act[:i], c_act[j:], -np.inf)
+                    elif np.all(A_sub):
+                        set_offset_block(r_act[:i], c_act[j:], np.inf)
+                    else:
+                        to_screen.append((r_act[np.arange(i)],
+                                          c_act[np.arange(j, n_act[1])]))
+                if i < n_act[0] and j > 0:
+                    A_sub = A_act[i:][:,:j]
+                    if not np.any(A_sub):
+                        set_offset_block(r_act[i:], c_act[:j], -np.inf)
+                    elif np.all(A_sub):
+                        set_offset_block(r_act[i:], c_act[:j], np.inf)
+                    else:
+                        to_screen.append((r_act[np.arange(i, n_act[0])],
+                                          c_act[np.arange(j)]))
+                break
 
     def show(self):
         graph = nx.DiGraph()
@@ -243,3 +278,11 @@ if __name__ == '__main__':
     print net_2.edge_covariates['ec_2']
     net_2.show()
             
+    net_3 = Network(10)
+    ord = np.arange(10)
+    np.random.shuffle(ord)
+    for i in range(10):
+        for j in range(i,10):
+            net_3.network[ord[i],ord[j]] = True
+    net_3.offset_extremes()
+    print net_3.offset.matrix()
