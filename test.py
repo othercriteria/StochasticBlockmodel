@@ -12,19 +12,19 @@ from Experiment import RandomSubnetworks, Results, add_network_stats
 from Utility import logit
 
 # Parameters
-params = { 'N': 200,
+params = { 'N': 300,
            'B': 5,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
-           'alpha_unif_sd': 1.0,
+           'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
            'kappa_target': ('degree', 2),
-           'offset_extreme': True,
+           'offset_extreme': False,
            'fit_nonstationary': True,
            'fit_method': 'convex_opt',
-           'num_reps': 10,
-           'sub_sizes': range(10, 110, 10),
+           'num_reps': 15,
+           'sub_sizes': range(10, 40, 10),
            'plot_mse': True,
            'plot_network': True }
 
@@ -86,6 +86,14 @@ for c in covariates:
 results.new('MSE(P_ij)', 'nm',
             lambda n, d, f: np.mean((d.edge_probabilities(n) - \
                                      f.edge_probabilities(n))**2))
+if params['offset_extreme']:
+    results.new('Active cells', 'n',
+                lambda n: np.isfinite(n.offset.matrix()).sum())
+else:
+    results.new('MSE(logit P_ij)', 'nm',
+            lambda n, d, f: np.mean((logit(d.edge_probabilities(n)) - \
+                                     logit(f.edge_probabilities(n)))**2))
+    results.new('Active cells', 'n', lambda n: n.N ** 2)
 
 for sub_size in params['sub_sizes']:
     print 'subnetwork size = %d' % sub_size
@@ -116,10 +124,14 @@ for c in covariates:
 # Plot inference performace, in terms of MSE(beta) and MSE(P_ij); also
 # plot kappas chosen for data models
 if params['plot_mse']:
-    results.plot([(['MSE(beta_i)'] + covariate_mses,
-                   {'ymin': 0, 'ymax': 3.0, 'plot_mean': True}),
-                  ('MSE(P_ij)', {'ymin': 0, 'ymax': 1}),
-                  'Sample kappa'])
+    to_plot = [(['MSE(beta_i)'] + covariate_mses,
+                {'ymin': 0, 'ymax': 3.0, 'plot_mean': True}),
+               ('MSE(P_ij)', {'ymin': 0, 'ymax': 1}),
+               ('Active cells', {'ymin': 0}),
+               'Sample kappa']
+    if not params['offset_extreme']:
+        to_plot.insert(2, ('MSE(logit P_ij)', {'ymin': 0, 'ymax': 6}))
+    results.plot(to_plot)
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
