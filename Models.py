@@ -289,7 +289,11 @@ class StationaryLogistic(Stationary):
             for b, b_n in enumerate(self.beta):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
-            return ET - T
+            grad = ET - T
+            abs_grad = np.abs(ET - T)
+            print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
+                (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
+            return grad
 
         bounds = [(-8,8)] * B + [(-15,15)]
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
@@ -442,7 +446,11 @@ class NonstationaryLogistic(StationaryLogistic):
             for b, b_n in enumerate(self.beta):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
-            return ET - T
+            grad = ET - T
+            abs_grad = np.abs(ET - T)
+            print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
+                (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
+            return grad
 
         bounds = [(-8,8)] * B + [(-15,15)] + [(-6,6)] * (2*(N-1))
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
