@@ -152,6 +152,7 @@ class IndependentBernoulli:
 class Stationary(IndependentBernoulli):
     def __init__(self):
         self.kappa = 0.0
+        self.fit = self.fit_convex_opt
 
     def edge_probabilities(self, network):
         N = network.N
@@ -186,9 +187,6 @@ class Stationary(IndependentBernoulli):
                 return abs(exp_density - val)
         self.kappa = opt.golden(obj)
 
-    def fit(self, network):
-        self.fit_convex_opt(network)
-
     # Mechanical specialization of the StationaryLogistic code, so not
     # really ideal for this one-dimensional problem.
     def fit_convex_opt(self, network):
@@ -198,7 +196,7 @@ class Stationary(IndependentBernoulli):
         T[0] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(1)
-        theta[0] = logit(network.adjacency_matrix().sum() / network.N ** 2)
+        theta[0] = logit(A.sum(dtype=np.int) / network.N ** 2)
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
@@ -240,6 +238,7 @@ class StationaryLogistic(Stationary):
     def __init__(self):
         Stationary.__init__(self)
         self.beta = {}
+        self.fit = self.fit_convex_opt
 
     def edge_probabilities(self, network):
         N = network.N
@@ -254,10 +253,7 @@ class StationaryLogistic(Stationary):
 
         return inv_logit(logit_P)
 
-    def fit(self, network):
-        self.fit_convex_opt(network)
-
-    def fit_convex_opt(self, network):
+    def fit_convex_opt(self, network, verbose = False):
         B = len(self.beta)
 
         # Calculate observed sufficient statistics
@@ -268,7 +264,9 @@ class StationaryLogistic(Stationary):
         T[B] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(B + 1)
-        theta[B] = logit(network.adjacency_matrix().sum() / network.N ** 2)
+        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        if network.offset:
+            theta[B] -= np.mean(network.offset.matrix())
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
@@ -290,9 +288,10 @@ class StationaryLogistic(Stationary):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
             grad = ET - T
-            abs_grad = np.abs(ET - T)
-            print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
-                (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
+            if verbose:
+                abs_grad = np.abs(ET - T)
+                print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
+                    (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
             return grad
 
         bounds = [(-8,8)] * B + [(-15,15)]
@@ -376,6 +375,10 @@ class StationaryLogistic(Stationary):
 #                     o_{ij})
 # Constraints: \sum_i alpha_out_i = 0, \sum_j alpha_in_j = 0
 class NonstationaryLogistic(StationaryLogistic):
+    def __init__(self):
+        StationaryLogistic.__init__(self)
+        self.fit = self.fit_convex_opt
+        
     def edge_probabilities(self, network):
         N = network.N
         alpha_out = network.node_covariates['alpha_out']
@@ -395,10 +398,7 @@ class NonstationaryLogistic(StationaryLogistic):
 
         return inv_logit(logit_P)
 
-    def fit(self, network):
-        self.fit_convex_opt(network)
-
-    def fit_convex_opt(self, network):
+    def fit_convex_opt(self, network, verbose = False):
         N = network.N
         B = len(self.beta)
         alpha_zero(network)
@@ -415,7 +415,9 @@ class NonstationaryLogistic(StationaryLogistic):
         T[B] = np.sum(A, dtype=np.int)
             
         theta = np.zeros(B + 1 + 2*(N-1))
-        theta[B] = logit(network.adjacency_matrix().sum() / network.N ** 2)
+        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        if network.offset:
+            theta[B] -= np.mean(network.offset.matrix())
         alpha_out = network.node_covariates['alpha_out']
         alpha_in = network.node_covariates['alpha_in']
         def obj(theta):
@@ -447,9 +449,10 @@ class NonstationaryLogistic(StationaryLogistic):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
             grad = ET - T
-            abs_grad = np.abs(ET - T)
-            print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
-                (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
+            if verbose:
+                abs_grad = np.abs(ET - T)
+                print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
+                    (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
             return grad
 
         bounds = [(-8,8)] * B + [(-15,15)] + [(-6,6)] * (2*(N-1))
