@@ -3,10 +3,11 @@
 # Models for generating and fitting networks
 # Daniel Klein, 5/11/2012
 
+from __future__ import division
 import numpy as np
 import scipy.optimize as opt
 
-from Utility import inv_logit
+from Utility import logit, inv_logit
 from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weights
 
 # It's a bit weird to have NonstationaryLogistic as a subclass of strictly
@@ -41,7 +42,13 @@ class IndependentBernoulli:
         # Compute the negative log-likelihood for the rest of the cells
         ind_P_rest = -(ind_P_zero + ind_P_one)
         P, A = P[ind_P_rest], A[ind_P_rest]
-        return -np.sum(np.log(P ** A) + np.log((1.0 - P) ** (1.0 - A)))
+        nll = -np.sum(np.log(P ** A) + np.log((1.0 - P) ** (1.0 - A)))
+
+        # Edge cases and numerical weirdness can occur; better to pass
+        # on infinity that at least carries the sign of the blowup
+        if np.isnan(nll):
+            return np.Inf
+        return nll
 
     def generate(self, network):
         N = network.N
@@ -93,6 +100,7 @@ class IndependentBernoulli:
         #
         # Scheduling Gibbs sweeps in a checkerboard-like manner to
         # simplify picking distinct random indices.
+        P_full = self.edge_probabilities(network)
         coverage_attained = 0
         inds = np.arange(N)
         while coverage_attained < coverage_target:
@@ -116,14 +124,10 @@ class IndependentBernoulli:
             A = len(active)
             coverage_attained += A
 
-            # Calculate individual edge probabilities; because of
-            # normalization, only beta/covariate contribution matters
-            logit_P = np.zeros((2*A,2))
-            for b in self.beta:
-                cov = network.edge_covariates[b].matrix()
-                for a, ij_prop in enumerate(active):
-                    logit_P[2*a:2*(a+1)] += self.beta[b] * cov[ij_prop]
-            P = inv_logit(logit_P)
+            # Calculate individual edge probabilities
+            P = np.empty((2*A,2))
+            for a, ij_prop in enumerate(active):
+                P[2*a:2*(a+1)] = P_full[ij_prop]
 
             # Normalize probabilities of allowed configurations to get
             # conditional probabilities
@@ -135,9 +139,9 @@ class IndependentBernoulli:
             p_diag = l_diag / (l_diag + l_adiag)
 
             # Update n according to calculated probabilities
-            to_diag = np.random.random(A) < p_diag
-            for diag, ij_prop in zip(to_diag, active):
-                if diag:
+            to_diags = np.random.random(A) < p_diag
+            for to_diag, ij_prop in zip(to_diags, active):
+                if to_diag:
                     gen[ij_prop] = diag
                 else:
                     gen[ij_prop] = adiag
@@ -194,10 +198,17 @@ class Stationary(IndependentBernoulli):
         T[0] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(1)
+        theta[0] = logit(network.adjacency_matrix().sum() / network.N ** 2)
         def obj(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
             self.kappa = theta[0]
             return self.nll(network)
         def grad(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing gradient for nan-containing vector.'
+                return np.zeros(1)
             self.kappa = theta[0]
             ET = np.zeros(1)
             P = self.edge_probabilities(network)
@@ -257,12 +268,19 @@ class StationaryLogistic(Stationary):
         T[B] = np.sum(A, dtype=np.int)
 
         theta = np.zeros(B + 1)
+        theta[B] = logit(network.adjacency_matrix().sum() / network.N ** 2)
         def obj(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
             return self.nll(network)
         def grad(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing gradient for nan-containing vector.'
+                return np.zeros(B + 1)
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
@@ -273,8 +291,11 @@ class StationaryLogistic(Stationary):
             ET[B] = np.sum(P)
             return ET - T
 
-        bounds = [(-10,10)] * B + [(-15,15)]
+        bounds = [(-8,8)] * B + [(-15,15)]
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
+        if (np.any(theta_opt == [b[0] for b in bounds]) or
+            np.any(theta_opt == [b[1] for b in bounds])):
+            print 'Warning: some constraints active in model fitting.'
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
         self.kappa = theta_opt[B]
@@ -390,9 +411,13 @@ class NonstationaryLogistic(StationaryLogistic):
         T[B] = np.sum(A, dtype=np.int)
             
         theta = np.zeros(B + 1 + 2*(N-1))
+        theta[B] = logit(network.adjacency_matrix().sum() / network.N ** 2)
         alpha_out = network.node_covariates['alpha_out']
         alpha_in = network.node_covariates['alpha_in']
         def obj(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
             alpha_out[0:N-1] = theta[(B + 1):(B + 1 + (N-1))]
             alpha_in[0:N-1] = theta[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
             for b, b_n in enumerate(self.beta):
@@ -400,6 +425,9 @@ class NonstationaryLogistic(StationaryLogistic):
             self.kappa = theta[B]
             return self.nll(network)
         def grad(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing gradient for nan-containing vector.'
+                return np.zeros(B + 1 + 2*(N-1))
             alpha_out[0:N-1] = theta[(B + 1):(B + 1 + (N-1))]
             alpha_in[0:N-1] = theta[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
             for b, b_n in enumerate(self.beta):
@@ -416,8 +444,11 @@ class NonstationaryLogistic(StationaryLogistic):
             ET[B] = np.sum(P)
             return ET - T
 
-        bounds = [(-10,10)] * B + [(-15,15)] + [(-6,6)] * (2*(N-1))
+        bounds = [(-8,8)] * B + [(-15,15)] + [(-6,6)] * (2*(N-1))
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
+        if (np.any(theta_opt == [b[0] for b in bounds]) or
+            np.any(theta_opt == [b[1] for b in bounds])):
+            print 'Warning: some constraints active in model fitting.'
         alpha_out[0:N-1] = theta_opt[(B + 1):(B + 1 + (N-1))]
         alpha_in[0:N-1] = theta_opt[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
         alpha_out_mean = np.mean(alpha_out[:])
@@ -573,11 +604,11 @@ class FixedMargins(IndependentBernoulli):
         self.r_name = r_name
         self.c_name = c_name
 
-    def generate(self, network, *opts):
+    def generate(self, network, **opts):
         r = network.node_covariates[self.r_name][:]
         c = network.node_covariates[self.c_name][:]
 
-        return self.base_model.generate_margins(network, r, c, *opts)
+        return self.base_model.generate_margins(network, r, c, **opts)
      
 # Generate alpha_out/in for an existing Network
 def center(x):
