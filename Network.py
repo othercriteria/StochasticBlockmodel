@@ -209,10 +209,10 @@ class Network:
 
     def show_heatmap(self, order_by = None):
         if order_by:
-            title = 'Ordered by node covariate\n"%s"' % order_by
+            title = 'Adjacency matrix ordered by node covariate\n"%s"' % order_by
             o = np.argsort(self.node_covariates[order_by][:])
         else:
-            title, o = 'Unordered', np.arange(self.N)
+            title, o = 'Unordered adjacency matrix', np.arange(self.N)
 
         f, (ax_im, ax_ord) = plt.subplots(2, sharex = True)
         f.set_figwidth(3)
@@ -229,6 +229,24 @@ class Network:
             ax_ord.set_xlim(0, self.N - 1)
             ax_ord.set_ylim(self.node_covariates[order_by][o[0]],
                             self.node_covariates[order_by][o[-1]])
+        plt.show()
+
+    def show_offset(self, order_by = None):
+        if order_by:
+            title = 'Offsets ordered by node covariate\n"%s"' % order_by
+            o = np.argsort(self.node_covariates[order_by][:])
+        else:
+            title, o = 'Unordered offsets', np.arange(self.N)
+
+        f = plt.figure()
+        ax = f.add_subplot(1, 1, 1)
+        O = self.offset.matrix()
+        ax.imshow(O[o][:,o])
+        ax.set_xlim(0, self.N - 1)
+        ax.set_ylim(0, self.N - 1)
+        ax.set_title(title)
+        plt.setp([ax.get_xticklabels(), ax.get_yticklabels()],
+                 visible = False)
         plt.show()
 
     def show_degree_histograms(self):
