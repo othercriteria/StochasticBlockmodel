@@ -191,7 +191,7 @@ class Stationary(IndependentBernoulli):
     # really ideal for this one-dimensional problem.
     def fit_convex_opt(self, network, verbose = False):
         # Calculate observed sufficient statistic
-        T = np.zeros(1)
+        T = np.empty(1)
         A = network.adjacency_matrix()
         T[0] = np.sum(A, dtype=np.int)
 
@@ -210,7 +210,7 @@ class Stationary(IndependentBernoulli):
                 print 'Warning: computing gradient for nan-containing vector.'
                 return np.zeros(1)
             self.kappa = theta[0]
-            ET = np.zeros(1)
+            ET = np.empty(1)
             P = self.edge_probabilities(network)
             ET[0] = np.sum(P)
             grad = ET - T
@@ -289,7 +289,7 @@ class StationaryLogistic(Stationary):
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
-            ET = np.zeros(B + 1)
+            ET = np.empty(B + 1)
             P = self.edge_probabilities(network)
             for b, b_n in enumerate(self.beta):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
@@ -463,7 +463,7 @@ class NonstationaryLogistic(StationaryLogistic):
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
-            ET = np.zeros(B + 1 + 2*(N-1))
+            ET = np.empty(B + 1 + 2*(N-1))
             P = self.edge_probabilities(network)
             Er = np.sum(P, axis = 1)[0:(N-1)]
             Ec = np.sum(P, axis = 0)[0:(N-1)]
