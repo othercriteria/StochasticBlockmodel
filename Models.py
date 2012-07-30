@@ -6,6 +6,7 @@
 from __future__ import division
 import numpy as np
 import scipy.optimize as opt
+from time import time
 
 from Utility import logit, inv_logit, logit_mean
 from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weights
@@ -190,6 +191,10 @@ class Stationary(IndependentBernoulli):
     # Mechanical specialization of the StationaryLogistic code, so not
     # really ideal for this one-dimensional problem.
     def fit_convex_opt(self, network, verbose = False):
+        self.fit_info = { 'obj_evals': 0, 'grad_evals': 0,
+                          'grad_final': np.empty(1) }
+        start_time = time()
+        
         # Calculate observed sufficient statistic
         T = np.empty(1)
         A = network.adjacency_matrix()
@@ -204,7 +209,9 @@ class Stationary(IndependentBernoulli):
                 print 'Warning: computing objective for nan-containing vector.'
                 return np.Inf
             self.kappa = theta[0]
-            return self.nll(network)
+            nll = self.nll(network)
+            self.fit_info['obj_evals'] += 1
+            return nll
         def grad(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing gradient for nan-containing vector.'
@@ -214,6 +221,8 @@ class Stationary(IndependentBernoulli):
             P = self.edge_probabilities(network)
             ET[0] = np.sum(P)
             grad = ET - T
+            self.fit_info['grad_evals'] += 1
+            self.fit_info['grad_final'][:] = grad
             if verbose:
                 print '|ET - T|: %.2f' % abs(grad[0])
             return grad
@@ -221,6 +230,8 @@ class Stationary(IndependentBernoulli):
         bounds = [(-15,15)]
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
         self.kappa = theta_opt[0]
+
+        self.fit_info['wall_time'] = time() - start_time
 
     def fit_logistic(self, network):
         import statsmodels.api as sm
@@ -261,6 +272,10 @@ class StationaryLogistic(Stationary):
     def fit_convex_opt(self, network, verbose = False):
         B = len(self.beta)
 
+        self.fit_info = { 'obj_evals': 0, 'grad_evals': 0,
+                          'grad_final': np.empty(B + 1) }
+        start_time = time()
+
         # Calculate observed sufficient statistics
         T = np.empty(B + 1)
         A = np.array(network.adjacency_matrix())
@@ -281,7 +296,9 @@ class StationaryLogistic(Stationary):
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
-            return self.nll(network)
+            nll = self.nll(network)
+            self.fit_info['obj_evals'] += 1
+            return nll
         def grad(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing gradient for nan-containing vector.'
@@ -295,6 +312,8 @@ class StationaryLogistic(Stationary):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
             grad = ET - T
+            self.fit_info['grad_evals'] += 1
+            self.fit_info['grad_final'][:] = grad
             if verbose:
                 abs_grad = np.abs(ET - T)
                 print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
@@ -309,6 +328,8 @@ class StationaryLogistic(Stationary):
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
         self.kappa = theta_opt[B]
+
+        self.fit_info['wall_time'] = time() - start_time
 
     def fit_logistic(self, network):
         import statsmodels.api as sm
@@ -407,9 +428,14 @@ class NonstationaryLogistic(StationaryLogistic):
 
     def fit_convex_opt(self, network, verbose = False):
         N = network.N
+        B = len(self.beta)
+
+        self.fit_info = { 'obj_evals': 0, 'grad_evals': 0,
+                          'grad_final': np.empty(B + 1 + 2*(N-1)) }
+        start_time = time()
+
         if network.offset:
             O = network.offset.matrix()
-        B = len(self.beta)
         alpha_zero(network)
 
         # Calculate observed sufficient statistics
@@ -453,7 +479,9 @@ class NonstationaryLogistic(StationaryLogistic):
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
-            return self.nll(network)
+            nll = self.nll(network)
+            self.fit_info['obj_evals'] += 1
+            return nll
         def grad(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing gradient for nan-containing vector.'
@@ -473,6 +501,8 @@ class NonstationaryLogistic(StationaryLogistic):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
             grad = ET - T
+            self.fit_info['grad_evals'] += 1
+            self.fit_info['grad_final'][:] = grad
             if verbose:
                 abs_grad = np.abs(ET - T)
                 print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
@@ -493,6 +523,8 @@ class NonstationaryLogistic(StationaryLogistic):
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
         self.kappa = theta_opt[B] + alpha_out_mean + alpha_in_mean
+
+        self.fit_info['wall_time'] = time() - start_time
 
     def fit_logistic(self, network):
         import statsmodels.api as sm
