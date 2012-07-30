@@ -7,7 +7,7 @@ from __future__ import division
 import numpy as np
 import scipy.optimize as opt
 
-from Utility import logit, inv_logit
+from Utility import logit, inv_logit, logit_mean
 from BinaryMatrix import arbitrary_from_margins, approximate_from_margins_weights
 
 # It's a bit weird to have NonstationaryLogistic as a subclass of strictly
@@ -189,14 +189,16 @@ class Stationary(IndependentBernoulli):
 
     # Mechanical specialization of the StationaryLogistic code, so not
     # really ideal for this one-dimensional problem.
-    def fit_convex_opt(self, network):
+    def fit_convex_opt(self, network, verbose = False):
         # Calculate observed sufficient statistic
         T = np.zeros(1)
         A = network.adjacency_matrix()
         T[0] = np.sum(A, dtype=np.int)
 
-        theta = np.zeros(1)
+        theta = np.empty(1)
         theta[0] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        if network.offset:
+            theta[0] -= logit_mean(network.offset.matrix())
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
@@ -211,9 +213,12 @@ class Stationary(IndependentBernoulli):
             ET = np.zeros(1)
             P = self.edge_probabilities(network)
             ET[0] = np.sum(P)
-            return ET - T
+            grad = ET - T
+            if verbose:
+                print '|ET - T|: %.2f' % abs(grad[0])
+            return grad
 
-        bounds = [(-20,20)]
+        bounds = [(-15,15)]
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
         self.kappa = theta_opt[0]
 
@@ -257,16 +262,18 @@ class StationaryLogistic(Stationary):
         B = len(self.beta)
 
         # Calculate observed sufficient statistics
-        T = np.zeros(B + 1)
+        T = np.empty(B + 1)
         A = np.array(network.adjacency_matrix())
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
 
+        # Initialize theta
         theta = np.zeros(B + 1)
         theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
         if network.offset:
-            theta[B] -= np.mean(network.offset.matrix())
+            theta[B] -= logit_mean(network.offset.matrix())
+
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
@@ -400,11 +407,13 @@ class NonstationaryLogistic(StationaryLogistic):
 
     def fit_convex_opt(self, network, verbose = False):
         N = network.N
+        if network.offset:
+            O = network.offset.matrix()
         B = len(self.beta)
         alpha_zero(network)
 
         # Calculate observed sufficient statistics
-        T = np.zeros(B + 1 + 2*(N-1))
+        T = np.empty(B + 1 + 2*(N-1))
         A = np.array(network.adjacency_matrix())
         r = np.sum(A, axis = 1, dtype=np.int)[0:(N-1)]
         c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
@@ -413,11 +422,26 @@ class NonstationaryLogistic(StationaryLogistic):
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
-            
+
+        # Initialize theta
         theta = np.zeros(B + 1 + 2*(N-1))
-        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        theta[B] = logit(A.sum(dtype=np.int) / N ** 2)
         if network.offset:
-            theta[B] -= np.mean(network.offset.matrix())
+            theta[B] -= logit_mean(O)
+        theta[(B + 1):(B + 1 + 2*(N-1))] = -theta[B]
+        for i in range(N-1):
+            theta[B + 1 + i] += logit((A[i,:].sum(dtype=np.int)+1)/(N+1))
+            if network.offset:
+                o_row = logit_mean(O[i,:])
+                if np.isfinite(o_row):
+                    theta[B + 1 + i] -= o_row
+        for j in range(N-1):
+            theta[B + 1 + (N-1) + j] += logit((A[:,j].sum(dtype=np.int)+1)/(N+1))
+            if network.offset:
+                o_col = logit_mean(O[:,j])
+                if np.isfinite(o_col):
+                    theta[B + 1 + (N-1) + j] -= o_col
+
         alpha_out = network.node_covariates['alpha_out']
         alpha_in = network.node_covariates['alpha_in']
         def obj(theta):
@@ -455,7 +479,7 @@ class NonstationaryLogistic(StationaryLogistic):
                     (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
             return grad
 
-        bounds = [(-8,8)] * B + [(-15,15)] + [(-6,6)] * (2*(N-1))
+        bounds = [(-8,8)] * B + [(-15,15)] + [(-8,8)] * (2*(N-1))
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
         if (np.any(theta_opt == [b[0] for b in bounds]) or
             np.any(theta_opt == [b[1] for b in bounds])):
