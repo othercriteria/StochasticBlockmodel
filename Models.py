@@ -43,7 +43,7 @@ class IndependentBernoulli:
         # Compute the negative log-likelihood for the rest of the cells
         ind_P_rest = -(ind_P_zero + ind_P_one)
         P, A = P[ind_P_rest], A[ind_P_rest]
-        nll = -np.sum(np.log(P ** A) + np.log((1.0 - P) ** (1.0 - A)))
+        nll = -np.sum(A * np.log(P) + (1.0 - A) * np.log1p(-P))
 
         # Edge cases and numerical weirdness can occur; better to pass
         # on infinity that at least carries the sign of the blowup
