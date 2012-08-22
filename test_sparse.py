@@ -7,12 +7,15 @@ from datetime import date, timedelta
 
 from Network import Network
 from Models import Stationary, StationaryLogistic, NonstationaryLogistic
+from Web import dump_to_json
 
 # Parameters
 params = { 'file_network': 'data/cit-HepTh/cit-HepTh.txt',
-           'import_limit_edges': 200,
+           'import_limit_edges': 300,
            'file_dates': 'data/cit-HepTh/cit-HepTh-dates.txt',
-           'pub_diff_classes': [30, 60, 90, 180, 360, 720] }
+           'pub_diff_classes': [30, 60, 90, 180, 360, 720],
+           'offset_extremes': True,
+           'plot': False }
 
 
 # Import covariate data from file
@@ -41,19 +44,20 @@ for line in open(params['file_network'], 'r').readlines():
     if len(edges) >= params['import_limit_edges']: break
 
 # Plot the raw data
-import matplotlib.pyplot as plt
-plt.figure()
-x, y = [], []
-for n_1, n_2 in edges:
-    x.append(dates[n_1].toordinal())
-    y.append(dates[n_2].toordinal())
-plt.plot(x, y, '.')
-plt.show()
+if params['plot']:
+    import matplotlib.pyplot as plt
+    plt.figure()
+    x, y = [], []
+    for n_1, n_2 in edges:
+        x.append(dates[n_1].toordinal())
+        y.append(dates[n_2].toordinal())
+    plt.plot(x, y, '.')
+    plt.show()
 
 # Initialize network from citation data
 net = Network()
 net.network_from_edges(edges)
-net.show_degree_histograms()
+if params['plot']: net.show_degree_histograms()
 
 # Process publication date data in covariates
 cov_names = []
@@ -67,9 +71,10 @@ for l, u in zip([0] + params['pub_diff_classes'], params['pub_diff_classes']):
 
 # Add publication order node covariate
 pub_dates = [dates[p].toordinal() for p in net.names]
-net.new_node_covariate('pub_dates').from_pairs(net.names, pub_dates)
-net.node_covariates['pub_dates'].show_histogram()
-net.show_heatmap('pub_dates')
+net.new_node_covariate('pub_date').from_pairs(net.names, pub_dates)
+if params['plot']:
+    net.node_covariates['pub_date'].show_histogram()
+    net.show_heatmap('pub_date')
 
 # Exclude impossible edges using infinite offset
 def f_impossible_pub_order(n_1, n_2):
@@ -80,23 +85,33 @@ def f_impossible_pub_order(n_1, n_2):
 net.initialize_offset().from_binary_function_name(f_impossible_pub_order)
 
 # Fit model
-for name, model, use_covs in [('Stationary', Stationary(), False),
-                              ('Stationary', StationaryLogistic(), True),
-                              ('Nonstationary', NonstationaryLogistic(), False),
-                              ('Nonstationary', NonstationaryLogistic(), True)]:
+def fit_and_summarize(name, fit_model, use_covs):
     print name
     if use_covs:
         for cov_name in cov_names:
-            model.beta[cov_name] = None
-    model.fit_convex_opt(net)
-    print 'NLL: %.2f' % model.nll(net)
-    print 'kappa: %.2f' % model.kappa
+            fit_model.beta[cov_name] = None
+    fit_model.fit_convex_opt(net, verbose = True)
+    print 'NLL: %.2f' % fit_model.nll(net)
+    print 'kappa: %.2f' % fit_model.kappa
     if use_covs:
         for cov_name in cov_names:
-            print '%s: %.2f' % (cov_name, model.beta[cov_name])
+            print '%s: %.2f' % (cov_name, fit_model.beta[cov_name])
     print '\n'
+fit_and_summarize('Stationary', Stationary(), False)
+fit_and_summarize('Stationary', StationaryLogistic(), True)
+if params['offset_extremes']:
+    print 'Detecting subnetworks associated with infinite parameter estimates.\n'
+    net.offset_extremes()
+    if params['plot']: net.show_offset('pub_date')
+fit_and_summarize('Nonstationary', NonstationaryLogistic(), False)
+fit_and_summarize('Nonstationary', NonstationaryLogistic(), True)
 
 # Redisplay heatmap, ordered by estimated alphas from last fit, i.e.,
 # NonstationaryLogistic with publication date difference covariates
-net.show_heatmap('alpha_out')
-net.show_heatmap('alpha_in')
+if params['plot']:
+    net.show_heatmap('alpha_out')
+    net.show_heatmap('alpha_in')
+
+outfile = open('scratch.json', 'w')
+outfile.write(dump_to_json(net))
+outfile.close()
