@@ -12,6 +12,10 @@ def logit(x):
 def inv_logit(x):
     return 1.0 / (np.exp(-x) + 1.0)
 
+# Get the "mean" log-odds from a collection of log-odds
+def logit_mean(x):
+    return logit(np.mean(inv_logit(x)))
+
 # Convenience functions for plotting ellipses, e.g., 2-d confidence regions
 #
 # Finding the right settings for Ellipse is surprisingly tricky so I follow:
