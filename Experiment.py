@@ -123,6 +123,11 @@ class Results:
                     for rep in range(data.shape[1]):
                         ax.scatter(self.sub_sizes, data[:,rep])
 
+            if 'baseline' in options:
+                ax.plot(self.sub_sizes,
+                        np.repeat(options['baseline'], len(self.sub_sizes)),
+                        'k:')
+
             ax.set_ylabel(plot_name)
             if 'ymin' in options and 'ymax' in options:
                 ax.set_ylim(options['ymin'], options['ymax'])
@@ -172,3 +177,6 @@ def minimum_disagreement(z_true, z_est, f = None):
             z_est_perm[z_est == s] = t
         best = min(best, f(z_true, z_est_perm))
     return best
+
+def rel_mse(est_1, est_2, truth):
+    return np.mean((est_1 - truth)**2) / np.mean((est_2 - truth)**2)
