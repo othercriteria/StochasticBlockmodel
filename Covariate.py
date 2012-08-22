@@ -59,6 +59,11 @@ class EdgeCovariate:
         self.data.__setitem__(index, x)
         self.dirty()
 
+    def copy(self):
+        new = EdgeCovariate(self.names)
+        new.data = self.data.copy()
+        return new
+
     def tocsr(self):
         self.data = self.data.tocsr()
 
