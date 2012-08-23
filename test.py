@@ -17,11 +17,11 @@ params = { 'N': 300,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 0.0,
+           'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
            'kappa_target': ('density', 0.1),
            'offset_extremes': False,
-           'fit_nonstationary': True,
+           'fit_nonstationary': False,
            'fit_method': 'convex_opt',
            'num_reps': 5,
            'sub_sizes': range(10, 60, 10),
@@ -89,25 +89,15 @@ if params['offset_extremes']:
     results.new('# Active', 'n', lambda n: np.isfinite(n.offset.matrix()).sum())
 else:
     results.new('# Active', 'n', lambda n: n.N ** 2)
-if params['fit_nonstationary']:
-    def rel_mse_p_ij(n, d, f):
-        P = d.edge_probabilities(n)
-        return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
-    results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
-    if not params['offset_extremes']:
-        def rel_mse_logit_p_ij(n, d, f):
-            logit_P = logit(d.edge_probabilities(n))
-            logit_Q = f.baseline_logit(n)
-            return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
-        results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
-else:
-    def rel_mse_p_ij(n, d, f):
-        return rel_mse(f.edge_probabilities(n), d.baseline(n),
-                       d.edge_probabilities(n))
-    results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
+def rel_mse_p_ij(n, d, f):
+    P = d.edge_probabilities(n)
+    return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
+results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
+if not (params['fit_nonstationary'] and params['offset_extremes']):
     def rel_mse_logit_p_ij(n, d, f):
-        return rel_mse(logit(f.edge_probabilities(n)), d.baseline_logit(n),
-                       logit(d.edge_probabilities(n)))
+        logit_P = logit(d.edge_probabilities(n))
+        logit_Q = f.baseline_logit(n)
+        return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
     results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
 
 if params['fit_method'] == 'convex_opt':
