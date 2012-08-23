@@ -90,7 +90,6 @@ if params['offset_extremes']:
 else:
     results.new('# Active', 'n', lambda n: n.N ** 2)
 if params['fit_nonstationary']:
-    import scipy.optimize as opt
     def rel_mse_p_ij(n, d, f):
         P = d.edge_probabilities(n)
         return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
