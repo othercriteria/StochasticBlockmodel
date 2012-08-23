@@ -178,5 +178,12 @@ def minimum_disagreement(z_true, z_est, f = None):
         best = min(best, f(z_true, z_est_perm))
     return best
 
+# Differences of infinities make sense in this context...
+def robust_mse(x, y):
+    diff = x - y
+    equal_cells = (x == y)
+    diff[equal_cells] = 0
+    return np.mean(diff ** 2)
+    
 def rel_mse(est_1, est_2, truth):
-    return np.mean((est_1 - truth)**2) / np.mean((est_2 - truth)**2)
+    return robust_mse(est_1, truth) / robust_mse(est_2, truth)
