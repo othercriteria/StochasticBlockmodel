@@ -90,7 +90,13 @@ class Results:
 
         for n in range(self.N_subs):
             self.results[name]['data'][n,0] = np.mean((t[n]-e[n])**2)
-                
+
+    def summary(self):
+        for field in self.results:
+            data = self.results[field]['data']
+            average_data = np.mean(data, 1)
+            print '%s: %s' % (field, str(average_data))
+        
     def plot(self, requests = None):
         if requests == None:
             requests = self.results.keys()
