@@ -136,15 +136,18 @@ def conjugate(c, n):
 
     return cc
 
-# Return a binary matrix sampled approximately according to the
-# specified Bernoulli weights, conditioned on having the specified
-# margins.
+# Return a binary matrix (or a list of binary matrices) sampled
+# approximately according to the specified Bernoulli weights,
+# conditioned on having the specified margins.
 # Inputs:
 #   r: row margins, length m
 #   c: column margins, length n
 #   w: weight matrix, (m x n) matrix with values in (0, +infty)
+#   T: number of matrices to sample
+#   sort_by_wopt_var: when enabled, column ordering depends on w
 # Output:
-#   B_sample_sparse: sparse representation of (m x n) binary matrix
+#   B_sample_sparse: (T = 1) sparse representation of (m x n) binary matrix
+#                    (T > 1) list of sparse binary matrices
 #
 # More explicitly, consider independent Bernoulli random variables
 # B(i,j) arranged as an m x n matrix B given the m-vector of row sums
@@ -170,24 +173,20 @@ def conjugate(c, n):
 #     for i, j in B_sample_sparse:
 #         if i == -1: break 
 #         B_sample[i,j] = 1
-def approximate_from_margins_weights(r, c, w, sort_by_wopt_var = True):
+def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
     check_margins(r, c)
-
-    # Make a copy of the margins as they are mutated below...
-    r, c = r.copy(), c.copy()
 
     ### Preprocessing
 
-    # (If re-enabling repeated samples, everything from here until
-    # Initialization needs to be done only once across samples.)
-    
-    # Sizing
+    # Sizing (making copies of m and n, as they are mutated during sampling)
+    r_init = r.copy()
     m, n = len(r), len(c)
+    m_init, n_init = m, n
     assert((m,n) == w.shape)
 
     # Sort the row margins (descending)
-    rndx = np.argsort(-r)
-    rsort = r[rndx]
+    rndx_init = np.argsort(-r)
+    rsort = r[rndx_init]
 
     # Balance the weights
     a_scale, b_scale = canonical_scalings(w)
@@ -236,223 +235,238 @@ def approximate_from_margins_weights(r, c, w, sort_by_wopt_var = True):
 
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
-    irndx = np.argsort(rndx)
+    irndx_init = np.argsort(rndx_init)
 
     # Compute the conjugate of c
-    cconj = conjugate(csort, m)
+    cconj_init = conjugate(csort, m)
 
     # Get the running total of number of ones to assign
-    count = np.sum(rsort)
+    count_init = np.sum(rsort)
 
     # Get the running total of sum of c squared
-    ccount2 = np.sum(csort ** 2)
+    ccount2_init = np.sum(csort ** 2)
     # Get the running total of (2 times the) column margins choose 2
-    ccount2c = np.sum(csort * (csort - 1))
+    ccount2c_init = np.sum(csort * (csort - 1))
     # Get the running total of (6 times the) column margins choose 3
-    ccount3c = np.sum(csort * (csort - 1) * (csort - 2))
+    ccount3c_init = np.sum(csort * (csort - 1) * (csort - 2))
 
     # Get the running total of sum of r squared
-    rcount2 = np.sum(rsort ** 2)
+    rcount2_init = np.sum(rsort ** 2)
     # Get the running total of (2 times the) column margins choose 2
-    rcount2c = np.sum(rsort * (rsort - 1))
+    rcount2c_init = np.sum(rsort * (rsort - 1))
     # Get the running total of (6 times the) column margins choose 3
-    rcount3c = np.sum(rsort * (rsort - 1) * (rsort - 2))
-
-    # Initialize B_sample_sparse
-    B_sample_sparse = -np.ones((count,2), dtype=np.int)
+    rcount3c_init = np.sum(rsort * (rsort - 1) * (rsort - 2))
     
-    # Initialize intermediate storage
-    #
-    # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
-    # corresponds to 1, ..., index M-1 corresponds to c[0]+1
-    M = csort[0] + 3
-    S = np.zeros((M,n))
-    SS = np.zeros(M)
-
     # Used to prevent divide by zero
     eps0 = np.spacing(0)
 
-    ### Initialization
+    def do_sample():
+        ### Initialization
 
-    # Most recent assigned column in B_sample_sparse
-    place = -1
+        # Make local copy of variables to be mutated
+        r = r_init.copy()
+        m, n = m_init, n_init
+        rndx, irndx = rndx_init.copy(), irndx_init.copy()
+        cconj = cconj_init.copy()
+        count = count_init
+        ccount2, ccount2c, ccount3c = ccount2_init, ccount2c_init, ccount3c_init
+        rcount2, rcount2c, rcount3c = rcount2_init, rcount2c_init, rcount3c_init
 
-    # Loop over columns for column-wise sampling
-    #
-    # Warning: things that "should" be fixed are modified in this
-    # loop, e.g., n, the number of columns!
-    for c1 in range(n):
-        ### Sample the next column
+        # Initialize intermediate storage
+        #
+        # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
+        # corresponds to 1, ..., index M-1 corresponds to c[0]+1
+        M = csort[0] + 3
+        S = np.zeros((M,n))
+        SS = np.zeros(M)
 
-        # Remember the starting point for this column in B_sample_sparse
-        placestart = place + 1
+        # Initialize B_sample_sparse
+        B_sample_sparse = -np.ones((count,2), dtype=np.int)
 
-        # Inspect column
-        clabel, colval = cndx[c1], csort[c1]
-        if colval == 0 or count == 0: break
+        # Most recent assigned column in B_sample_sparse
+        place = -1
 
-        # Update the conjugate
-        cconj[0:colval] -= 1
+        # Loop over columns for column-wise sampling
+        #
+        # Warning: things that "should" be fixed are modified in this
+        # loop, e.g., n, the number of columns!
+        for c1 in range(n):
+            ### Sample the next column
 
-        # Update the number of columns remaining
-        n -= 1
+            # Remember the starting point for this column in B_sample_sparse
+            placestart = place + 1
 
-        ### DP initialization
+            # Inspect column
+            clabel, colval = cndx[c1], csort[c1]
+            if colval == 0 or count == 0: break
 
-        # Variables used inside DP
-        smin, smax = colval, colval
-        cumsums, cumconj = count, count - colval
+            # Update the conjugate
+            cconj[0:colval] -= 1
 
-        # Update the count and the running column counts
-        count -= colval
-        ccount2 -= colval ** 2
-        ccount2c -= colval * (colval - 1)
-        ccount3c -= colval * (colval - 1) * (colval - 2)
+            # Update the number of columns remaining
+            n -= 1
 
-        # Start filling SS (indices corresponding to colval-1, colval, colval+1)
-        SS[colval:(colval+3)] = [0,1,0]
+            ### DP initialization
 
-        # Get the constants for computing the probabilities
-        if count == 0 or m*n == count:
-            weightA = 0
-        else:
-            wA = 1.0 * m * n / (count * (m * n - count))
-            weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
+            # Variables used inside DP
+            smin, smax = colval, colval
+            cumsums, cumconj = count, count - colval
 
-        ### DP
+            # Update the count and the running column counts
+            count -= colval
+            ccount2 -= colval ** 2
+            ccount2c -= colval * (colval - 1)
+            ccount3c -= colval * (colval - 1) * (colval - 2)
 
-        # Loop over (remaining and sorted descending) rows in reverse
-        for i in reversed(range(m)):
-            # Get the value for this row, for use in computing the
-            # probability of a 1 for this row/column pair
-            rlabel = rndx[i]
-            val = r[rlabel]
+            # Start filling SS (indices corresponding to colval-1 ... colval+1)
+            SS[colval:(colval+3)] = [0,1,0]
 
-            # Use the Canfield, Greenhill, and McKay (2008)
-            # approximation to N(r,c)
-            p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
-            p = p1 / (n + 1.0 - val + p1)
-            q = 1.0 - p
+            # Get the constants for computing the probabilities
+            if count == 0 or m*n == count:
+                weightA = 0
+            else:
+                wA = 1.0 * m * n / (count * (m * n - count))
+                weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
 
-            # Incorporate weights
-            if n > 0 and val > 0:
-                Gk = G[val-1,rlabel,c1]
-                if Gk < 0:
-                    q = 0
-                else:
-                    p *= Gk
+            ### DP
 
-            # Update the feasibility constraints
-            cumsums -= val
-            cumconj -= cconj[i]
+            # Loop over (remaining and sorted descending) rows in reverse
+            for i in reversed(range(m)):
+                # Get the value for this row, for use in computing the
+                # probability of a 1 for this row/column pair
+                rlabel = rndx[i]
+                val = r[rlabel]
 
-            # Incorporate the feasibility constraints into bounds on
-            # the running column sum
-            sminold, smaxold = smin, smax
-            smin = max(0, max(cumsums - cumconj, sminold - 1))
-            smax = min(smaxold, i)
+                # Use the Canfield, Greenhill, and McKay (2008)
+                # approximation to N(r,c)
+                p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
+                p = p1 / (n + 1.0 - val + p1)
+                q = 1.0 - p
 
-            # DP iteration (only needed parts of SS updated)
-            SSS = 0.0
-            SS[smin] = 0.0
-            for j in range(smin+1,smax+2):
-                a = SS[j] * q
-                b = SS[j+1] * p
-                apb = a + b
-                SSS += apb
-                SS[j] = apb
-                S[j,i] = b / (apb + eps0)
-            SS[smax+2] = 0.0
+                # Incorporate weights
+                if n > 0 and val > 0:
+                    Gk = G[val-1,rlabel,c1]
+                    if Gk < 0:
+                        q = 0
+                    else:
+                        p *= Gk
 
-            # Check for impossible; if so, jump out of inner loop
+                # Update the feasibility constraints
+                cumsums -= val
+                cumconj -= cconj[i]
+
+                # Incorporate the feasibility constraints into bounds on
+                # the running column sum
+                sminold, smaxold = smin, smax
+                smin = max(0, max(cumsums - cumconj, sminold - 1))
+                smax = min(smaxold, i)
+
+                # DP iteration (only needed parts of SS updated)
+                SSS = 0.0
+                SS[smin] = 0.0
+                for j in range(smin+1,smax+2):
+                    a = SS[j] * q
+                    b = SS[j+1] * p
+                    apb = a + b
+                    SSS += apb
+                    SS[j] = apb
+                    S[j,i] = b / (apb + eps0)
+                SS[smax+2] = 0.0
+
+                # Check for impossible; if so, jump out of inner loop
+                if SSS <= 0: break
+
+                # Normalize to prevent overflow/underflow
+                SS[(smin+1):(smax+2)] /= SSS
+
+            # Check for impossible; if so, jump out of outer loop
             if SSS <= 0: break
 
-            # Normalize to prevent overflow/underflow
-            SS[(smin+1):(smax+2)] /= SSS
+            ### Sampling
 
-        # Check for impossible; if so, jump out of outer loop
-        if SSS <= 0: break
+            # Running total and target of how many entries filled (offset
+            # to match S)
+            j, jmax = 1, colval + 1
 
-        ### Sampling
+            # Skip assigning anything when colval = 0
+            if j < jmax:
+                for i in range(m):
+                    # Generate a one according to the transition probability
+                    p = S[j,i]
+                    if np.random.random() < p:
+                        # Decrement row total
+                        rlabel = rndx[i]
+                        val = r[rlabel]
+                        r[rlabel] -= 1
 
-        # Running total and target of how many entries filled (offset
-        # to match S)
-        j, jmax = 1, colval + 1
+                        # Update the running row counts
+                        rcount2 -= 2 * val - 1
+                        rcount2c -= 2 * val - 2
+                        rcount3c -= 3 * (val - 1) * (val - 2)
 
-        # Skip assigning anything when colval = 0
-        if j < jmax:
-            for i in range(m):
-                # Generate a one according to the transition probability
-                p = S[j,i]
-                if np.random.random() < p:
-                    # Decrement row total
-                    rlabel = rndx[i]
-                    val = r[rlabel]
-                    r[rlabel] -= 1
+                        # Record the entry
+                        place += 1
+                        B_sample_sparse[place,:] = [rlabel,clabel]
+                        j += 1
 
-                    # Update the running row counts
-                    rcount2 -= 2 * val - 1
-                    rcount2c -= 2 * val - 2
-                    rcount3c -= 3 * (val - 1) * (val - 2)
+                        # Break the loop early, since all the remaining
+                        # p's must be 0
+                        if j == jmax: break
 
-                    # Record the entry
-                    place += 1
-                    B_sample_sparse[place,:] = [rlabel,clabel]
-                    j += 1
+            # Everything is updated except the re-sorting, so skip if possible
+            if count == 0: break
 
-                    # Break the loop early, since all the remaining
-                    # p's must be 0
-                    if j == jmax: break
+            ### Re-sort row sums
 
-        # Everything is updated except the re-sorting, so skip if possible
-        if count == 0: break
+            # Essentially, we only need to re-sort the assigned rows. In
+            # greater detail, we take each row that was assigned to the
+            # list and either leave it in place or swap it with the last
+            # row that matches its value; this leaves the rows sorted
+            # (descending) since each row was decremented by only 1.
 
-        ### Re-sort row sums
+            # Looping in reverse ensures that least rows are swapped first
+            for j in range(place, placestart-1, -1):
+                # Get the row label, its new value, and its inverse index
+                k = B_sample_sparse[j,0]
+                val = r[k]
+                irndxk = irndx[k]
 
-        # Essentially, we only need to re-sort the assigned rows. In
-        # greater detail, we take each row that was assigned to the
-        # list and either leave it in place or swap it with the last
-        # row that matches its value; this leaves the rows sorted
-        # (descending) since each row was decremented by only 1.
+                # See if the list is still sorted
+                irndxk1 = irndxk + 1
+                if irndxk1 >= m or r[rndx[irndxk1]] <= val:
+                    continue
 
-        # Looping in reverse ensures that least rows are swapped first
-        for j in range(place, placestart-1, -1):
-            # Get the row label, its new value, and its inverse index
-            k = B_sample_sparse[j,0]
-            val = r[k]
-            irndxk = irndx[k]
-
-            # See if the list is still sorted
-            irndxk1 = irndxk + 1
-            if irndxk1 >= m or r[rndx[irndxk1]] <= val:
-                continue
-
-            # Find the first place where k can be inserted
-            irndxk1 += 1
-            while irndxk1 < m and r[rndx[irndxk1]] > val:
+                # Find the first place where k can be inserted
                 irndxk1 += 1
-            irndxk1 -= 1
+                while irndxk1 < m and r[rndx[irndxk1]] > val:
+                    irndxk1 += 1
+                irndxk1 -= 1
 
-            # Perform swap
-            rndxk1 = rndx[irndxk1]
-            rndx[irndxk] = rndxk1
-            rndx[irndxk1] = k
-            irndx[k] = irndxk1
-            irndx[rndxk1] = irndxk
+                # Perform swap
+                rndxk1 = rndx[irndxk1]
+                rndx[irndxk] = rndxk1
+                rndx[irndxk1] = k
+                irndx[k] = irndxk1
+                irndx[rndxk1] = irndxk
 
-        ### Recursion
+            ### Recursion
 
-        # At this point:
-        #   r[rndx] is sorted and represents unassigned row margins
-        #   rndx[irndx] = 0:m
-        #   c[cndx[(c1+1):]] is sorted and represents unassigned column margins
-        #   m, n, count, ccount*, rcount*, cconj, etc. are valid
-        #   place points to new entries in B_sample_sparse
-        #
-        # In other words, it is as if Initialization had just
-        # completed for sampling a submatrix of B_sample.
+            # At this point:
+            #   r[rndx] is sorted, represents unassigned row margins
+            #   rndx[irndx] = 0:m
+            #   c[cndx[(c1+1):]] is sorted, represents unassigned column margins
+            #   m, n, count, ccount*, rcount*, cconj, etc. are valid
+            #   place points to new entries in B_sample_sparse
+            #
+            # In other words, it is as if Initialization had just
+            # completed for sampling a submatrix of B_sample.
+                
+        return B_sample_sparse
 
-    return B_sample_sparse
+    if T == 1:
+        return do_sample()
+    else:
+        return [do_sample() for t in range(T)]
 
 # Return the approximate nll of an observed binary matrix given
 # specified Bernoulli weights, conditioned on having the observed
@@ -792,3 +806,13 @@ if __name__ == '__main__':
     # Test of approximate conditional likelihood
     print approximate_conditional_nll(B_sample, w)
     print approximate_conditional_nll(B_sample, np.tile(1.0, (N,N)))
+
+    # Test repeated sampling
+    T = 10
+    B_samples_sparse = approximate_from_margins_weights(r, c, w, T)
+    for t in range(T):
+        B_sample = np.zeros((N,N), dtype = np.bool)
+        for i, j in B_samples_sparse[t]:
+            if i == -1: break
+            B_sample[i,j] = 1
+        print B_sample[x < -1.0].sum(), B_sample[x > 1.0].sum()
