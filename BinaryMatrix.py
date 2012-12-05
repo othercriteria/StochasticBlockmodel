@@ -6,6 +6,12 @@
 from __future__ import division
 import numpy as np
 
+# See if C support code can be loaded
+try:
+    import ctypes
+except:
+    print 'C support code can\'t load. Falling back to Python.'
+
 ##############################################################################
 # Adapting a Matlab routine provided by Jeff Miller
 # (jeffrey_miller@brown.edu), which implements an algorithm suggested
@@ -146,8 +152,8 @@ def conjugate(c, n):
 #   T: number of matrices to sample
 #   sort_by_wopt_var: when enabled, column ordering depends on w
 # Output:
-#   B_sample_sparse: (T = 1) sparse representation of (m x n) binary matrix
-#                    (T > 1) list of sparse binary matrices
+#   B_sample_sparse: (T default) sparse representation of (m x n) binary matrix
+#                    (T >= 1) list of (sparse binary matrices, logQ, logP)
 #
 # More explicitly, consider independent Bernoulli random variables
 # B(i,j) arranged as an m x n matrix B given the m-vector of row sums
@@ -173,7 +179,8 @@ def conjugate(c, n):
 #     for i, j in B_sample_sparse:
 #         if i == -1: break 
 #         B_sample[i,j] = 1
-def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
+def approximate_from_margins_weights(r, c, w, T = None,
+                                     sort_by_wopt_var = True):
     check_margins(r, c)
 
     ### Preprocessing
@@ -201,6 +208,7 @@ def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
     wopt = wopt[:,cndx]
 
     # Precompute log weights
+    logw = np.log(w)
     logwopt = np.log(wopt)
 
     # Compute G
@@ -280,8 +288,9 @@ def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
         S = np.zeros((M,n))
         SS = np.zeros(M)
 
-        # Initialize B_sample_sparse
+        # Initialize B_sample_sparse, logQ, logP
         B_sample_sparse = -np.ones((count,2), dtype=np.int)
+        logQ, logP = 0.0, 0.0
 
         # Most recent assigned column in B_sample_sparse
         place = -1
@@ -409,9 +418,15 @@ def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
                         B_sample_sparse[place,:] = [rlabel,clabel]
                         j += 1
 
+                        # Record contribution to logQ, logP
+                        logQ += np.log(p)
+                        logP += logw[rlabel,clabel]
+
                         # Break the loop early, since all the remaining
                         # p's must be 0
                         if j == jmax: break
+                    else:
+                        logQ += np.log1p(-p)
 
             # Everything is updated except the re-sorting, so skip if possible
             if count == 0: break
@@ -461,13 +476,13 @@ def approximate_from_margins_weights(r, c, w, T = 1, sort_by_wopt_var = True):
             # In other words, it is as if Initialization had just
             # completed for sampling a submatrix of B_sample.
                 
-        return B_sample_sparse
+        return (B_sample_sparse, logQ, logP)
 
-    if T == 1:
-        return do_sample()
-    else:
+    if T:
         return [do_sample() for t in range(T)]
-
+    else:
+        return do_sample()[0]
+    
 # Return the approximate nll of an observed binary matrix given
 # specified Bernoulli weights, conditioned on having the observed
 # margins.
@@ -810,9 +825,16 @@ if __name__ == '__main__':
     # Test repeated sampling
     T = 10
     B_samples_sparse = approximate_from_margins_weights(r, c, w, T)
+    from Utility import logsumexp, logabsdiffexp
+    logf = np.empty(T)
     for t in range(T):
         B_sample = np.zeros((N,N), dtype = np.bool)
-        for i, j in B_samples_sparse[t]:
+        for i, j in B_samples_sparse[t][0]:
             if i == -1: break
             B_sample[i,j] = 1
         print B_sample[x < -1.0].sum(), B_sample[x > 1.0].sum()
+        logf[t] = B_samples_sparse[t][2] - B_samples_sparse[t][1]
+    logkappa = -np.log(T) + logsumexp(logf)
+    logcvsq = -np.log(T - 1) - 2 * logkappa + \
+        logsumexp(2 * logabsdiffexp(logf, logkappa))
+    print np.exp(logcvsq)
