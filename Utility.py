@@ -12,6 +12,15 @@ def logit(x):
 def inv_logit(x):
     return 1.0 / (np.exp(-x) + 1.0)
 
+def logsumexp(x):
+    return reduce(np.logaddexp, x)
+
+def logabsdiffexp(x, y):
+    def f(x, y):
+        if x < y: x, y = y, x
+        return y + np.log(np.exp(x - y) - 1)
+    return (np.vectorize(f))(x,y)
+
 # Get the "mean" log-odds from a collection of log-odds
 def logit_mean(x):
     return logit(np.mean(inv_logit(x)))
