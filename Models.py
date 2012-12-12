@@ -14,6 +14,16 @@ from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights
 from BinaryMatrix import approximate_conditional_nll
 
+# See if embedded R process can be started; this should be done once,
+# globally, to reduce overhead.
+try:
+    import rpy2.robjects as robjects
+
+    r_interface_started = True
+except:
+    print 'Can\'t open R interface. Some inference methods may be unavailable.'
+    r_interface_started = False
+
 # It's a bit weird to have NonstationaryLogistic as a subclass of strictly
 # less general StationaryLogistic model, but I believe this is how
 # inheritance is supposed to work in Python.
