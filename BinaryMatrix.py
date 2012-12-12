@@ -9,8 +9,33 @@ import numpy as np
 # See if C support code can be loaded
 try:
     import ctypes
+
+    c_double_p = ctypes.POINTER(ctypes.c_double)
+    c_int_p = ctypes.POINTER(ctypes.c_int)
+    c_int = ctypes.c_int
+
+    support_library = ctypes.cdll.LoadLibrary('support.so')
+
+    # int *r, int r_max, int m, int n, double *wopt, double *logwopt, double *G
+    support_library.fill_G.argtypes = [c_int_p, c_int, c_int, c_int,
+                                       c_double_p, c_double_p, c_double_p]
+    support_library.restype = ctypes.c_void_p
+
+    def fill_G(r, r_max, m, n, wopt, logwopt, G):
+        arr_r = np.ascontiguousarray(r, dtype='int32')
+        arr_wopt = np.ascontiguousarray(wopt, dtype='float64')
+        arr_logwopt = np.ascontiguousarray(logwopt, dtype='float64')
+        arr_G = np.ascontiguousarray(G, dtype='float64')
+
+        support_library.fill_G(arr_r.ctypes.data_as(c_int_p), r_max, m, n,
+                               arr_wopt.ctypes.data_as(c_double_p),
+                               arr_logwopt.ctypes.data_as(c_double_p),
+                               arr_G.ctypes.data_as(c_double_p))
+    
+    c_support_loaded = True
 except:
     print 'C support code can\'t load. Falling back to Python.'
+    c_support_loaded = False
 
 ##############################################################################
 # Adapting a Matlab routine provided by Jeff Miller
@@ -209,37 +234,9 @@ def approximate_from_margins_weights(r, c, w, T = None,
 
     # Precompute log weights
     logw = np.log(w)
-    logwopt = np.log(wopt)
 
     # Compute G
-    r_max = np.max(r)
-    G = np.tile(-np.inf, (r_max+1, m, n-1))
-    G[0,:,:] = 0.0
-    G[1,:,n-2] = logwopt[:,n-1]
-    for i, ri in enumerate(r):
-        for j in range(n-2, 0, -1):
-            wij = logwopt[i,j]
-            for k in range(1, ri+1):
-                b = G[k-1,i,j] + wij
-                a = G[k,i,j]
-                if a == -np.inf and b == -np.inf: continue
-                if a > b:
-                    G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
-                else:
-                    G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
-        for j in range(n-1):
-            for k in range(r_max):
-                Gk_num = G[k,i,j]
-                Gk_den = G[k+1,i,j]
-                if np.isinf(Gk_den):
-                    G[k,i,j] = -1.0
-                else:
-                # Python's 0-based indexing affected the last term
-                    G[k,i,j] = wopt[i,j] * np.exp(Gk_num-Gk_den) * \
-                        ((n - j - k - 1.0) / (k + 1.0))
-            # Tricky idiom: this is Gk_den for k = r_max-1
-            if np.isinf(Gk_den):
-                G[r_max,i,j] = -1.0
+    G = compute_G(r, m, n, wopt)
 
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
@@ -518,38 +515,8 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     csort = c[cndx];
     wopt = wopt[:,cndx]
 
-    # Precompute log weights
-    logwopt = np.log(wopt)
-
     # Compute G
-    r_max = np.max(r)
-    G = np.tile(-np.inf, (r_max+1, m, n-1))
-    G[0,:,:] = 0.0
-    G[1,:,n-2] = logwopt[:,n-1]
-    for i, ri in enumerate(r):
-        for j in range(n-2, 0, -1):
-            wij = logwopt[i,j]
-            for k in range(1, ri+1):
-                b = G[k-1,i,j] + wij
-                a = G[k,i,j]
-                if a == -np.inf and b == -np.inf: continue
-                if a > b:
-                    G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
-                else:
-                    G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
-        for j in range(n-1):
-            for k in range(r_max):
-                Gk_num = G[k,i,j]
-                Gk_den = G[k+1,i,j]
-                if np.isinf(Gk_den):
-                    G[k,i,j] = -1.0
-                else:
-                # Python's 0-based indexing affected the last term
-                    G[k,i,j] = wopt[i,j] * np.exp(Gk_num-Gk_den) * \
-                        ((n - j - k - 1.0) / (k + 1.0))
-            # Tricky idiom: this is Gk_den for k = r_max-1
-            if np.isinf(Gk_den):
-                G[r_max,i,j] = -1.0
+    G = compute_G(r, m, n, wopt)
 
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
@@ -772,6 +739,40 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
 
     return cnll
 
+def compute_G(r, m, n, wopt):
+    logwopt = np.log(wopt)
+    r_max = np.max(r)
+
+    G = np.tile(-np.inf, (r_max+1, m, n-1))
+    G[0,:,:] = 0.0
+    G[1,:,n-2] = logwopt[:,n-1]
+    if c_support_loaded:
+        fill_G(r, r_max, m, n, wopt, logwopt, G)
+    else:
+        for i, ri in enumerate(r):
+            for j in range(n-2, 0, -1):
+                wij = logwopt[i,j]
+                for k in range(1, ri+1):
+                    b = G[k-1,i,j] + wij
+                    a = G[k,i,j]
+                    if a == -np.inf and b == -np.inf: continue
+                    if a > b:
+                        G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
+                    else:
+                        G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
+            for j in range(n-1):
+                for k in range(r_max):
+                    Gk_num = G[k,i,j]
+                    Gk_den = G[k+1,i,j]
+                    if np.isinf(Gk_den):
+                        G[k,i,j] = -1.0
+                    else:
+                        G[k,i,j] = wopt[i,j] * np.exp(Gk_num-Gk_den) * \
+                            ((n - j - k - 1.0) / (k + 1.0))
+                if np.isinf(Gk_den):
+                    G[r_max,i,j] = -1.0
+    return G
+
 ##############################################################################
 # End of adapted code
 ##############################################################################
@@ -796,7 +797,7 @@ if __name__ == '__main__':
     print conjugate([1,1,1,1,2,8], 10)
 
     # Test of approximate margins-conditional sampling
-    N = 50;
+    N = 5;
     a_out = np.random.normal(0, 1, N)
     a_in = np.random.normal(0, 1, N)
     x = np.random.normal(0, 1, (N,N))
@@ -808,7 +809,7 @@ if __name__ == '__main__':
         logit_P[:,j] += a
     logit_P += theta * x
     w = np.exp(logit_P)
-    r, c = np.repeat(5, N), np.repeat(5, N)
+    r, c = np.repeat(2, N), np.repeat(2, N)
     B_sample_sparse = approximate_from_margins_weights(r, c, w)
     B_sample = np.zeros((N,N), dtype=np.bool)
     for i, j in B_sample_sparse:
