@@ -220,10 +220,11 @@ class Network:
         A = self.adjacency_matrix()
         ax_im.imshow(A[o][:,o]).set_cmap('binary')
         ax_im.set_ylim(0, self.N - 1)
+        ax_im.set_xticks([])
         ax_im.set_yticks([])
         ax_im.set_title(title)
-        plt.setp([ax_im.get_xticklabels(), ax_im.get_yticklabels()],
-                 visible = False)
+        #plt.setp([ax_im.get_xticklabels(), ax_im.get_yticklabels()],
+        #         visible = False)
         if order_by:
             ax_ord.scatter(np.arange(self.N), self.node_covariates[order_by][o])
             ax_ord.set_xlim(0, self.N - 1)
