@@ -33,13 +33,10 @@ fit_model = NonstationaryLogistic()
 for covariate in covariates:
     fit_model.beta[covariate] = None
 
-from Utility import draw_ellipse
-
 # Set up random subnetwork generator, and run fitting experiments
 gen = RandomSubnetworks(net, 200)
 for rep in range(5):
     subnet = gen.sample()
 
-    fit_model.fit_logistic_l2(subnet, prior_precision = 1.0)
+    fit_model.fit(subnet)
     print 'Estimated beta_1: %.2f' % fit_model.beta['x_1']
-    print fit_model.variance_covariance
