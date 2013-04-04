@@ -12,8 +12,8 @@ class NodeCovariate:
         self.dtype = dtype
         self.data = np.zeros(len(names), dtype = dtype)
 
-    def __repr__(self):
-        return 'NodeCovariate\n%s\n%s' % (repr(self.names),repr(self.data))
+    def __str__(self):
+        return '<NodeCovariate\n%s\n%s>' % (repr(self.names),repr(self.data))
 
     def __getitem__(self, index):
         return self.data.__getitem__(index)
@@ -49,8 +49,8 @@ class EdgeCovariate:
         self.data = sparse.lil_matrix((len(names),len(names)))
         self.dirty()
 
-    def __repr__(self):
-        return 'EdgeCovariate\n%s\n%s' % (repr(self.names),repr(self.data))
+    def __str__(self):
+        return '<EdgeCovariate\n%s\n%s>' % (repr(self.names),repr(self.data))
 
     def __getitem__(self, index):
         return self.data.__getitem__(index)
