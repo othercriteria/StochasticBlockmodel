@@ -6,6 +6,13 @@
 import numpy as np
 from scipy.stats import norm
 
+def dot_named(x, y):
+    val = 0.0
+    for x_n in x:
+        if not x_n in y: continue
+        val += x[x_n] * y[x_n]
+    return val
+
 def logit(x):
     return np.log(x / (1.0 - x))
 
