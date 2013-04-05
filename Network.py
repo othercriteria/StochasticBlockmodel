@@ -65,7 +65,7 @@ class Network:
         sub.node_covariates = {}
         for node_covariate in self.node_covariates:
             src = self.node_covariates[node_covariate]
-            sub.new_node_covariate(node_covariate).from_existing(src, inds)
+            sub.node_covariates[node_covariate] = src.subset(inds)
         sub.edge_covariates = {}
         for edge_covariate in self.edge_covariates:
             src = self.edge_covariates[edge_covariate]

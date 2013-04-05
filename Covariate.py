@@ -21,11 +21,13 @@ class NodeCovariate:
     def __setitem__(self, index, x):
         self.data.__setitem__(index, x)
 
-    def from_existing(self, node_covariate, inds):
-        self.names = node_covariate.names[inds]
-        self.dtype = node_covariate.dtype
-        self.data.dtype = self.dtype
-        self.data[:] = node_covariate.data[inds]
+    def subset(self, inds):
+        sub_names = self.names[inds]
+        sub_dtype = self.dtype
+        sub = NodeCovariate(sub_names, sub_dtype)
+        sub.data[:] = self.data[inds]
+
+        return sub
 
     def from_pairs(self, names, values):
         n_to_ind = {}
@@ -82,11 +84,11 @@ class EdgeCovariate:
     def sparse_matrix(self):
         return self.data
 
-    def from_existing(self, node_covariate, inds):
-        self.names = node_covariate.names[inds]
+    def from_existing(self, edge_covariate, inds):
+        self.names = edge_covariate.names[inds]
         
-        node_covariate.tocsr()
-        self.data = node_covariate.data[inds][:,inds]
+        edge_covariate.tocsr()
+        self.data = edge_covariate.data[inds][:,inds]
         self.dirty()
 
     def from_binary_function_name(self, f):
