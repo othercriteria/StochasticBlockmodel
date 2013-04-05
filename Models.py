@@ -6,18 +6,23 @@
 from __future__ import division
 import numpy as np
 import scipy.optimize as opt
+from scipy.stats import norm
 from time import time
 from itertools import permutations
 
 from Utility import logit, inv_logit, logit_mean, logsumexp, logabsdiffexp
+from Utility import dot_named
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights
 from BinaryMatrix import approximate_conditional_nll
+from BinaryMatrix import p_margins_saddlepoint
 
 # See if embedded R process can be started; this should be done once,
 # globally, to reduce overhead.
 try:
     import rpy2.robjects as robjects
+    from rpy2.robjects.packages import importr
+    r_interface_cond = importr('cond')
 
     r_interface_started = True
 except:
@@ -28,7 +33,7 @@ except:
 # less general StationaryLogistic model, but I believe this is how
 # inheritance is supposed to work in Python.
 
-# Some of the inference routines and the Kappa picking routine rely on
+# Some of the inference routines and the kappa picking routine rely on
 # a side-effect (modifying an instance variable of the enclosing
 # class) inside the objective function. This is inelegant and seems
 # error-prone, and so should probably be fixed...
@@ -419,6 +424,113 @@ class StationaryLogistic(Stationary):
         self.kappa = theta_opt[B]
 
         self.fit_info['wall_time'] = time() - start_time
+        
+    def fit_saddlepoint(self, network, verbose = False):
+        B = len(self.beta)
+        N = network.N
+        A = np.array(network.adjacency_matrix())
+
+        if not self.fit_info:
+            self.fit_info = {}
+        self.fit_info['cnll_evals'] = 0
+        
+        start_time = time()
+
+        # Identify non-extreme sub-matrix on which saddlepoint
+        # approximation is well-defined.
+        i_nonextreme = range(N)
+        j_nonextreme = range(N)
+        while True:
+            found = False
+            A_j_nonextreme = A[:,j_nonextreme]
+            for i in i_nonextreme:
+                r = np.sum(A_j_nonextreme[i,:])
+                if r == 0 or r == len(j_nonextreme):
+                    found = True
+                    i_nonextreme.remove(i)
+            if found:
+                continue
+
+            found = False
+            A_i_nonextreme = A[i_nonextreme,:]
+            for j in j_nonextreme:
+                c = np.sum(A_i_nonextreme[:,j])
+                if c == 0 or c == len(i_nonextreme):
+                    found = True
+                    j_nonextreme.remove(j)
+            if found:
+                continue
+
+            break
+
+        # Initialize theta
+        theta = np.zeros(B + 1)
+        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        if network.offset:
+            theta[B] -= logit_mean(network.offset.matrix())
+
+        def obj(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
+            for b, b_n in enumerate(self.beta):
+                self.beta[b_n] = theta[b]
+            self.kappa = theta[B]
+            nll = self.nll(network)
+            A_non = A[i_nonextreme][:,j_nonextreme]
+            r_non = np.sum(A_non,1)
+            c_non = np.sum(A_non,0)
+            P = self.edge_probabilities(network)
+            P_non = P[i_nonextreme][:,j_nonextreme]
+            p_denom = np.log(p_margins_saddlepoint(r_non, c_non, P_non))
+            cnll = nll + p_denom
+            self.fit_info['cnll_evals'] += 1
+            return cnll
+
+        bounds = [(-8,8)] * B + [(-15,15)]
+        theta_opt = opt.fmin_l_bfgs_b(obj, theta, bounds = bounds)[0]
+        if (np.any(theta_opt == [b[0] for b in bounds]) or
+            np.any(theta_opt == [b[1] for b in bounds])):
+            print 'Warning: some constraints active in model fitting.'
+        for b, b_n in enumerate(self.beta):
+            self.beta[b_n] = theta_opt[b]
+        self.kappa = theta_opt[B]
+
+        self.fit_info['wall_time'] = time() - start_time
+
+    def fit_brazzale(self, network):
+        B = len(self.beta)
+        if not (B == 1):
+            print 'Method only applicable to scalar parameter of interest.'
+            return
+
+        N = network.N
+        A = np.array(network.adjacency_matrix())
+        o = network.offset.matrix()
+        x = network.edge_covariates[self.beta.keys()[0]].matrix()
+
+        y_vec = robjects.FloatVector(A.flatten())
+        x_vec = robjects.FloatVector(x.flatten())
+        o_vec = robjects.FloatVector(o.flatten())
+        row_vec = robjects.IntVector(np.repeat(range(N), N))
+        col_vec = robjects.IntVector(range(N) * N)
+
+        dat = robjects.DataFrame({'y': y_vec, 'x': x_vec, 'o': o_vec,
+                                  'row': row_vec, 'col': col_vec})
+        robjects.globalenv['dat'] = dat
+        robjects.r('dat <- dat[is.finite(dat$o),]')
+        spec = 'glm(y ~ x + factor(row) + factor(col), ' + \
+            'data=dat, family=binomial)'
+        dat_glm = robjects.r(spec)
+        robjects.globalenv['dat.glm'] = dat_glm
+        robjects.r('write.csv(dat, file = "debug.csv")')
+        dat_cond = robjects.r('cond(dat.glm, x, from=-2.5, to=2.5, n=250)')
+        robjects.globalenv['dat.cond'] = dat_cond
+        theta_opt = robjects.r('summary(dat.cond)$coefficients[2,1]')[0]
+
+        self.beta[self.beta.keys()[0]] = theta_opt
+
+        self.fit_convex_opt(network, fix_beta = True)
 
     def fit_conditional(self, network,
                         fit_grid = False, verbose = False, T = 0):
@@ -560,6 +672,9 @@ class StationaryLogistic(Stationary):
 
                 # Check if all permutations are trivial, so no change to cnll
                 active = A_sub.shape[1]
+                if active > 8:
+                    print 'Skipping row pair with excessive active columns.'
+                    continue
                 if np.sum(A_sub[0,:]) in [active, 0]:
                     continue
 
@@ -717,6 +832,28 @@ class StationaryLogistic(Stationary):
             record[b_n] = lambda n, m: m.beta[b_n]
 
         return Sampler(network, self, update, record)
+
+    def confidence_wald(self, network, a, num_bootstrap = 20, alpha = 0.05,
+                        **fit_options):
+        # Locate center of confidence interval
+        self.fit(network, **fit_options)
+        nu_hat = dot_named(a, self.beta)
+
+        # Parametric bootstrap to get approximate standard error
+        network_original = network.network.copy()
+        nu_hat_bootstraps = np.empty(num_bootstrap)
+        for n in range(num_bootstrap):
+            network.generate(self)
+            self.fit(network, **fit_options)
+            nu_hat_bootstrap = dot_named(a, self.beta)
+            nu_hat_bootstraps[n] = nu_hat_bootstrap
+        network.network = network_original
+        nu_hat_se = np.sqrt(np.var(nu_hat_bootstraps) / num_bootstrap)
+
+        # Calculate appropriate z-score
+        z_score = norm().ppf(1.0 - alpha / 2.0)
+
+        return nu_hat - z_score * nu_hat_se, nu_hat + z_score * nu_hat_se
 
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
 #                     o_{ij})
@@ -1163,8 +1300,7 @@ class FixedMargins(IndependentBernoulli):
         else:
             c = network.node_covariates[self.c_name][:]
 
-        return self.base_model.generate_margins(network, r, c, coverage = 0,
-                                                **opts)
+        return self.base_model.generate_margins(network, r, c, **opts)
 
 # Handles the state, updates, and recording for a (usually MCMC) sampler
 class Sampler:
