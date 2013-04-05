@@ -69,10 +69,10 @@ class Network:
         sub.edge_covariates = {}
         for edge_covariate in self.edge_covariates:
             src = self.edge_covariates[edge_covariate]
-            sub.new_edge_covariate(edge_covariate).from_existing(src, inds)
+            sub.edge_covariates[edge_covariate] = src.subset(inds)
 
         if self.offset:
-            sub.initialize_offset().from_existing(self.offset, inds)
+            sub.offset = self.offset.subset(inds)
             
         return sub
 
@@ -305,3 +305,4 @@ if __name__ == '__main__':
             net_3.network[ord[i],ord[j]] = True
     net_3.offset_extremes()
     print net_3.offset.matrix()
+    print net_3.subnetwork(np.array([2,1,0])).offset.matrix()

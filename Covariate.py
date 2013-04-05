@@ -84,12 +84,14 @@ class EdgeCovariate:
     def sparse_matrix(self):
         return self.data
 
-    def from_existing(self, edge_covariate, inds):
-        self.names = edge_covariate.names[inds]
+    def subset(self, inds):
+        sub_names = self.names[inds]
+        sub = EdgeCovariate(sub_names)
+
+        self.tocsr()
+        sub.data[:,:] = self.data[inds][:,inds]
         
-        edge_covariate.tocsr()
-        self.data = edge_covariate.data[inds][:,inds]
-        self.dirty()
+        return sub
 
     def from_binary_function_name(self, f):
         for i, n_1 in enumerate(self.names):
