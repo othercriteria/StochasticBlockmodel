@@ -5,6 +5,11 @@
 
 from __future__ import division
 import numpy as np
+from scipy import optimize as opt
+import hashlib
+
+# Get machine precision; used to prevent divide by zero
+eps0 = np.spacing(0)
 
 # See if C support code can be loaded
 try:
@@ -13,14 +18,13 @@ try:
     c_double_p = ctypes.POINTER(ctypes.c_double)
     c_int_p = ctypes.POINTER(ctypes.c_int)
     c_int = ctypes.c_int
+    c_double = ctypes.c_double
 
     support_library = ctypes.cdll.LoadLibrary('support.so')
 
-    # int *r, int r_max, int m, int n, double *wopt, double *logwopt, double *G
     support_library.fill_G.argtypes = [c_int_p, c_int, c_int, c_int,
                                        c_double_p, c_double_p, c_double_p]
-    support_library.restype = ctypes.c_void_p
-
+    support_library.fill_G.restype = ctypes.c_void_p
     def fill_G(r, r_max, m, n, wopt, logwopt, G):
         arr_r = np.ascontiguousarray(r, dtype='int32')
         arr_wopt = np.ascontiguousarray(wopt, dtype='float64')
@@ -31,11 +35,129 @@ try:
                                arr_wopt.ctypes.data_as(c_double_p),
                                arr_logwopt.ctypes.data_as(c_double_p),
                                arr_G.ctypes.data_as(c_double_p))
+
+    support_library.update_S_SS.argtypes = [c_double_p, c_double_p,
+                                            c_double, c_double,
+                                            c_int, c_int, c_int,
+                                            c_int, c_double]
+    support_library.update_S_SS.restype = c_double
+    def update_S_SS(S, SS, p, q, smin, smax, i, m):
+        arr_S = np.ascontiguousarray(S, dtype='float64')
+        arr_SS = np.ascontiguousarray(SS, dtype='float64')
+
+        SSS = support_library.update_S_SS(arr_S.ctypes.data_as(c_double_p),
+                                          arr_SS.ctypes.data_as(c_double_p),
+                                          p, q, smin, smax, i, m, eps0)
+        return SSS
     
     c_support_loaded = True
 except:
     print 'C support code can\'t load. Falling back to Python.'
     c_support_loaded = False
+
+# Saddlepoint approximation to P(R = r, C = c) for a matrix with
+# independent Bernoulli(p_{ij}) entries. Because of linear dependence
+# in the distribution of the margins (which leads to a singular
+# K''(s_hat, t_hat), I introduce the additional random variable of the
+# sum of all the cells and then only consider the distribution of the
+# first (m-1) row and first (n-1) column margins.
+#
+# Behavior not well-defined if any margins are extreme or if the
+# margins don't satisfy the Gale-Ryser conditions.
+def p_margins_saddlepoint(r, c, p):
+    m, n = len(r), len(c)
+    
+    a = np.sum(r)
+    r = r[0:(m-1)]
+    c = c[0:(n-1)]
+
+    # Utility code: unpack vectorized (s, t, u)
+    def unpack_s_t_u(x):
+        s = x[0:(m-1)]
+        t = x[(m-1):(m+n-2)]
+        u = x[(m+n-2)]
+        return s, t, u
+
+    # The "E matrix" is used repeatedly in the calculations for K, K',
+    # and K''. Vectorized for efficiency.
+    def E_mat(s, t, u):
+        E = np.zeros((m,n))
+        for i in xrange(m-1):
+            E[i,:] += s[i]
+        for j in xrange(n-1):
+            E[:,j] += t[j]
+        E[:,:] += u
+        E = np.exp(E)
+        return E
+    
+    # The Hessian K''(s, t, u) is needed in both the saddlepoint
+    # approximation and in the numerical solution for the saddlepoint
+    # equations.
+    def K_prime_prime(x):
+        s, t, u = unpack_s_t_u(x)
+
+        E = E_mat(s, t, u)
+        K_prime_prime_mat = p * (1.0 - p) * E / \
+            ((p * E + (1.0 - p)) ** 2)
+        
+        out = np.zeros(((m+n-1),(m+n-1)))
+
+        for i in xrange(m-1):
+            val = np.sum(K_prime_prime_mat[i,:])
+            out[i,i] = val
+            out[m+n-2,i] = val
+            out[i,m+n-2] = val
+
+        for j in xrange(n-1):
+            val = np.sum(K_prime_prime_mat[:,j])
+            out[m-1+j,m-1+j] = val
+            out[m+n-2,m-1+j] = val
+            out[m-1+j,m+n-2] = val
+
+        for i in xrange(m-1):
+            for j in xrange(n-1):
+                out[i,m-1+j] = K_prime_prime_mat[i,j]
+                out[m-1+j,i] = K_prime_prime_mat[i,j]
+
+        out[m+n-2,m+n-2] = np.sum(K_prime_prime_mat)
+
+        return out
+    
+    # Solve saddlepoint equations K'(s_hat, t_hat, u_hat) = (r, c, a)
+    def s_t_hat_eq(x):
+        s, t, u = unpack_s_t_u(x)
+
+        E = E_mat(s, t, u)
+        K_prime_mat = p * E / (p * E + (1.0 - p))
+
+        out = np.empty((m+n-1))
+
+        for i in xrange(m-1):
+            out[i] = np.sum(K_prime_mat[i,:]) - r[i]
+
+        for j in xrange(n-1):
+            out[m-1+j] = np.sum(K_prime_mat[:,j]) - c[j]
+
+        out[m+n-2] = np.sum(K_prime_mat) - a
+
+        return out
+
+    x_hat = opt.fsolve(s_t_hat_eq, np.zeros((m+n-1)), fprime = K_prime_prime)
+    s_hat, t_hat, u_hat = unpack_s_t_u(x_hat)
+
+    # Compute saddlepoint approximation
+    E = E_mat(s_hat, t_hat, u_hat)
+    K_hat = np.sum(np.log(p * E + (1.0 - p)))
+
+    s_hat_dot_r = np.dot(s_hat, r)
+    t_hat_dot_c = np.dot(t_hat, c)
+    u_hat_dot_a = u_hat * a
+
+    K_prime_prime_hat = K_prime_prime(x_hat)
+
+    return (2 * np.pi) ** (-(m+n-1) / 2.0) * \
+        np.linalg.det(K_prime_prime_hat) ** (-0.5) * \
+        np.exp(K_hat - s_hat_dot_r - t_hat_dot_c - u_hat_dot_a)
 
 ##############################################################################
 # Adapting a Matlab routine provided by Jeff Miller
@@ -87,7 +209,7 @@ def arbitrary_from_margins(r, c):
 
     # Construct the maximal matrix and the conjugate
     A = np.zeros((m,n), dtype = np.bool)
-    for i in range(m):
+    for i in xrange(m):
         A[i,0:r[i]] = True
     col = np.sum(A, axis = 0)
 
@@ -119,7 +241,12 @@ def arbitrary_from_margins(r, c):
 # Sinkhorn(-Knopp) algorithm
 #
 # FIXME: Assuming nonzero entries; check with manuscript and fix.
+_dict_canonical_scalings = {}
 def canonical_scalings(w):
+    w_hash = hashlib.sha1(w.view(np.uint8)).hexdigest()
+    if w_hash in _dict_canonical_scalings:
+        return _dict_canonical_scalings[w_hash]
+
     max_iter = 100
     tol = 1e-8
 
@@ -147,6 +274,7 @@ def canonical_scalings(w):
 
         iter += 1
 
+    _dict_canonical_scalings[w_hash] = (a, b)
     return a, b
 
 # Suppose c is a sequence of nonnegative integers. Returns c_conj where:
@@ -161,7 +289,7 @@ def conjugate(c, n):
             cc[k-1] += 1
 
     s = cc[n-1]
-    for j in range(n-2,-1,-1):
+    for j in xrange(n-2,-1,-1):
         s += cc[j]
         cc[j] = s
 
@@ -250,21 +378,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
 
     # Get the running total of sum of c squared
     ccount2_init = np.sum(csort ** 2)
-    # Get the running total of (2 times the) column margins choose 2
-    ccount2c_init = np.sum(csort * (csort - 1))
-    # Get the running total of (6 times the) column margins choose 3
-    ccount3c_init = np.sum(csort * (csort - 1) * (csort - 2))
-
-    # Get the running total of sum of r squared
-    rcount2_init = np.sum(rsort ** 2)
-    # Get the running total of (2 times the) column margins choose 2
-    rcount2c_init = np.sum(rsort * (rsort - 1))
-    # Get the running total of (6 times the) column margins choose 3
-    rcount3c_init = np.sum(rsort * (rsort - 1) * (rsort - 2))
     
-    # Used to prevent divide by zero
-    eps0 = np.spacing(0)
-
     def do_sample():
         ### Initialization
 
@@ -274,15 +388,14 @@ def approximate_from_margins_weights(r, c, w, T = None,
         rndx, irndx = rndx_init.copy(), irndx_init.copy()
         cconj = cconj_init.copy()
         count = count_init
-        ccount2, ccount2c, ccount3c = ccount2_init, ccount2c_init, ccount3c_init
-        rcount2, rcount2c, rcount3c = rcount2_init, rcount2c_init, rcount3c_init
+        ccount2 = ccount2_init
 
         # Initialize intermediate storage
         #
         # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
         # corresponds to 1, ..., index M-1 corresponds to c[0]+1
         M = csort[0] + 3
-        S = np.zeros((M,n))
+        S = np.zeros((M,m))
         SS = np.zeros(M)
 
         # Initialize B_sample_sparse, logQ, logP
@@ -296,7 +409,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
         #
         # Warning: things that "should" be fixed are modified in this
         # loop, e.g., n, the number of columns!
-        for c1 in range(n):
+        for c1 in xrange(n):
             ### Sample the next column
 
             # Remember the starting point for this column in B_sample_sparse
@@ -321,8 +434,6 @@ def approximate_from_margins_weights(r, c, w, T = None,
             # Update the count and the running column counts
             count -= colval
             ccount2 -= colval ** 2
-            ccount2c -= colval * (colval - 1)
-            ccount3c -= colval * (colval - 1) * (colval - 2)
 
             # Start filling SS (indices corresponding to colval-1 ... colval+1)
             SS[colval:(colval+3)] = [0,1,0]
@@ -368,16 +479,19 @@ def approximate_from_margins_weights(r, c, w, T = None,
                 smax = min(smaxold, i)
 
                 # DP iteration (only needed parts of SS updated)
-                SSS = 0.0
-                SS[smin] = 0.0
-                for j in range(smin+1,smax+2):
-                    a = SS[j] * q
-                    b = SS[j+1] * p
-                    apb = a + b
-                    SSS += apb
-                    SS[j] = apb
-                    S[j,i] = b / (apb + eps0)
-                SS[smax+2] = 0.0
+                if c_support_loaded:
+                    SSS = update_S_SS(S, SS, p, q, smin, smax, i, m)
+                else:
+                    SSS = 0.0
+                    SS[smin] = 0.0
+                    for j in xrange(smin+1,smax+2):
+                        a = SS[j] * q
+                        b = SS[j+1] * p
+                        apb = a + b
+                        SSS += apb
+                        SS[j] = apb
+                        S[j,i] = b / (apb + eps0)
+                    SS[smax+2] = 0.0
 
                 # Check for impossible; if so, jump out of inner loop
                 if SSS <= 0: break
@@ -396,7 +510,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
 
             # Skip assigning anything when colval = 0
             if j < jmax:
-                for i in range(m):
+                for i in xrange(m):
                     # Generate a one according to the transition probability
                     p = S[j,i]
                     if np.random.random() < p:
@@ -404,11 +518,6 @@ def approximate_from_margins_weights(r, c, w, T = None,
                         rlabel = rndx[i]
                         val = r[rlabel]
                         r[rlabel] -= 1
-
-                        # Update the running row counts
-                        rcount2 -= 2 * val - 1
-                        rcount2c -= 2 * val - 2
-                        rcount3c -= 3 * (val - 1) * (val - 2)
 
                         # Record the entry
                         place += 1
@@ -437,7 +546,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
             # (descending) since each row was decremented by only 1.
 
             # Looping in reverse ensures that least rows are swapped first
-            for j in range(place, placestart-1, -1):
+            for j in xrange(place, placestart-1, -1):
                 # Get the row label, its new value, and its inverse index
                 k = B_sample_sparse[j,0]
                 val = r[k]
@@ -467,7 +576,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
             #   r[rndx] is sorted, represents unassigned row margins
             #   rndx[irndx] = 0:m
             #   c[cndx[(c1+1):]] is sorted, represents unassigned column margins
-            #   m, n, count, ccount*, rcount*, cconj, etc. are valid
+            #   m, n, count, ccount*, cconj, etc. are valid
             #   place points to new entries in B_sample_sparse
             #
             # In other words, it is as if Initialization had just
@@ -476,7 +585,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
         return (B_sample_sparse, logQ, logP)
 
     if T:
-        return [do_sample() for t in range(T)]
+        return [do_sample() for t in xrange(T)]
     else:
         return do_sample()[0]
     
@@ -530,17 +639,6 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
 
     # Get the running total of sum of c squared
     ccount2 = np.sum(csort ** 2)
-    # Get the running total of (2 times the) column margins choose 2
-    ccount2c = np.sum(csort * (csort - 1))
-    # Get the running total of (6 times the) column margins choose 3
-    ccount3c = np.sum(csort * (csort - 1) * (csort - 2))
-
-    # Get the running total of sum of r squared
-    rcount2 = np.sum(rsort ** 2)
-    # Get the running total of (2 times the) column margins choose 2
-    rcount2c = np.sum(rsort * (rsort - 1))
-    # Get the running total of (6 times the) column margins choose 3
-    rcount3c = np.sum(rsort * (rsort - 1) * (rsort - 2))
 
     # Initialize B_sample_sparse
     B_sample_sparse = -np.ones((count,2), dtype=np.int)
@@ -550,11 +648,8 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
     # corresponds to 1, ..., index M-1 corresponds to c[0]+1
     M = csort[0] + 3
-    S = np.zeros((M,n))
+    S = np.zeros((M,m))
     SS = np.zeros(M)
-
-    # Used to prevent divide by zero
-    eps0 = np.spacing(0)
 
     # Most recent assigned column in B_sample_sparse
     place = -1
@@ -566,7 +661,7 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     #
     # Warning: things that "should" be fixed are modified in this
     # loop, e.g., n, the number of columns!
-    for c1 in range(n):
+    for c1 in xrange(n):
         ### Sample the next column
 
         # Remember the starting point for this column in B_sample_sparse
@@ -591,8 +686,6 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
         # Update the count and the running column counts
         count -= colval
         ccount2 -= colval ** 2
-        ccount2c -= colval * (colval - 1)
-        ccount3c -= colval * (colval - 1) * (colval - 2)
 
         # Start filling SS (indices corresponding to colval-1, colval, colval+1)
         SS[colval:(colval+3)] = [0,1,0]
@@ -638,16 +731,19 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
             smax = min(smaxold, i)
 
             # DP iteration (only needed parts of SS updated)
-            SSS = 0.0
-            SS[smin] = 0.0
-            for j in range(smin+1,smax+2):
-                a = SS[j] * q
-                b = SS[j+1] * p
-                apb = a + b
-                SSS += apb
-                SS[j] = apb
-                S[j,i] = b / (apb + eps0)
-            SS[smax+2] = 0.0
+            if c_support_loaded:
+                SSS = update_S_SS(S, SS, p, q, smin, smax, i, m)
+            else:
+                SSS = 0.0
+                SS[smin] = 0.0
+                for j in xrange(smin+1,smax+2):
+                    a = SS[j] * q
+                    b = SS[j+1] * p
+                    apb = a + b
+                    SSS += apb
+                    SS[j] = apb
+                    S[j,i] = b / (apb + eps0)
+                SS[smax+2] = 0.0
 
             # Check for impossible; if so, jump out of inner loop
             if SSS <= 0: break
@@ -666,7 +762,7 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
 
         # Skip assigning anything when colval = 0
         if j < jmax:
-            for i in range(m):
+            for i in xrange(m):
                 # Generate a one according to the transition probability
                 p = S[j,i]
                 rlabel = rndx[i]
@@ -674,11 +770,6 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
                     # Decrement row total
                     val = r[rlabel]
                     r[rlabel] -= 1
-
-                    # Update the running row counts
-                    rcount2 -= 2 * val - 1
-                    rcount2c -= 2 * val - 2
-                    rcount3c -= 3 * (val - 1) * (val - 2)
 
                     # Record the entry
                     place += 1
@@ -704,7 +795,7 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
         # (descending) since each row was decremented by only 1.
 
         # Looping in reverse ensures that least rows are swapped first
-        for j in range(place, placestart-1, -1):
+        for j in xrange(place, placestart-1, -1):
             # Get the row label, its new value, and its inverse index
             k = B_sample_sparse[j,0]
             val = r[k]
@@ -734,7 +825,7 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
         #   r[rndx] is sorted and represents unassigned row margins
         #   rndx[irndx] = 0:m
         #   c[cndx[(c1+1):]] is sorted and represents unassigned column margins
-        #   m, n, count, ccount*, rcount*, cconj, etc. are valid
+        #   m, n, count, ccount*, cconj, etc. are valid
         #   place points to new entries in B_sample_sparse
 
     return cnll
@@ -750,9 +841,9 @@ def compute_G(r, m, n, wopt):
         fill_G(r, r_max, m, n, wopt, logwopt, G)
     else:
         for i, ri in enumerate(r):
-            for j in range(n-2, 0, -1):
+            for j in xrange(n-2, 0, -1):
                 wij = logwopt[i,j]
-                for k in range(1, ri+1):
+                for k in xrange(1, ri+1):
                     b = G[k-1,i,j] + wij
                     a = G[k,i,j]
                     if a == -np.inf and b == -np.inf: continue
@@ -760,8 +851,8 @@ def compute_G(r, m, n, wopt):
                         G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
                     else:
                         G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
-            for j in range(n-1):
-                for k in range(r_max):
+            for j in xrange(n-1):
+                for k in xrange(r_max):
                     Gk_num = G[k,i,j]
                     Gk_den = G[k+1,i,j]
                     if np.isinf(Gk_den):
