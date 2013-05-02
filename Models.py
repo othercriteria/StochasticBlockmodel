@@ -11,10 +11,9 @@ from time import time
 from itertools import permutations
 
 from Utility import logit, inv_logit, logit_mean, logsumexp, logabsdiffexp
-from Utility import dot_named
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights
-from BinaryMatrix import approximate_conditional_nll
+from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import p_margins_saddlepoint
 
 # See if embedded R process can be started; this should be done once,
@@ -183,6 +182,7 @@ class Stationary(IndependentBernoulli):
         self.kappa = 0.0
         self.fit = self.fit_convex_opt
         self.fit_info = None
+        self.conf = None
 
     def edge_probabilities(self, network, submatrix = None):
         N = network.N
@@ -561,7 +561,7 @@ class StationaryLogistic(Stationary):
             w = P / (1.0 - P)
 
             if T == 0:
-                cnll = approximate_conditional_nll(A, w,
+                cnll = acnll(A, w,
                                                    sort_by_wopt_var = False)
             else:
                 z = approximate_from_margins_weights(r, c, w, T,
@@ -833,27 +833,220 @@ class StationaryLogistic(Stationary):
 
         return Sampler(network, self, update, record)
 
-    def confidence_wald(self, network, a, num_bootstrap = 20, alpha = 0.05,
-                        **fit_options):
-        # Locate center of confidence interval
+    def confidence(self, network, num_bootstrap = 50, alpha = 0.05,
+                   **fit_options):
+        # Point estimate
         self.fit(network, **fit_options)
-        nu_hat = dot_named(a, self.beta)
+        theta_hats = { b: self.beta[b] for b in self.beta }
 
-        # Parametric bootstrap to get approximate standard error
-        network_original = network.network.copy()
-        nu_hat_bootstraps = np.empty(num_bootstrap)
+        # Parametric bootstrap to characterize uncertainty in point estimate
+        network_samples = []
         for n in range(num_bootstrap):
-            network.generate(self)
+            network_samples.append(self.generate(network))
+        network_original = network.network.copy()
+        theta_hat_bootstraps = { b: np.empty(num_bootstrap) for b in self.beta }
+        for n in range(num_bootstrap):
+            network.network = network_samples[n]
             self.fit(network, **fit_options)
-            nu_hat_bootstrap = dot_named(a, self.beta)
-            nu_hat_bootstraps[n] = nu_hat_bootstrap
+            for b in theta_hat_bootstraps:
+                theta_hat_bootstraps[b][n] = self.beta[b]
         network.network = network_original
-        nu_hat_se = np.sqrt(np.var(nu_hat_bootstraps) / num_bootstrap)
 
-        # Calculate appropriate z-score
-        z_score = norm().ppf(1.0 - alpha / 2.0)
+        # Initialize data structure to hold confidence intervals
+        if not self.conf:
+            self.conf = {}
+        for b in self.beta:
+            if not b in self.conf:
+                self.conf[b] = {}
 
-        return nu_hat - z_score * nu_hat_se, nu_hat + z_score * nu_hat_se
+        # Construct (asymptotically valid) confidence interval
+        for b in self.conf:
+            p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
+            theta_hat = theta_hats[b]
+            theta_hat_bootstrap = theta_hat_bootstraps[b]
+            self.conf[b]['percentile'] = \
+                (np.percentile(theta_hat_bootstrap, 100.0 * p_l),
+                 np.percentile(theta_hat_bootstrap, 100.0 * p_u))
+            self.conf[b]['pivotal'] = \
+                (2*theta_hat - np.percentile(theta_hat_bootstrap, 100.0 * p_u),
+                 2*theta_hat - np.percentile(theta_hat_bootstrap, 100.0 * p_l))
+            z_score = norm().ppf(p_u)
+            theta_hat_se = np.sqrt(np.mean((theta_hat_bootstrap-theta_hat)**2))
+            self.conf[b]['normal'] = \
+                (theta_hat - z_score * theta_hat_se,
+                 theta_hat + z_score * theta_hat_se)
+
+    # Implementation of ideas from "Conservative Hypothesis Tests and
+    # Confidence Intervals using Importance Sampling" (Harrison, 2012).
+    def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 30,
+                            L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
+        N = network.N
+        A = np.array(network.adjacency_matrix())
+
+        x = network.edge_covariates[b].matrix()
+
+        # Generate beta grid for inference
+        beta_grid = np.linspace(beta_l_min, beta_l_max, L)
+
+        # Observed statistic
+        t_X = np.sum(A * x)
+
+        # Row and column margins; the part of the data we can use to design Q
+        r, c = A.sum(1), A.sum(0)
+
+        # Generate samples from the mixture proposal distribution
+        Y = []
+        for n in range(n_MC):
+            l = np.random.randint(L)
+            logit_P_l = beta_grid[l] * x
+        
+            Y_sparse = approximate_from_margins_weights(r, c, np.exp(logit_P_l))
+            Y_dense = np.zeros((N,N), dtype = np.bool)
+            for i, j in Y_sparse:
+                if i == -1: break
+                Y_dense[i,j] = 1
+            Y.append(Y_dense)
+
+        # Statistics for the samples from the proposal distribution only
+        # need to be calculated once...
+        t_Y = np.empty(n_MC)
+        for n in range(n_MC):
+            t_Y[n] = np.sum(Y[n] * x)
+        I_t_Y_plus = t_Y >= t_X
+        I_t_Y_minus = -t_Y >= -t_X
+
+        # Probabilities under each component of the proposal distribution
+        # only need to be calculated once...
+        log_Q_X = np.empty(L)
+        log_Q_Y = np.empty((L,n_MC))
+        for l in range(L):
+            logit_P_l = beta_grid[l] * x
+            log_Q_X[l] = -acnll(A, np.exp(logit_P_l))
+            for n in range(n_MC):
+                log_Q_Y[l,n] = -acnll(Y[n], np.exp(logit_P_l))
+        Q_sum_X = np.exp(np.logaddexp.reduce(log_Q_X))
+        Q_sum_Y = np.empty(n_MC)
+        for n in range(n_MC):
+            Q_sum_Y[n] = np.exp(np.logaddexp.reduce(log_Q_Y[:,n]))
+
+        # Step over the grid, calculating approximate p-values
+        p_plus = np.empty(L)
+        p_minus = np.empty(L)
+        for l in range(L):
+            beta_l = beta_grid[l]
+
+            p_num_plus, p_num_minus, p_denom = 0.0, 0.0, 0.0
+
+            # X contribution
+            w_X = np.exp(beta_l * t_X) / Q_sum_X
+            p_num_plus += w_X
+            p_num_minus += w_X
+            p_denom += w_X
+
+            # Y contribution
+            for n in range(n_MC):
+                w_Y = np.exp(beta_l * t_Y[n]) / Q_sum_Y[n]
+                if I_t_Y_plus[n]: p_num_plus += w_Y
+                if I_t_Y_minus[n]: p_num_minus += w_Y
+                p_denom += w_Y
+
+            p_plus[l] = p_num_plus / p_denom
+            p_minus[l] = p_num_minus / p_denom
+
+        p_plus_minus = np.fmin(1, 2 * np.fmin(p_plus, p_minus))
+
+        C_alpha = beta_grid[p_plus_minus > alpha_level]
+
+        if not self.conf:
+            self.conf = {}
+        if not b in self.conf:
+            self.conf[b] = {}
+        self.conf[b]['harrison'] = (np.min(C_alpha), np.max(C_alpha))
+
+    # Generalization of conservative importance sampling confidence
+    # intervals to two parameters.
+    def confidence_harrison_2(self, network, a, alpha_level = 0.05, n_MC = 20,
+                              L = 20, beta_l_min = -6.0, beta_l_max = 6.0):
+        N = network.N
+        A = network.adjacency_matrix()
+        b_1, b_2 = self.beta.keys()
+
+        x_1 = network.edge_covariates[b_1].matrix()
+        x_2 = network.edge_covariates[b_2].matrix()
+
+        # Generate beta grid for inference
+        beta_grid_1 = np.linspace(beta_l_min, beta_l_max, L)
+        beta_grid_2 = np.linspace(beta_l_min, beta_l_max, L)
+
+        # Observed statistic
+        t_X = np.sum(A * (x_1 + x_2))
+
+        # Row and column margins; the part of the data we can use to design Q
+        r, c = A.sum(1), A.sum(0)
+
+        # Generate samples from the mixture proposal distribution
+        Y = []
+        for n in range(n_MC):
+            l = np.random.randint(L)
+            logit_P_l = beta_grid[l] * x
+        
+            Y_sparse = approximate_from_margins_weights(r, c, np.exp(logit_P_l))
+            Y_dense = np.zeros((N,N), dtype = np.bool)
+            for i, j in Y_sparse:
+                if i == -1: break
+                Y_dense[i,j] = 1
+            Y.append(Y_dense)
+
+        # Statistics for the samples from the proposal distribution only
+        # need to be calculated once...
+        t_Y = np.empty(n_MC)
+        for n in range(n_MC):
+            t_Y[n] = np.sum(Y[n] * x)
+        I_t_Y_plus = t_Y >= t_X
+        I_t_Y_minus = -t_Y >= -t_X
+
+        # Probabilities under each component of the proposal distribution
+        # only need to be calculated once...
+        log_Q_X = np.empty(L)
+        log_Q_Y = np.empty((L,n_MC))
+        for l in range(L):
+            logit_P_l = beta_grid[l] * x
+            log_Q_X[l] = -acnll(A, np.exp(logit_P_l))
+            for n in range(n_MC):
+                log_Q_Y[l,n] = -acnll(Y[n], np.exp(logit_P_l))
+        Q_sum_X = np.exp(np.logaddexp.reduce(log_Q_X))
+        Q_sum_Y = np.empty(n_MC)
+        for n in range(n_MC):
+            Q_sum_Y[n] = np.exp(np.logaddexp.reduce(log_Q_Y[:,n]))
+
+        # Step over the grid, calculating approximate p-values
+        p_plus = np.empty(L)
+        p_minus = np.empty(L)
+        for l in range(L):
+            beta_l = beta_grid[l]
+
+            p_num_plus, p_num_minus, p_denom = 0.0, 0.0, 0.0
+
+            # X contribution
+            w_X = np.exp(beta_l * t_X) / Q_sum_X
+            p_num_plus += w_X
+            p_num_minus += w_X
+            p_denom += w_X
+
+            # Y contribution
+            for n in range(n_MC):
+                w_Y = np.exp(beta_l * t_Y[n]) / Q_sum_Y[n]
+                if I_t_Y_plus[n]: p_num_plus += w_Y
+                if I_t_Y_minus[n]: p_num_minus += w_Y
+                p_denom += w_Y
+
+            p_plus[l] = p_num_plus / p_denom
+            p_minus[l] = p_num_minus / p_denom
+
+        p_plus_minus = np.fmin(1, 2 * np.fmin(p_plus, p_minus))
+
+        C_alpha = beta_grid[p_plus_minus > alpha_level]
+        return np.min(C_alpha), np.max(C_alpha)
 
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
 #                     o_{ij})
