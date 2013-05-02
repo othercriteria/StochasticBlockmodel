@@ -3,6 +3,7 @@
 # Network representation and basic operations
 # Daniel Klein, 5/10/2012
 
+from os import system, unlink
 import numpy as np
 import scipy.sparse as sparse
 import networkx as nx
@@ -156,36 +157,38 @@ class Network:
         while len(to_screen) > 0:
             r_act, c_act = to_screen.pop()
 
+            if len(r_act) == 0 or len(c_act) == 0:
+                continue
+
             A_act = A[r_act][:,c_act]
             n_act = A_act.shape
-            trivial = [(0,0), (0,n_act[1]), (n_act[0],0), (n_act[0],n_act[1])]
-            for (i,j) in [(i,j)
-                         for i in range(n_act[0] + 1)
-                         for j in range(n_act[1] + 1)]:
-                if (i,j) in trivial: continue
-                if np.any(A_act[:i][:,:j]): continue
-                if not np.all(A_act[i:][:,j:]): continue
-                set_offset_block(r_act[:i], c_act[:j], -np.inf)
-                set_offset_block(r_act[i:], c_act[j:], np.inf)
-                if i > 0 and j < n_act[1]:
-                    A_sub = A_act[:i][:,j:]
-                    if not np.any(A_sub):
-                        set_offset_block(r_act[:i], c_act[j:], -np.inf)
-                    elif np.all(A_sub):
-                        set_offset_block(r_act[:i], c_act[j:], np.inf)
-                    else:
-                        to_screen.append((r_act[np.arange(i)],
-                                          c_act[np.arange(j, n_act[1])]))
-                if i < n_act[0] and j > 0:
-                    A_sub = A_act[i:][:,:j]
-                    if not np.any(A_sub):
-                        set_offset_block(r_act[i:], c_act[:j], -np.inf)
-                    elif np.all(A_sub):
-                        set_offset_block(r_act[i:], c_act[:j], np.inf)
-                    else:
-                        to_screen.append((r_act[np.arange(i, n_act[0])],
-                                          c_act[np.arange(j)]))
-                break
+
+            # Cumulative sums allow for efficient bad substructure search
+            C_inc = np.cumsum(np.cumsum(A_act,1),0)
+            def reverse(x):
+                return x[range(n_act[0]-1,-1,-1)][:,range(n_act[1]-1,-1,-1)]
+            C_dec = reverse(np.cumsum(np.cumsum(reverse(1-A_act),1),0))
+
+            if C_inc[-1,-1] == 0:
+                set_offset_block(r_act, c_act, -np.inf)
+                continue
+            if C_dec[0,0] == 0:
+                set_offset_block(r_act, c_act, np.inf)
+                continue
+
+            align = np.zeros((n_act[0]+1,n_act[1]+1))
+            align[1:(n_act[0]+1)][:,1:(n_act[1]+1)] += (C_inc == 0)
+            align[0:n_act[0]][:,0:n_act[1]] *= (C_dec == 0)
+            splits = zip(*np.where(align))
+            if len(splits) == 0:
+                continue
+            i_split, j_split = splits[0]
+
+            set_offset_block(r_act[:i_split], c_act[:j_split], -np.inf)
+            set_offset_block(r_act[i_split:], c_act[j_split:], np.inf)
+
+            to_screen.append((r_act[i_split:], c_act[:j_split]))
+            to_screen.append((r_act[:i_split], c_act[j_split:]))
 
     def show(self):
         graph = nx.DiGraph()
@@ -194,7 +197,6 @@ class Network:
             graph.add_node(n)
 
         if self.is_sparse():
-            nonzeros = set()
             nz_i, nz_j = self.network.nonzero()
             for n in range(self.network.nnz):
                 graph.add_edge(self.names[nz_i[n]],self.names[nz_j[n]])
@@ -206,6 +208,38 @@ class Network:
         
         nx.draw_graphviz(graph)
         plt.show()
+
+    def show_graphviz(self, file = 'graph.pdf', splines = True, labels = True):
+        outfile = open('temp_graphviz.dot', 'w')
+        outfile.write('digraph G {\n')
+        outfile.write('size="12,16";\n')
+        outfile.write('orientation=landscape;\n')
+        outfile.write('overlap=none;\n')
+        outfile.write('repulsiveforce=12;\n')
+        if splines:
+            outfile.write('splines=true;\n')
+
+        for name in self.names:
+            outfile.write('%s [label=""];\n' % name)
+
+        if self.is_sparse():
+            nz_i, nz_j = self.network.nonzero()
+            for n in range(self.network.nnz):
+                outfile.write('%s -> %s;\n' % \
+                              (self.names[nz_i[n]], self.names[nz_j[n]]))
+        else:
+            for i in range(self.N):
+                for j in range(self.N):
+                    if self.network[i,j]:
+                        outfile.write('%s -> %s;\n' % \
+                                      (self.names[i], self.names[j]))
+                        
+        outfile.write('}\n')
+        outfile.close()
+        system('fdp -Tps2 temp_graphviz.dot -o temp_graphviz.ps')
+        unlink('temp_graphviz.dot')
+        system('ps2pdf temp_graphviz.ps %s' % file)
+        unlink('temp_graphviz.ps')
 
     def show_heatmap(self, order_by = None):
         if order_by:
