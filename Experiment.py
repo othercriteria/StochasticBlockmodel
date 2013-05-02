@@ -8,16 +8,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class RandomSubnetworks:
-    def __init__(self, network, train_size, test_size = 0):
+    def __init__(self, network, train_size, test_size = 0, method = 'node'):
         self.network = network
         self.train_size = train_size
         self.test_size = test_size
+        self.method = method
 
-        self.inds = np.arange(self.network.N)
+        if self.method == 'node':
+            self.inds = np.arange(self.network.N)
+        elif self.method == 'edge':
+            edges = self.network.network.nonzero()
+            edges_i, edges_j = edges[0], edges[1]
+            self.edges_i = edges_i
+            self.edges_j = edges_j
+            self.num_edges = len(edges_i)
 
     def sample(self):
-        np.random.shuffle(self.inds)
-        sub_train = self.inds[0:self.train_size]
+        if self.method == 'node':
+            np.random.shuffle(self.inds)
+            sub_train = self.inds[0:self.train_size]
+        elif self.method == 'edge':
+            added = set()
+            while len(added) < self.train_size:
+                e = np.random.randint(self.num_edges)
+                edge_i = self.edges_i[e]
+                edge_j = self.edges_j[e]
+                if len(added) == self.train_size - 1:
+                    # Edge case, since otherwise would bias to tail node
+                    if np.random.random() < 0.5:
+                        added.add(edge_i)
+                    else:
+                        added.add(edge_j)
+                added.add(edge_i)
+                added.add(edge_j)
+            sub_train = np.array(list(added))
+
         if self.test_size == 0:
             return self.network.subnetwork(sub_train)
         else:
@@ -65,7 +90,8 @@ class Results:
 
         return name
 
-    def record(self, sub_size, rep, network, data_model, fit_model):
+    def record(self, sub_size, rep, network,
+               data_model = None, fit_model = None):
         for result in self.results:
             f = self.results[result]['f']
             f_type = self.results[result]['f_type']
