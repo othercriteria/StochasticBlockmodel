@@ -22,12 +22,13 @@ class RandomSubnetworks:
             self.edges_i = edges_i
             self.edges_j = edges_j
             self.num_edges = len(edges_i)
-        elif self.method == 'link':
+        elif self.method in ['link', 'link_f'] :
             edges = self.network.network.nonzero()
             neighbors = { n: set() for n in range(self.network.N) }
             for i, j in zip(edges[0], edges[1]):
                 neighbors[i].add(j)
-                neighbors[j].add(i)
+                if self.method == 'link':
+                    neighbors[j].add(i)
             self.neighbors = { n: list(neighbors[n]) for n in neighbors }
 
     def sample(self):
@@ -49,7 +50,7 @@ class RandomSubnetworks:
                 added.add(edge_i)
                 added.add(edge_j)
             sub_train = np.array(list(added))
-        elif self.method == 'link':
+        elif self.method in ['link', 'link_f']:
             added = set()
             loc = np.random.randint(self.network.N)
             while len(added) < self.train_size:
