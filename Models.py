@@ -1390,7 +1390,7 @@ class NonstationaryLogistic(StationaryLogistic):
             for j in range(N-1):
                 v = P_bar[i+1,j+1]
                 I[i,N-1+j] = v
-                I[N-1+i,j] = v
+                I[N-1+j,i] = v
         for i in range(N-1):
             v = np.sum(P_bar[i+1,:])
             I[i,i] = v
