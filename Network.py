@@ -81,17 +81,29 @@ class Network:
     def generate(self, model, **opts):
         self.network = model.generate(self, **opts)
 
-    def network_from_file_gexf(self, path):
-        in_network = nx.read_gexf(path)
-        self.N = in_network.number_of_nodes()
-        self.names = np.array(in_network.nodes())
+    def network_from_networkx(self, g, cov_names = []):
+        self.N = g.number_of_nodes()
+        self.names = np.array(g.nodes())
         self.network = sparse.lil_matrix((self.N,self.N), dtype=np.bool)
 
         name_to_index = {}
         for i, n in enumerate(self.names):
             name_to_index[n] = i
-        for s, t in in_network.edges():
+        for s, t in g.edges():
             self.network[name_to_index[s],name_to_index[t]] = True
+
+        for cov_name in cov_names:
+            nodes = g.nodes()
+            covs = [g.node[n][cov_name] for n in nodes]
+            self.new_node_covariate(cov_name).from_pairs(nodes, covs)
+        
+    def network_from_file_gexf(self, path, cov_names = []):
+        in_network = nx.read_gexf(path)
+        self.network_from_networkx(in_network, cov_names)
+
+    def network_from_file_gml(self, path, cov_names = []):
+        in_network = nx.read_gml(path)
+        self.network_from_networkx(in_network, cov_names)
 
     def network_from_edges(self, edges):
         # First pass over edges to determine names and number of nodes
@@ -340,3 +352,7 @@ if __name__ == '__main__':
     net_3.offset_extremes()
     print net_3.offset.matrix()
     print net_3.subnetwork(np.array([2,1,0])).offset.matrix()
+
+    net_4 = Network()
+    net_4.network_from_file_gml('data/polblogs/polblogs.gml', ['value'])
+    print net_4.node_covariates['value']
