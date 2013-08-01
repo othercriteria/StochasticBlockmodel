@@ -187,6 +187,10 @@ class Results:
             elif 'ymax' in options:
                 ax.set_ylim(ymax = options['ymax'])
 
+            if 'loglog' in options:
+                ax.set_xscale('log')
+                ax.set_yscale('log')
+
         axarr[-1].set_xlabel('N_sub')
         f.subplots_adjust(hspace = 0)
         plt.setp([a.get_xticklabels() for a in axarr[:-1]], visible = False)
@@ -207,7 +211,7 @@ def add_network_stats(results):
 #
 # Eventually should add option to use Hungarian algorithm, although
 # this is probably unnecessary for, say, K <= 6.
-def minimum_disagreement(z_true, z_est, f = None):
+def minimum_disagreement(z_true, z_est, f = None, normalized = True):
     from itertools import permutations
 
     assert(len(z_true) == len(z_est))
@@ -227,6 +231,14 @@ def minimum_disagreement(z_true, z_est, f = None):
         for s, t in zip(est_permutation, true_classes):
             z_est_perm[z_est == s] = t
         best = min(best, f(z_true, z_est_perm))
+
+    if normalized:
+        best_constant = np.inf
+        for z in set(z_true):
+            z_constant = np.repeat(z, len(z_true))
+            best_constant = min(best_constant, f(z_true, z_constant))
+        best /= best_constant
+        
     return best
 
 # Differences of infinities make sense in this context...
