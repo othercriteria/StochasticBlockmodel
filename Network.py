@@ -12,15 +12,32 @@ import matplotlib.pyplot as plt
 from Covariate import NodeCovariate, EdgeCovariate
 
 class Network:
-    def __init__(self, N = None):
+    def __init__(self, N = None, M = None):
         if N:
             self.N = N
-            self.network = sparse.lil_matrix((self.N,self.N), dtype=np.bool)
-            self.names = np.array(['n_%d' % n for n in range(N)])
+            if M:
+                self.M = M
+                self.bipartite = True
+            else:
+                self.M = N
+                self.bipartite = False
+            self.network = sparse.lil_matrix((self.M,self.N), dtype=np.bool)
+            if self.bipartite:
+                self.names = None
+                self.rnames = np.array(['m_%d' % m for m in range(self.M)])
+                self.cnames = np.array(['n_%d' % n for n in range(self.N)])
+            else:
+                self.names = np.array(['%d' % n for n in range(self.N)])
+                self.rnames = None
+                self.cnames = None
         else:
+            self.M = 0
             self.N = 0
+            self.bipartite = False
             self.network = None
             self.names = None
+            self.rnames = None
+            self.cnames = None
 
         # Offset intitially set to None so simpler offset-free model
         # code can be used by default
@@ -28,6 +45,8 @@ class Network:
              
         # Maps from names to 1-D and 2-D arrays, respectively
         self.node_covariates = {}
+        self.row_covariates = {}
+        self.col_covariates = {}
         self.edge_covariates = {}
 
     def tocsr(self):
@@ -45,35 +64,109 @@ class Network:
         self.node_covariates[name] = NodeCovariate(self.names, dtype = np.int)
         return self.node_covariates[name]
 
+    def new_row_covariate(self, name):
+        self.row_covariates[name] = NodeCovariate(self.rnames)
+        return self.row_covariates[name]
+
+    def new_col_covariate(self, name):
+        self.col_covariates[name] = NodeCovariate(self.cnames)
+        return self.col_covariates[name]
+
     def new_edge_covariate(self, name):
-        self.edge_covariates[name] = EdgeCovariate(self.names)
+        if self.bipartite:
+            names_tuple = (self.rnames, self.cnames)
+            self.edge_covariates[name] = EdgeCovariate(names_tuple)
+        else:
+            self.edge_covariates[name] = EdgeCovariate(self.names)
         return self.edge_covariates[name]
 
     def initialize_offset(self):
-        self.offset = EdgeCovariate(self.names)
+        if self.bipartite:
+            names_tuple = (self.rnames, self.cnames)
+            self.offset = EdgeCovariate(names_tuple)
+        else:
+            self.offset = EdgeCovariate(self.names)
         return self.offset
 
-    def subnetwork(self, inds):
-        sub_N = len(inds)
+    def subnetwork(self, inds, sub_type = 'node'):
+        if sub_type == 'node':
+            if type(inds) == tuple:
+                rinds = inds[0]
+                cinds = inds[1]
+                sub_M = len(rinds)
+                sub_N = len(cinds)
+            else:
+                sub_M = len(inds)
+                sub_N = len(inds)
+                rinds = inds
+                cinds = inds
+        elif sub_type == 'row':
+            rinds = inds
+            sub_M = len(rinds)
+            sub_N = self.N
+            cinds = np.arange(sub_N)
+        elif sub_type == 'col':
+            cinds = inds
+            sub_M = self.M
+            sub_N = len(cinds)
+            rinds = np.arange(sub_M)
         sub = Network()
 
+        sub.bipartite = self.bipartite
         if self.is_sparse():
             self.tocsr()
-        sub.network = self.network[inds][:,inds]
-        sub.names = self.names[inds]
+        if type(inds) == tuple:
+            sub.bipartite = True
+            sub.network = self.network[rinds][:,cinds]
+            sub.rnames = self.names[rinds]
+            sub.cnames = self.names[cinds]
+        elif sub_type == 'node':
+            sub.network = self.network[inds][:,inds]
+            sub.names = self.names[inds]
+        else:
+            sub.network = self.network[rinds][:,cinds]
+            sub.rnames = self.rnames[rinds]
+            sub.cnames = self.cnames[cinds]
+        sub.M = sub_M
         sub.N = sub_N
 
         sub.node_covariates = {}
-        for node_covariate in self.node_covariates:
-            src = self.node_covariates[node_covariate]
-            sub.node_covariates[node_covariate] = src.subset(inds)
+        sub.row_covariates = {}
+        sub.col_covariates = {}
         sub.edge_covariates = {}
-        for edge_covariate in self.edge_covariates:
-            src = self.edge_covariates[edge_covariate]
-            sub.edge_covariates[edge_covariate] = src.subset(inds)
+        if type(inds) == tuple:
+            for node_covariate in self.node_covariates:
+                src = self.node_covariates[node_covariate]
+                sub.row_covariates[node_covariate] = src.subset(rinds)
+                sub.col_covariates[node_covariate] = src.subset(cinds)
+            for edge_covariate in self.edge_covariates:
+                src = self.edge_covariates[edge_covariate]
+                sub.edge_covariates[edge_covariate] = src.subset((rinds,cinds))
+        elif sub_type == 'node':
+            for node_covariate in self.node_covariates:
+                src = self.node_covariates[node_covariate]
+                sub.node_covariates[node_covariate] = src.subset(inds)
+            for edge_covariate in self.edge_covariates:
+                src = self.edge_covariates[edge_covariate]
+                sub.edge_covariates[edge_covariate] = src.subset(inds)
+        else:
+            for row_covariate in self.row_covariates:
+                src = self.row_covariates[row_covariate]
+                sub.row_covariates[row_covariate] = src.subset(rinds)
+            for col_covariate in self.col_covariates:
+                src = self.col_covariates[col_covariate]
+                sub.col_covariates[col_covariate] = src.subset(cinds)
+            for edge_covariate in self.edge_covariates:
+                src = self.edge_covariates[edge_covariate]
+                sub.edge_covariates[edge_covariate] = src.subset((rinds,cinds))
 
         if self.offset:
-            sub.offset = self.offset.subset(inds)
+            if type(inds) == tuple:
+                sub.offset = self.offset.subset((rinds,cinds))
+            elif sub_type == 'node':
+                sub.offset = self.offset.subset(inds)
+            else:
+                sub.offset = self.offset.subset((rinds,cinds))
             
         return sub
 
@@ -118,6 +211,7 @@ class Network:
                 N += 1
 
         # Process list of names and assign indices
+        self.M = N
         self.N = N
         self.network = sparse.lil_matrix((self.N,self.N), dtype=np.bool)
         self.names = np.array(list(names))
@@ -161,11 +255,14 @@ class Network:
 
         # Convenience function to set blocks of the offset
         def set_offset_block(r, c, val):
-            self.offset[r_ord[r],c_ord[c]] = val
+            # XXX: Replace this with working vectorized code
+            for i in r_ord[r]:
+                for j in c_ord[c]:
+                    self.offset[i,j] = val
 
         # Recursively examine for submatrices that will send
         # corresponding EMLE parameter estimates to infinity
-        to_screen = [(np.arange(self.N), np.arange(self.N))]
+        to_screen = [(np.arange(self.M), np.arange(self.N))]
         while len(to_screen) > 0:
             r_act, c_act = to_screen.pop()
 

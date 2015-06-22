@@ -10,6 +10,7 @@ from scipy.stats import norm
 from scipy.linalg import inv
 from time import time
 from itertools import permutations
+import hashlib
 
 from Utility import logit, inv_logit, logit_mean, logsumexp, logabsdiffexp
 from BinaryMatrix import arbitrary_from_margins
@@ -44,6 +45,9 @@ class IndependentBernoulli:
         N = network.N
         if submatrix:
             i_sub, j_sub = submatrix
+            m, n = len(i_sub), len(j_sub)
+        else:
+            m, n = N, N
 
         if network.offset:
             logit_P = network.offset.matrix()
@@ -51,10 +55,7 @@ class IndependentBernoulli:
                 logit_P = logit[i_sub][:,j_sub]
             return inv_logit(logit_P)
         else:
-            if submatrix:
-                return np.tile(0.5, (len(i_sub),len(j_sub)))
-            else:
-                return np.tile(0.5, (N,N))
+            return np.tile(0.5, (m, n))
 
     def nll(self, network, submatrix = None):
         P = self.edge_probabilities(network, submatrix)
@@ -80,10 +81,11 @@ class IndependentBernoulli:
         return nll
 
     def generate(self, network):
+        M = network.M
         N = network.N
         
         P = self.edge_probabilities(network)
-        return np.random.random((N,N)) < P
+        return np.random.random((M,N)) < P
 
     # Generate sample (approximately) from the conditional
     # distribution with fixed margins.
@@ -99,30 +101,50 @@ class IndependentBernoulli:
     # distribution requires a bit more time initially but takes many
     # fewer steps to reach the stationary distribution, so it is
     # enabled by default.
-    def generate_margins(self, network, r, c,
-                         coverage = 0, arbitrary_init = False):
-        N = network.N
-        windows = N // 2
-        coverage_target = coverage * N**2 / 4
-
-        # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
-        diag = np.array([[True,False],[False,True]])
-        adiag = np.array([[False,True],[True,False]])
-        valid = set([diag.data[0:4], adiag.data[0:4]])
+    def generate_margins(self, network, r = None, c = None,
+                         coverage = 0, arbitrary_init = False,
+                         optimize_perm = True):
+        network.gen_info = { 'wall_time': 0.0,
+                             'coverage': 0.0, }
         
+        N = network.N
+        if r is None:
+            r = np.asarray(network.adjacency_matrix()).sum(1)
+        if c is None:
+            c = np.asarray(network.adjacency_matrix()).sum(0)
+
+        start_time = time()
         if arbitrary_init:
             # Initialize from an arbitrary matrix with the requested margins
             gen = arbitrary_from_margins(r, c)
         else:
             # Initialize from an approximate sample from the
             # conditional distribution
-            p = self.edge_probabilities(network)
-            w = p / (1.0 - p)
+            P = self.edge_probabilities(network)
+            w = P / (1.0 - P)
             gen_sparse = approximate_from_margins_weights(r, c, w)
             gen = np.zeros((N,N), dtype=np.bool)
             for i, j in gen_sparse:
                 if i == -1: break 
                 gen[i,j] = 1
+        network.gen_info['wall_time'] += time() - start_time
+
+        if optimize_perm and np.all(r[:] == 1) and np.all(c[:] == 1):
+            return self.gibbs_improve_perm(network, gen, coverage)
+        else:
+            return self.gibbs_improve(network, gen, coverage)                
+
+    def gibbs_improve(self, network, gen, coverage):
+        N = network.N
+        windows = N // 2
+        coverage_target = coverage * N**2 / 4
+
+        start_time = time()
+        
+        # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
+        diag = np.array([[True,False],[False,True]])
+        adiag = np.array([[False,True],[True,False]])
+        valid = set([diag.data[0:4], adiag.data[0:4]])
 
         # Gibbs sampling to match the "location" of the edges to where
         # they are likely under the conditional distribution
@@ -166,6 +188,64 @@ class IndependentBernoulli:
                 l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
                 l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
             p_diag = l_diag / (l_diag + l_adiag)
+            
+            # Update n according to calculated probabilities
+            to_diags = np.random.random(A) < p_diag
+            for to_diag, ij_prop in zip(to_diags, active):
+                if to_diag:
+                    gen[ij_prop] = diag
+                else:
+                    gen[ij_prop] = adiag
+
+        network.gen_info['wall_time'] += time() - start_time
+        network.gen_info['coverage'] += coverage
+                    
+        return gen
+        
+    def gibbs_improve_perm(self, network, gen, coverage):
+        N = network.N
+        windows = N // 2
+        coverage_target = coverage * N**2 / 4
+
+        start_time = time()
+        
+        # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
+        diag = np.array([[True,False],[False,True]])
+        adiag = np.array([[False,True],[True,False]])
+
+        # Gibbs sampling to match the "location" of the edges to where
+        # they are likely under the conditional distribution
+        #
+        # Scheduling Gibbs sweeps in a checkerboard-like manner to
+        # simplify picking distinct random indices.
+        P_full = self.edge_probabilities(network)
+        coverage_attained = 0
+        inds = np.arange(N)
+        while coverage_attained < coverage_target:
+            # Pick i-ranges and j-ranges of the randomly chosen 2x2
+            # subnetworks in which to propose moves
+            np.random.shuffle(inds)
+            i_props = [inds[2*window:2*(window+1)] for window in range(windows)]
+            j_props = [np.where(gen[i_prop] == 1)[1] for i_prop in i_props]
+
+            active = [np.ix_(i_prop, j_prop)
+                      for i_prop, j_prop in zip(i_props, j_props)]
+            A = len(active)
+            coverage_attained += A
+
+            # Calculate individual edge probabilities
+            P = np.empty((2*A,2))
+            for a, ij_prop in enumerate(active):
+                P[2*a:2*(a+1)] = P_full[ij_prop]
+
+            # Normalize probabilities of allowed configurations to get
+            # conditional probabilities
+            l_diag, l_adiag = np.empty(A), np.empty(A)
+            for a in range(A):
+                P_a = P[2*a:2*(a+1)]
+                l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
+                l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
+            p_diag = l_diag / (l_diag + l_adiag)
 
             # Update n according to calculated probabilities
             to_diags = np.random.random(A) < p_diag
@@ -175,8 +255,11 @@ class IndependentBernoulli:
                 else:
                     gen[ij_prop] = adiag
 
+        network.gen_info['wall_time'] += time() - start_time
+        network.gen_info['coverage'] += coverage
+                    
         return gen
-
+        
 # P_{ij} = Logit^{-1}(kappa + o_{ij})
 class Stationary(IndependentBernoulli):
     def __init__(self):
@@ -189,21 +272,20 @@ class Stationary(IndependentBernoulli):
         N = network.N
         if submatrix:
             sub_i, sub_j = submatrix
+            m, n = len(i_sub), len(j_sub)
 
         if network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[sub_i][:,sub_j]
         else:
-            if submatrix:
-                logit_P = np.zeros((len(sub_i),len(sub_j)))
-            else:
-                logit_P = np.zeros((N,N))
+            logit_P = np.zeros((m,n))
         logit_P += self.kappa
 
         return inv_logit(logit_P)
 
     def match_kappa(self, network, kappa_target):
+        M = network.M
         N = network.N
 
         # kappa_target should be a tuple of the following form:
@@ -217,11 +299,14 @@ class Stationary(IndependentBernoulli):
             exp_edges = np.sum(P)
             if target == 'edges':
                 return abs(exp_edges - val)
-            elif target == 'degree':
+            elif target in ('degree', 'row_degree') :
+                exp_degree = exp_edges / (1.0 * M)
+                return abs(exp_degree - val)
+            elif target == 'col_degree':
                 exp_degree = exp_edges / (1.0 * N)
                 return abs(exp_degree - val)
             elif target == 'density':
-                exp_density = exp_edges / (1.0 * N ** 2)
+                exp_density = exp_edges / (1.0 * M * N)
                 return abs(exp_density - val)
         self.kappa = opt.golden(obj)
 
@@ -241,7 +326,7 @@ class Stationary(IndependentBernoulli):
         T[0] = np.sum(A, dtype=np.int)
 
         theta = np.empty(1)
-        theta[0] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        theta[0] = logit(A.sum(dtype=np.int) / (1.0 * network.M * network.N))
         if network.offset:
             theta[0] -= logit_mean(network.offset.matrix())
         def obj(theta):
@@ -327,19 +412,20 @@ class StationaryLogistic(Stationary):
         self.fit = self.fit_convex_opt
 
     def edge_probabilities(self, network, submatrix = None):
+        M = network.M
         N = network.N
         if submatrix:
             i_sub, j_sub = submatix
+            m, n = len(i_sub), len(j_sub)
+        else:
+            m, n = M, N
         
         if network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
         else:
-            if submatrix:
-                logit_P = np.zeros((len(i_sub),len(j_sub)))
-            else:
-                logit_P = np.zeros((N,N))            
+            logit_P = np.zeros((m,n))
         for b in self.beta:
             ec_b = network.edge_covariates[b].matrix()
             if submatrix:
@@ -378,7 +464,7 @@ class StationaryLogistic(Stationary):
         if fix_beta:
             for b, b_n in enumerate(self.beta):
                 theta[b] = self.beta[b_n]
-        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        theta[B] = logit(A.sum(dtype=np.int) / (1.0 * network.M * network.N))
         if network.offset:
             theta[B] -= logit_mean(network.offset.matrix())
 
@@ -533,10 +619,10 @@ class StationaryLogistic(Stationary):
 
         self.fit_convex_opt(network, fix_beta = True)
 
-    def fit_conditional(self, network,
+    def fit_conditional(self, network, p_approx = 'canfield',
                         fit_grid = False, verbose = False, T = 0):
         B = len(self.beta)
-        if fit_grid and not B in [1,2]:
+        if fit_grid and not B in (1,2):
             print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
             fit_grid = False
 
@@ -547,7 +633,7 @@ class StationaryLogistic(Stationary):
         start_time = time()
 
         A = np.array(network.adjacency_matrix())
-        r, c = A.sum(1), A.sum(0)
+        r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
 
         # Initialize theta
         theta = np.zeros(B)
@@ -562,14 +648,20 @@ class StationaryLogistic(Stationary):
             w = P / (1.0 - P)
 
             if T == 0:
-                cnll = acnll(A, w,
-                                                   sort_by_wopt_var = False)
+                if (np.all(w == 0.0) or np.all(w == np.Inf) or
+                    np.any(np.isnan(w))):
+                    cnll = np.Inf
+                else:
+                    cnll = acnll(A, w,
+                                sort_by_wopt_var = False, p_approx = p_approx)
             else:
                 z = approximate_from_margins_weights(r, c, w, T,
-                                                     sort_by_wopt_var = False)
+                                                     p_approx = p_approx,
+                                                     sort_by_wopt_var = True)
                 logf = np.empty(T)
                 for t in range(T):
-                    logf[t] = z[t][2] - z[t][1]
+                    logQ, logP = z[t][1], z[t][2]
+                    logf[t] = logP - logQ
                 logkappa = -np.log(T) + logsumexp(logf)
                 logcvsq = -np.log(T - 1) - 2 * logkappa + \
                     logsumexp(2 * logabsdiffexp(logf, logkappa))
@@ -610,8 +702,9 @@ class StationaryLogistic(Stationary):
         else:
             if T > 0:
                 # Use Kiefer-Wolfowitz stochastic approximation
-                for n in range(1, 16):
-                    a_n = 0.02 * n ** (-1.0)
+                scale = 1.0 / obj(np.repeat(0, B))
+                for n in range(1, 40):
+                    a_n = 2.0 * scale * n ** (-1.0)
                     c_n = 0.5 * n ** (-1.0 / 3)
                     grad = np.empty(B)
                     for b in range(B):
@@ -962,7 +1055,12 @@ class StationaryLogistic(Stationary):
             self.conf = {}
         if not b in self.conf:
             self.conf[b] = {}
-        self.conf[b]['harrison'] = (np.min(C_alpha), np.max(C_alpha))
+        l, u = np.min(C_alpha), np.max(C_alpha)
+        if l == beta_l_min:
+            l = -np.inf
+        if u == beta_l_max:
+            u = np.inf
+        self.conf[b]['harrison'] = (l, u)
 
     # Generalization of conservative importance sampling confidence
     # intervals to two parameters.
@@ -1048,7 +1146,7 @@ class StationaryLogistic(Stationary):
 
         C_alpha = beta_grid[p_plus_minus > alpha_level]
         return np.min(C_alpha), np.max(C_alpha)
-
+    
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
 #                     o_{ij})
 # Constraints: \sum_i alpha_out_i = 0, \sum_j alpha_in_j = 0
@@ -1058,12 +1156,21 @@ class NonstationaryLogistic(StationaryLogistic):
         self.fit = self.fit_convex_opt
         
     def edge_probabilities(self, network, submatrix = None):
+        M = network.M
         N = network.N
+        bipartite = network.bipartite
         if submatrix:
             i_sub, j_sub = submatrix
+            m, n = len(i_sub), len(j_sub)
+        else:
+            m, n = M, N
 
-        alpha_out = network.node_covariates['alpha_out']
-        alpha_in = network.node_covariates['alpha_in']
+        if bipartite:
+            alpha_out = network.row_covariates['alpha_out']
+            alpha_in = network.col_covariates['alpha_in']
+        else:
+            alpha_out = network.node_covariates['alpha_out']
+            alpha_in = network.node_covariates['alpha_in']
         if submatrix:
             alpha_out = alpha_out[i_sub]
             alpha_in = alpha_in[j_sub]
@@ -1073,21 +1180,16 @@ class NonstationaryLogistic(StationaryLogistic):
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
         else:
-            if submatrix:
-                logit_P = np.zeros((len(i_sub),len(j_sub)))
-            else:
-                logit_P = np.zeros((N,N))
-        for i, a in enumerate(alpha_out):
-            logit_P[i,:] += a
-        for j, a in enumerate(alpha_in):
-            logit_P[:,j] += a
+            logit_P = np.zeros((m,n))
+        np.add(logit_P, alpha_out[:].reshape((-1,1)), logit_P)
+        np.add(logit_P, alpha_in[:].reshape((1,-1)), logit_P)
         for b in self.beta:
             ec_b = network.edge_covariates[b].matrix()
             if submatrix:
                 ec_b = ec_b[i_sub][:,j_sub]
             logit_P += self.beta[b] * ec_b
         logit_P += self.kappa
-
+        
         return inv_logit(logit_P)
 
     def baseline(self, network):
@@ -1129,62 +1231,70 @@ class NonstationaryLogistic(StationaryLogistic):
         return logit_Q
 
     def fit_convex_opt(self, network, verbose = False, fix_beta = False):
+        M = network.M
         N = network.N
+        bipartite = network.bipartite
         B = len(self.beta)
 
         if not self.fit_info:
             self.fit_info = {}
         self.fit_info['nll_evals'] = 0
         self.fit_info['grad_nll_evals'] = 0
-        self.fit_info['grad_nll_final'] = np.empty(B + 1 + 2*(N-1))
+        self.fit_info['grad_nll_final'] = np.empty(B + 1 + (M-1) + (N-1))
 
         start_time = time()
 
         if network.offset:
             O = network.offset.matrix()
-        alpha_zero(network)
+        alpha_zero(network, bipartite = bipartite)
 
         # Calculate observed sufficient statistics
-        T = np.empty(B + 1 + 2*(N-1))
+        T = np.empty(B + 1 + (M-1) + (N-1))
         A = np.array(network.adjacency_matrix())
-        r = np.sum(A, axis = 1, dtype=np.int)[0:(N-1)]
+        r = np.sum(A, axis = 1, dtype=np.int)[0:(M-1)]
         c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
-        T[(B + 1):(B + 1 + (N-1))] = r
-        T[(B + 1 + (N-1)):(B + 1 + 2*(N-1))] = c
+        T[(B + 1):(B + 1 + (M-1))] = r
+        T[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = c
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
 
         # Initialize theta
-        theta = np.zeros(B + 1 + 2*(N-1))
+        theta = np.zeros(B + 1 + (M-1) + (N-1))
         if fix_beta:
             for b, b_n in enumerate(self.beta):
                 theta[b] = self.beta[b_n]
-        theta[B] = logit(A.sum(dtype=np.int) / N ** 2)
+        theta[B] = logit(A.sum(dtype=np.int) / (1.0 * M * N))
         if network.offset:
             theta[B] -= logit_mean(O)
-        theta[(B + 1):(B + 1 + 2*(N-1))] = -theta[B]
-        for i in range(N-1):
-            theta[B + 1 + i] += logit((A[i,:].sum(dtype=np.int)+1)/(N+1))
+        theta[(B + 1):(B + 1 + (M-1) + (N-1))] = -theta[B]
+        for i in range(M-1):
+            theta[B + 1 + i] += \
+              logit((A[i,:].sum(dtype=np.int) + 1.0) / (N + 1.0))
             if network.offset:
                 o_row = logit_mean(O[i,:])
                 if np.isfinite(o_row):
                     theta[B + 1 + i] -= o_row
         for j in range(N-1):
-            theta[B + 1 + (N-1) + j] += logit((A[:,j].sum(dtype=np.int)+1)/(N+1))
+            theta[B + 1 + (M-1) + j] += \
+              logit((A[:,j].sum(dtype=np.int) + 1.0) / (M + 1.0))
             if network.offset:
                 o_col = logit_mean(O[:,j])
                 if np.isfinite(o_col):
-                    theta[B + 1 + (N-1) + j] -= o_col
+                    theta[B + 1 + (M-1) + j] -= o_col
 
-        alpha_out = network.node_covariates['alpha_out']
-        alpha_in = network.node_covariates['alpha_in']
+        if bipartite:
+            alpha_out = network.row_covariates['alpha_out']
+            alpha_in = network.col_covariates['alpha_in']
+        else:
+            alpha_out = network.node_covariates['alpha_out']
+            alpha_in = network.node_covariates['alpha_in']
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
                 return np.Inf
-            alpha_out[0:N-1] = theta[(B + 1):(B + 1 + (N-1))]
-            alpha_in[0:N-1] = theta[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+            alpha_out[0:M-1] = theta[(B + 1):(B + 1 + (M-1))]
+            alpha_in[0:N-1] = theta[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
@@ -1194,18 +1304,18 @@ class NonstationaryLogistic(StationaryLogistic):
         def grad(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing gradient for nan-containing vector.'
-                return np.zeros(B + 1 + 2*(N-1))
-            alpha_out[0:N-1] = theta[(B + 1):(B + 1 + (N-1))]
-            alpha_in[0:N-1] = theta[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+                return np.zeros(B + 1 + (M-1) + (N-1))
+            alpha_out[0:M-1] = theta[(B + 1):(B + 1 + (M-1))]
+            alpha_in[0:N-1] = theta[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
             self.kappa = theta[B]
-            ET = np.empty(B + 1 + 2*(N-1))
+            ET = np.empty(B + 1 + (M-1) + (N-1))
             P = self.edge_probabilities(network)
-            Er = np.sum(P, axis = 1)[0:(N-1)]
+            Er = np.sum(P, axis = 1)[0:(M-1)]
             Ec = np.sum(P, axis = 0)[0:(N-1)]
-            ET[(B + 1):(B + 1 + (N-1))] = Er
-            ET[(B + 1 + (N-1)):(B + 1 + 2*(N-1))] = Ec
+            ET[(B + 1):(B + 1 + (M-1))] = Er
+            ET[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = Ec
             for b, b_n in enumerate(self.beta):
                 ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
             ET[B] = np.sum(P)
@@ -1220,13 +1330,13 @@ class NonstationaryLogistic(StationaryLogistic):
                     (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
             return grad
 
-        bounds = [(-8,8)] * B + [(-15,15)] + [(-8,8)] * (2*(N-1))
+        bounds = [(-8,8)] * B + [(-15,15)] + [(-8,8)] * ((M-1) + (N-1))
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
         if (np.any(theta_opt == [b[0] for b in bounds]) or
             np.any(theta_opt == [b[1] for b in bounds])):
             print 'Warning: some constraints active in model fitting.'
-        alpha_out[0:N-1] = theta_opt[(B + 1):(B + 1 + (N-1))]
-        alpha_in[0:N-1] = theta_opt[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+        alpha_out[0:M-1] = theta_opt[(B + 1):(B + 1 + (M-1))]
+        alpha_in[0:N-1] = theta_opt[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
         alpha_out_mean = np.mean(alpha_out[:])
         alpha_in_mean = np.mean(alpha_in[:])
         alpha_out[:] -= alpha_out_mean
@@ -1237,6 +1347,67 @@ class NonstationaryLogistic(StationaryLogistic):
 
         self.fit_info['wall_time'] = time() - start_time
 
+    def fit_irls(self, network, verbose = False, perturb = 1e-4):
+        N = network.N
+        B = len(self.beta)
+        P = B + 1 + 2*(N-1)
+
+        if not self.fit_info:
+            self.fit_info = {}
+
+        start_time = time()
+
+        alpha_zero(network)
+        alpha_out = network.node_covariates['alpha_out']
+        alpha_in = network.node_covariates['alpha_in']
+        
+        # Construct response and design matrices
+        y = np.asarray(network.adjacency_matrix(), dtype='float64')
+        y = y.reshape((N*N,1))
+        X = np.zeros((N*N, P))
+        for b, b_n in enumerate(self.beta):
+            X[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
+        X[:,B] = 1.0
+        for r in range(N-1):
+            X_row = np.zeros((N,N))
+            X_row[r,:] = 1.0
+            X[:,B + 1 + r] = X_row.reshape((N*N,))
+        for c in range(N-1):
+            X_col = np.zeros((N,N))
+            X_col[:,c] = 1.0
+            X[:,B + 1 + (N-1) + c] = X_col.reshape((N*N,))
+
+        theta = np.zeros((P,1))
+
+        def fitted_p(theta):
+            theta_vec = np.reshape(theta, (P,))
+            alpha_out[0:N-1] = theta_vec[(B + 1):(B + 1 + (N-1))]
+            alpha_in[0:N-1] = theta_vec[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+            for b, b_n in enumerate(self.beta):
+                self.beta[b_n] = theta_vec[b]
+            self.kappa = theta_vec[B]
+            return self.edge_probabilities(network).reshape((N*N,1))
+
+        for iter in range(10):
+            p = fitted_p(theta)
+            X_tilde = X * p + np.random.uniform(-perturb, perturb, (N*N, P))
+            X_t = np.transpose(X)
+            hat = np.dot(inv(np.dot(X_t, X_tilde)), X_t)
+            theta += np.dot(hat, (y - p))
+
+        theta_vec = np.reshape(theta, (P,))
+        alpha_out[0:N-1] = theta_vec[(B + 1):(B + 1 + (N-1))]
+        alpha_in[0:N-1] = theta_vec[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+        alpha_out_mean = np.mean(alpha_out[:])
+        alpha_in_mean = np.mean(alpha_in[:])
+        alpha_out[:] -= alpha_out_mean
+        alpha_in[:] -= alpha_in_mean
+        for b, b_n in enumerate(self.beta):
+            self.beta[b_n] = theta_vec[b]
+        self.kappa = theta_vec[B] + alpha_out_mean + alpha_in_mean
+
+        self.fit_info['wall_time'] = time() - start_time
+        
     def fit_logistic(self, network):
         import statsmodels.api as sm
 
@@ -1445,7 +1616,8 @@ class Blockmodel(IndependentBernoulli):
         self.K = K
         self.Theta = np.zeros((K,K))
         self.block_name = block_name
-
+        self.fit = self.fit_sem
+        
     def apply_to_offset(self, network):
         N = network.N
         z = network.node_covariates[self.block_name]
@@ -1453,7 +1625,7 @@ class Blockmodel(IndependentBernoulli):
             for j in range(N):
                 network.offset[i,j] += self.Theta[z[i], z[j]]
 
-    def edge_probabilities(self, network):
+    def edge_probabilities(self, network, submatrix = None):
         if network.offset:
             old_offset = network.offset.copy()
         else:
@@ -1461,7 +1633,7 @@ class Blockmodel(IndependentBernoulli):
             old_offset = None
         self.apply_to_offset(network)
 
-        P = self.base_model.edge_probabilities(network)
+        P = self.base_model.edge_probabilities(network, submatrix)
 
         if old_offset:
             network.offset = old_offset
@@ -1491,39 +1663,26 @@ class Blockmodel(IndependentBernoulli):
         else:
             network.offset = None
 
-    def fit(self, network):
-        self.fit_sem(network)
-
     # Stochastic EM fitting with `sweeps` Gibbs sweeps in the E-step
     # and `cycles` repetitions of the entire E-step/M-step operation
     #
     # This fitting procedure requires that `base_model` can handle
     # edge covariate effects and a kappa term.
-    def fit_sem(self, network, cycles = 20, sweeps = 5):        
+    def fit_sem(self, network, cycles = 20, sweeps = 5, store_all = False,
+                use_best = True, **base_fit_options):
         # Local aliases for convenience
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
-        A = network.adjacency_matrix()
-        
-        for cycle in range(cycles):
-            # Stochastic E-step
-            for gibbs_step in range(sweeps * N):
-                l = np.random.randint(N)
-                logprobs = np.empty(K)
-                for k in range(K):
-                    logprobs[k] = (np.dot(Theta[z[:],k], A[:,l]) +
-                                   np.dot(Theta[k,z[:]], A[l,:]) +
-                                   (Theta[k,k] * A[l,l]))
-                logprobs -= np.max(logprobs)
-                probs = np.exp(logprobs)
-                probs /= np.sum(probs)
-                z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
+        A = np.array(network.adjacency_matrix())
 
-            # M-step
-            cov_name_to_inds = {}
+        self.sem_trace = []
+
+        cov_name_to_inds = {}
+        def fit_at_z(z):
             for s in range(K):
                 for t in range(K):
+                    if s == 0 and t == 0: continue
                     cov_name = '_%d_%d' % (s,t)
                     cov_name_to_inds[cov_name] = (s,t)
                     cov = network.new_edge_covariate(cov_name)
@@ -1531,18 +1690,131 @@ class Blockmodel(IndependentBernoulli):
                         return (z[i_1] == s) and (z[i_2] == t)
                     cov.from_binary_function_ind(f_edge_class)
                     self.base_model.beta[cov_name] = None
+                    
+            self.base_model.fit(network, **base_fit_options)
 
-            self.base_model.fit(network)
-
+        for cycle in range(cycles):
+            # M-step
+            fit_at_z(z)
+            Theta[0,0] = 0.0
             for cov_name in cov_name_to_inds:
                 s, t = cov_name_to_inds[cov_name]
-                self.Theta[s,t] = self.base_model.beta[cov_name]
+                Theta[s,t] = self.base_model.beta[cov_name]
+                network.edge_covariates.pop(cov_name)
+                self.base_model.beta.pop(cov_name)
+            Theta_mean = np.mean(Theta)
+            Theta -= Theta_mean
+            self.base_model.kappa += Theta_mean
+            
+            # Stochastic E-step
+            for gibbs_step in range(sweeps * N):
+                l = np.random.randint(N)
+                logprobs = np.empty(K)
+                for k in range(K):
+                    logprobs[k] = (np.dot(Theta[k,z[:]], A[:,l]) +
+                                   np.dot(Theta[z[:],k], A[l,:]) -
+                                   (Theta[k,k] * A[l,l]))
+                logprobs -= np.max(logprobs)
+                probs = np.exp(logprobs)
+                probs /= np.sum(probs)
+                z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
+
+            nll = self.nll(network)
+            self.sem_trace.append((nll, z.copy(), Theta.copy()))
+
+        if use_best:
+            best_nll, best_c = np.inf, 0
+            for c in range(cycles):
+                if self.sem_trace[c][0] < best_nll:
+                    best_nll, best_c = self.sem_trace[c][0], c
+            fit_at_z(self.sem_trace[best_c][1])
+            Theta[0,0] = 0.0
+            for cov_name in cov_name_to_inds:
+                s, t = cov_name_to_inds[cov_name]
+                Theta[s,t] = self.base_model.beta[cov_name]
                 network.edge_covariates.pop(cov_name)
                 self.base_model.beta.pop(cov_name)
             Theta_mean = np.mean(Theta)
             Theta -= Theta_mean
             self.base_model.kappa += Theta_mean
 
+    # Blockmodel fitting using the algorithm given in Karrer and
+    # Newman (2011) that the authors claim is inspired by the
+    # Kernighan-Lin algorithm.
+    #
+    # Note that the `cycles` in this algorithm may require as much as
+    # O(K*N^2) times as many model fits as the `cycles` in the SEM
+    # algorithm! It's doubtful that this can be improved in the most
+    # general case...
+    def fit_kl(self, network, cycles = 5, **base_fit_options):
+        K, Theta = self.K, self.Theta
+        N = network.N
+        z = network.node_covariates[self.block_name]
+        A = np.array(network.adjacency_matrix())
+
+        z_to_nll_cache = {}
+        cov_name_to_inds = {}
+        def fit_at_z(z):
+            z_hash = hashlib.sha1(z[:].view(np.uint8)).hexdigest()
+            if z_hash in z_to_nll_cache:
+                return z_to_nll_cache[z_hash]
+            
+            for s in range(K):
+                for t in range(K):
+                    if s == 0 and t == 0: continue
+                    cov_name = '_%d_%d' % (s,t)
+                    cov_name_to_inds[cov_name] = (s,t)
+                    cov = network.new_edge_covariate(cov_name)
+                    def f_edge_class(i_1, i_2):
+                        return (z[i_1] == s) and (z[i_2] == t)
+                    cov.from_binary_function_ind(f_edge_class)
+                    self.base_model.beta[cov_name] = None
+                    
+            self.base_model.fit(network, **base_fit_options)
+
+            nll = self.nll(network)
+            z_to_nll_cache[z_hash] = nll
+            return nll
+            
+        for cycle in range(cycles):
+            z_states = []
+            unmoved = range(N)
+            np.random.shuffle(unmoved)
+            while len(unmoved) > 0:
+                # Defaults may actually be used when NLL calculation
+                # behaves poorly...
+                best_nll, best_m, best_z_m = np.inf, unmoved[0], 0
+                for m in unmoved:
+                    z_m_current = z[m]
+                    for z_m in range(K):
+                        if z_m == z_m_current:
+                            continue
+                        z[m] = z_m
+                        nll = fit_at_z(z)
+                        if nll < best_nll:
+                            best_nll, best_m, best_z_m = nll, m, z_m
+                    z[m] = z_m_current
+                z[best_m] = best_z_m
+                unmoved.remove(best_m)
+                z_states.append((best_nll, z[:].copy()))
+
+            best_nll, best_i = np.inf, 0
+            for i in range(N):
+                nll = z_states[i][0]
+                if nll < best_nll:
+                    best_nll, best_i = nll, i
+            z[:] = z_states[best_i][1]
+            
+        Theta[0,0] = 0.0
+        for cov_name in cov_name_to_inds:
+            s, t = cov_name_to_inds[cov_name]
+            Theta[s,t] = self.base_model.beta[cov_name]
+            network.edge_covariates.pop(cov_name)
+            self.base_model.beta.pop(cov_name)
+        Theta_mean = np.mean(Theta)
+        Theta -= Theta_mean
+        self.base_model.kappa += Theta_mean
+                
 # Endow an existing model with fixed row and column margins
 class FixedMargins(IndependentBernoulli):
     def __init__(self, base_model, r_name = 'r', c_name = 'c', coverage = 0):
@@ -1564,8 +1836,15 @@ class FixedMargins(IndependentBernoulli):
         else:
             c = network.node_covariates[self.c_name][:]
 
-        return self.base_model.generate_margins(network, r, c, **opts)
+        return self.base_model.generate_margins(network, r, c, self.coverage,
+                                                **opts)
 
+    def nll(self, network, **opts):
+        return self.base_model.nll(network, **opts)
+
+    def edge_probabilities(self, network, submatrix = None):
+        return self.base_model.edge_probabilities(network, submatrix)
+    
 # Handles the state, updates, and recording for a (usually MCMC) sampler
 class Sampler:
     def __init__(self, network, model, update, record = {}):
@@ -1600,31 +1879,29 @@ class Sampler:
 def center(x):
     return x - np.mean(x)
 
-def alpha_zero(network):
-    network.new_node_covariate('alpha_out')
-    network.new_node_covariate('alpha_in')
+def alpha_f(network, bipartite, f):
+    a = f(network.M)
+    b = f(network.N)
+
+    if bipartite:
+        network.new_row_covariate('alpha_out')[:] = a
+        network.new_col_covariate('alpha_in')[:] = b
+    else:
+        network.new_node_covariate('alpha_out')[:] = a
+        network.new_node_covariate('alpha_in')[:] = b
+
+def alpha_zero(network, bipartite = False):
+    alpha_f(network, bipartite, lambda l: np.tile(0.0, l))
     
-def alpha_norm(network, alpha_sd):
-    a = np.random.normal(0, alpha_sd, (2,network.N))
-    a[0] = center(a[0])
-    a[1] = center(a[1])
+def alpha_norm(network, alpha_sd, bipartite = False):
+    alpha_f(network, bipartite,
+            lambda l: center(np.random.normal(0, alpha_sd, l)))
 
-    network.new_node_covariate('alpha_out')[:] = a[0]
-    network.new_node_covariate('alpha_in')[:] = a[1]
-
-def alpha_unif(network, alpha_sd):
+def alpha_unif(network, alpha_sd, bipartite = False):
     c = np.sqrt(12) / 2
-    a = np.random.uniform(-alpha_sd * c, alpha_sd * c, (2,network.N))
-    a[0] = center(a[0])
-    a[1] = center(a[1])
-    
-    network.new_node_covariate('alpha_out')[:] = a[0]
-    network.new_node_covariate('alpha_in')[:] = a[1]
+    alpha_f(network, bipartite,
+            lambda l: center(np.random.uniform(-alpha_sd*c, alpha_sd * c, l)))
 
-def alpha_gamma(network, alpha_loc, alpha_scale):
-    a = np.random.gamma(alpha_loc, alpha_scale, (2,network.N))
-    a[0] = center(a[0])
-    a[1] = center(a[1])
-    
-    network.new_node_covariate('alpha_out')[:] = a[0]
-    network.new_node_covariate('alpha_in')[:] = a[1]
+def alpha_gamma(network, alpha_loc, alpha_scale, bipartite = False):
+    alpha_f(network, bipartite,
+            lambda l: center(np.random.gamma(alpha_loc, alpha_scale, l)))

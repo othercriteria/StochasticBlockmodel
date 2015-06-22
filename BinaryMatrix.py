@@ -36,19 +36,121 @@ try:
                                arr_logwopt.ctypes.data_as(c_double_p),
                                arr_G.ctypes.data_as(c_double_p))
 
-    support_library.update_S_SS.argtypes = [c_double_p, c_double_p,
-                                            c_double, c_double,
-                                            c_int, c_int, c_int,
-                                            c_int, c_double]
-    support_library.update_S_SS.restype = c_double
-    def update_S_SS(S, SS, p, q, smin, smax, i, m):
+    support_library.core_cnll_c.argtypes = [c_int_p,
+                                            c_int, c_int, c_int, c_int,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_double_p,
+                                            c_double_p, c_double_p, c_int_p]
+    support_library.core_cnll_c.restype = c_double
+    def core_cnll_c(A,
+                    count, ccount2, m, n, r, rndx, irndx, csort, cndx, cconj, G,
+                    S, SS, B):
+        arr_A = np.ascontiguousarray(A, dtype='int32')
+        arr_r = np.ascontiguousarray(r, dtype='int32')
+        arr_rndx = np.ascontiguousarray(rndx, dtype='int32')
+        arr_irndx = np.ascontiguousarray(irndx, dtype='int32')
+        arr_csort = np.ascontiguousarray(csort, dtype='int32')
+        arr_cndx = np.ascontiguousarray(cndx, dtype='int32')
+        arr_cconj = np.ascontiguousarray(cconj, dtype='int32')
+        arr_G = np.ascontiguousarray(G, dtype='float64')
         arr_S = np.ascontiguousarray(S, dtype='float64')
         arr_SS = np.ascontiguousarray(SS, dtype='float64')
+        arr_B = np.ascontiguousarray(B, dtype='int32')
+        return support_library.core_cnll_c(arr_A.ctypes.data_as(c_int_p),
+                                           count, ccount2, m, n,
+                                           arr_r.ctypes.data_as(c_int_p),
+                                           arr_rndx.ctypes.data_as(c_int_p),
+                                           arr_irndx.ctypes.data_as(c_int_p),
+                                           arr_csort.ctypes.data_as(c_int_p),
+                                           arr_cndx.ctypes.data_as(c_int_p),
+                                           arr_cconj.ctypes.data_as(c_int_p),
+                                           arr_G.ctypes.data_as(c_double_p),
+                                           arr_S.ctypes.data_as(c_double_p),
+                                           arr_SS.ctypes.data_as(c_double_p),
+                                           arr_B.ctypes.data_as(c_int_p))
 
-        SSS = support_library.update_S_SS(arr_S.ctypes.data_as(c_double_p),
-                                          arr_SS.ctypes.data_as(c_double_p),
-                                          p, q, smin, smax, i, m, eps0)
-        return SSS
+    support_library.core_cnll_g.argtypes = [c_int_p,
+                                            c_int, c_int, c_int, c_int,
+                                            c_int, c_int, c_int, c_int, c_int,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_double_p,
+                                            c_double_p, c_double_p, c_int_p]
+    support_library.core_cnll_g.restype = c_double
+    def core_cnll_g(A,
+                    count, rcount2, rcount2c, rcount3c,
+                    ccount2, ccount2c, ccount3c, m, n,
+                    r, rndx, irndx, csort, cndx, cconj, G,
+                    S, SS, B):
+        arr_A = np.ascontiguousarray(A, dtype='int32')
+        arr_r = np.ascontiguousarray(r, dtype='int32')
+        arr_rndx = np.ascontiguousarray(rndx, dtype='int32')
+        arr_irndx = np.ascontiguousarray(irndx, dtype='int32')
+        arr_csort = np.ascontiguousarray(csort, dtype='int32')
+        arr_cndx = np.ascontiguousarray(cndx, dtype='int32')
+        arr_cconj = np.ascontiguousarray(cconj, dtype='int32')
+        arr_G = np.ascontiguousarray(G, dtype='float64')
+        arr_S = np.ascontiguousarray(S, dtype='float64')
+        arr_SS = np.ascontiguousarray(SS, dtype='float64')
+        arr_B = np.ascontiguousarray(B, dtype='int32')
+        return support_library.core_cnll_g(arr_A.ctypes.data_as(c_int_p),
+                                           count,
+                                           rcount2, rcount2c, rcount3c,
+                                           ccount2, ccount2c, ccount3c,
+                                           m, n,
+                                           arr_r.ctypes.data_as(c_int_p),
+                                           arr_rndx.ctypes.data_as(c_int_p),
+                                           arr_irndx.ctypes.data_as(c_int_p),
+                                           arr_csort.ctypes.data_as(c_int_p),
+                                           arr_cndx.ctypes.data_as(c_int_p),
+                                           arr_cconj.ctypes.data_as(c_int_p),
+                                           arr_G.ctypes.data_as(c_double_p),
+                                           arr_S.ctypes.data_as(c_double_p),
+                                           arr_SS.ctypes.data_as(c_double_p),
+                                           arr_B.ctypes.data_as(c_int_p))
+
+    support_library.core_sample.argtypes = [c_double_p,
+                                            c_int, c_int, c_int, c_int,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_int_p, c_int_p, c_int_p,
+                                            c_double_p, c_double_p,
+                                            c_double_p, c_double_p,
+                                            c_int_p, c_double_p, c_double_p]
+    support_library.core_sample.restype = ctypes.c_void_p
+    def core_sample(logw,
+                    count, ccount2, m, n, r, rndx, irndx, csort, cndx, cconj,
+                    G, rvs, S, SS, B, logQ, logP):
+        arr_logw = np.ascontiguousarray(logw, dtype='float64')
+        arr_r = np.ascontiguousarray(r, dtype='int32')
+        arr_rndx = np.ascontiguousarray(rndx, dtype='int32')
+        arr_irndx = np.ascontiguousarray(irndx, dtype='int32')
+        arr_csort = np.ascontiguousarray(csort, dtype='int32')
+        arr_cndx = np.ascontiguousarray(cndx, dtype='int32')
+        arr_cconj = np.ascontiguousarray(cconj, dtype='int32')
+        arr_G = np.ascontiguousarray(G, dtype='float64')
+        arr_rvs = np.ascontiguousarray(rvs, dtype='float64')
+        arr_S = np.ascontiguousarray(S, dtype='float64')
+        arr_SS = np.ascontiguousarray(SS, dtype='float64')
+        arr_B = np.ascontiguousarray(B, dtype='int32')
+        arr_logQ = np.ascontiguousarray(logQ, dtype='float64')
+        arr_logP = np.ascontiguousarray(logP, dtype='float64')
+        support_library.core_sample(arr_logw.ctypes.data_as(c_double_p),
+                                    count, ccount2, m, n,
+                                    arr_r.ctypes.data_as(c_int_p),
+                                    arr_rndx.ctypes.data_as(c_int_p),
+                                    arr_irndx.ctypes.data_as(c_int_p),
+                                    arr_csort.ctypes.data_as(c_int_p),
+                                    arr_cndx.ctypes.data_as(c_int_p),
+                                    arr_cconj.ctypes.data_as(c_int_p),
+                                    arr_G.ctypes.data_as(c_double_p),
+                                    arr_rvs.ctypes.data_as(c_double_p),
+                                    arr_S.ctypes.data_as(c_double_p),
+                                    arr_SS.ctypes.data_as(c_double_p),
+                                    arr_B.ctypes.data_as(c_int_p),
+                                    arr_logQ.ctypes.data_as(c_double_p),
+                                    arr_logP.ctypes.data_as(c_double_p))
+        return (arr_B, arr_logQ[0], arr_logP[0])
     
     c_support_loaded = True
 except:
@@ -247,7 +349,7 @@ def canonical_scalings(w):
     if w_hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[w_hash]
 
-    max_iter = 100
+    max_iter = 10
     tol = 1e-8
 
     # Balancing is only meaningful for a nonnegative matrix
@@ -332,7 +434,7 @@ def conjugate(c, n):
 #     for i, j in B_sample_sparse:
 #         if i == -1: break 
 #         B_sample[i,j] = 1
-def approximate_from_margins_weights(r, c, w, T = None,
+def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
                                      sort_by_wopt_var = True):
     check_margins(r, c)
 
@@ -378,29 +480,395 @@ def approximate_from_margins_weights(r, c, w, T = None,
 
     # Get the running total of sum of c squared
     ccount2_init = np.sum(csort ** 2)
-    
+
     def do_sample():
-        ### Initialization
+        return compute_sample(logw,
+                              count_init, ccount2_init, m_init, n_init,
+                              r_init, rndx_init, irndx_init,
+                              csort, cndx, cconj_init,
+                              G)
+    
+    if T:
+        return [do_sample() for t in xrange(T)]
+    else:
+        return do_sample()[0]
+    
+# Return the approximate nll of an observed binary matrix given
+# specified Bernoulli weights, conditioned on having the observed
+# margins.
+#
+# Inputs:
+#   A: observed data, (m x n) binary matrix
+#   w: weight matrix, (m x n) matrix with values in (0, +infty)
+# Output:
+#   ncll: negative conditional log-likelihood
+def approximate_conditional_nll(A, w, p_approx = 'canfield',
+                                sort_by_wopt_var = True):
+    assert(A.shape == w.shape)
 
-        # Make local copy of variables to be mutated
-        r = r_init.copy()
-        m, n = m_init, n_init
-        rndx, irndx = rndx_init.copy(), irndx_init.copy()
-        cconj = cconj_init.copy()
-        count = count_init
-        ccount2 = ccount2_init
+    if not p_approx in ('canfield', 'greenhill'):
+        print 'Warning: unknown approximation %s; using Canfield.' % p_approx
+        p_approx = 'canfield'
+    
+    # FIXME: this will probably break if A is a matrix (as opposed to an array)
+    r = A.sum(1, dtype=np.int)
+    c = A.sum(0, dtype=np.int)
 
-        # Initialize intermediate storage
+    # Sizing
+    m, n = len(r), len(c)
+
+    # Sort the row margins (descending)
+    rndx = np.argsort(-r)
+    rsort = r[rndx]
+
+    # Balance the weights
+    a_scale, b_scale = canonical_scalings(w)
+    wopt = a_scale * w * b_scale
+    if np.any(np.isnan(wopt)):
+        wopt = w
+
+    # Reorder the columns
+    if sort_by_wopt_var:
+        cndx = np.lexsort((-wopt.var(0), -c))
+    else:
+        cndx = np.argsort(-c)
+    csort = c[cndx];
+    wopt = wopt[:,cndx]
+
+    # Compute G
+    G = compute_G(r, m, n, wopt)
+
+    return compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx)
+    
+
+def compute_G(r, m, n, wopt):
+    logwopt = np.log(wopt)
+    r_max = max(1, np.max(r))
+
+    G = np.tile(-np.inf, (r_max+1, m, n-1))
+    G[0,:,:] = 0.0
+    G[1,:,n-2] = logwopt[:,n-1]
+    if c_support_loaded:
+        fill_G(r, r_max, m, n, wopt, logwopt, G)
+    else:
+        for i, ri in enumerate(r):
+            for j in xrange(n-2, 0, -1):
+                wij = logwopt[i,j]
+                for k in xrange(1, ri+1):
+                    b = G[k-1,i,j] + wij
+                    a = G[k,i,j]
+                    if a == -np.inf and b == -np.inf: continue
+                    if a > b:
+                        G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
+                    else:
+                        G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
+            for j in xrange(n-1):
+                for k in xrange(r_max):
+                    Gk_num = G[k,i,j]
+                    Gk_den = G[k+1,i,j]
+                    if np.isinf(Gk_den):
+                        G[k,i,j] = -1.0
+                    else:
+                        G[k,i,j] = wopt[i,j] * np.exp(Gk_num-Gk_den) * \
+                            ((n - j - k - 1.0) / (k + 1.0))
+                if np.isinf(Gk_den):
+                    G[r_max,i,j] = -1.0
+    return G
+
+def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
+    # Generate the inverse index for the row orders to facilitate fast
+    # sorting during the updating
+    irndx = np.argsort(rndx)
+
+    # Compute the conjugate of c
+    cconj = conjugate(csort, m)
+
+    # Get the running total of number of ones to assign
+    count = np.sum(rsort)
+
+    if p_approx == 'greenhill':
+        rcount2 = np.sum(rsort ** 2)
+        rcount2c = np.sum(rsort * (rsort - 1))
+        rcount3c = np.sum(rsort * (rsort - 1) * (rsort - 2))
+    
+    # Get the running total of sum of c squared
+    ccount2 = np.sum(csort ** 2)
+    if p_approx == 'greenhill':
+        ccount2c = np.sum(csort * (csort - 1))
+        ccount3c = np.sum(csort * (csort - 1) * (csort - 2))
+
+    # Initialize B_sample_sparse
+    B_sample_sparse = -np.ones((count,2), dtype=np.int)
+    
+    # Initialize intermediate storage
+    #
+    # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
+    # corresponds to 1, ..., index M-1 corresponds to c[0]+1
+    M = csort[0] + 3
+    S = np.zeros((M,m))
+    SS = np.zeros(M)
+    
+    if c_support_loaded:
+        if p_approx == 'canfield':
+            cnll = core_cnll_c(A,
+                               count, ccount2, m, n,
+                               r, rndx, irndx, csort, cndx, cconj, G,
+                               S, SS, B_sample_sparse)
+        elif p_approx == 'greenhill':
+            cnll = core_cnll_g(A,
+                               count, rcount2, rcount2c, rcount3c,
+                               ccount2, ccount2c, ccount3c, m, n,
+                               r, rndx, irndx, csort, cndx, cconj, G,
+                               S, SS, B_sample_sparse)
+            
+        return cnll
+    else:
+        # Most recent assigned column in B_sample_sparse
+        place = -1
+
+        # Initialize nll
+        cnll = 0.0
+
+        # Loop over columns for column-wise sampling
         #
-        # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
-        # corresponds to 1, ..., index M-1 corresponds to c[0]+1
-        M = csort[0] + 3
-        S = np.zeros((M,m))
-        SS = np.zeros(M)
+        # Warning: things that "should" be fixed are modified in this
+        # loop, e.g., n, the number of columns!
+        for c1 in xrange(n):
+            ### Sample the next column
 
-        # Initialize B_sample_sparse, logQ, logP
-        B_sample_sparse = -np.ones((count,2), dtype=np.int)
+            # Remember the starting point for this column in B_sample_sparse
+            placestart = place + 1
+
+            # Inspect column
+            clabel, colval = cndx[c1], csort[c1]
+            if colval == 0 or count == 0: break
+
+            # Update the conjugate
+            cconj[0:colval] -= 1
+
+            # Update the number of columns remaining
+            n -= 1
+
+            ### DP initialization
+
+            # Variables used inside DP
+            smin, smax = colval, colval
+            cumsums, cumconj = count, count - colval
+
+            # Update the count and the running column counts
+            count -= colval
+            ccount2 -= colval ** 2
+            if p_approx == 'greenhill':
+                ccount2c -= colval * (colval - 1)
+                ccount3c -= colval * (colval - 1) * (colval - 2)
+
+            # Start filling SS (indices of colval-1, colval, colval+1)
+            SS[colval:(colval+3)] = [0,1,0]
+
+            # Get the constants for computing the probabilities
+            if p_approx == 'canfield':
+                if count == 0 or m*n == count:
+                    weightA = 0.0
+                else:
+                    wA = 1.0 * m * n / (count * (m * n - count))
+                    weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
+            elif p_approx == 'greenhill':
+                d = 1.0 * ccount2c / count ** 2
+                d2 = (1.0 * ccount2c / (2 * count ** 2 + eps0) +
+                      1.0 * ccount2c / (2 * count ** 3 + eps0) +
+                      1.0 * ccount2c ** 2 / (4 * count ** 4 + eps0))
+                d3 = (-1.0 * ccount3c / (3 * count ** 3 + eps0) +
+                      1.0 * ccount2c ** 2 / (2 * count ** 4 + eps0))
+                d22 = (1.0 * ccount2c / (4 * count ** 4 + eps0) +
+                       1.0 * ccount3c / (2 * count ** 4 + eps0) +
+                       -1.0 * ccount2c ** 2 / (2 * count ** 5 + eps0))
+                
+            ### DP
+
+            # Loop over (remaining and sorted descending) rows in reverse
+            for i in reversed(range(m)):
+                # Get the value for this row, for use in computing the
+                # probability of a 1 for this row/column pair
+                rlabel = rndx[i]
+                val = r[rlabel]
+
+                # Combinatorial approximations to N(r,c) are used in
+                # the importance sampler cell probabilities.
+                if p_approx == 'canfield':
+                    # Canfield, Greenhill, and McKay (2008)
+                    p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
+                    p = p1 / (n + 1.0 - val + p1)
+                    q = 1.0 - p
+                elif p_approx == 'greenhill':
+                    # Greenhill, McKay, and Wang (2006)
+                    q = (1.0 /
+                         (1.0 +
+                          val * np.exp((2 * d2 + 3 * d3 * (val - 2) +
+                                        4 * d22 * (rcount2c - val + 1)) *
+                                       (val - 1))))
+                    p = 1.0 - q
+
+                # Incorporate weights
+                if n > 0 and val > 0:
+                    Gk = G[val-1,rlabel,c1]
+                    if Gk < 0:
+                        q = 0
+                    else:
+                        p *= Gk
+
+                # Update the feasibility constraints
+                cumsums -= val
+                cumconj -= cconj[i]
+
+                # Incorporate the feasibility constraints into bounds on
+                # the running column sum
+                sminold, smaxold = smin, smax
+                smin = max(0, max(cumsums - cumconj, sminold - 1))
+                smax = min(smaxold, i)
+
+                # DP iteration (only needed parts of SS updated)
+                SSS = 0.0
+                SS[smin] = 0.0
+                for j in xrange(smin+1,smax+2):
+                    a = SS[j] * q
+                    b = SS[j+1] * p
+                    apb = a + b
+                    SSS += apb
+                    SS[j] = apb
+                    S[j,i] = b / (apb + eps0)
+                SS[smax+2] = 0.0
+
+                # Check for impossible; if so, jump out of inner loop
+                if SSS <= 0: break
+
+                # Normalize to prevent overflow/underflow
+                SS[(smin+1):(smax+2)] /= SSS
+
+            # Check for impossible; if so, jump out of outer loop
+            if SSS <= 0: break
+
+            ### Updating cnll
+
+            # Running total and target of how many entries filled (offset
+            # to match S)
+            j, jmax = 1, colval + 1
+
+            # Skip assigning anything when colval = 0
+            if j < jmax:
+                for i in xrange(m):
+                    # Ones are generated according to the transition probability
+                    p = S[j,i]
+                    rlabel = rndx[i]
+                    if A[rlabel,clabel]:
+                        # Decrement row total
+                        val = r[rlabel]
+                        r[rlabel] -= 1
+
+                        if p_approx == 'greenhill':
+                            # Update counts
+                            rcount2 -= 2 * val - 1
+                            rcount2c -= 2 * val - 2
+                            rcount3c -= 3 * (val - 1) * (val - 2)
+                        
+                        # Record the entry
+                        place += 1
+                        cnll -= np.log(p)
+                        B_sample_sparse[place,:] = [rlabel,clabel]
+                        j += 1
+
+                        # Break the loop early, since all the remaining
+                        # p's must be 0
+                        if j == jmax: break
+                    else:
+                        cnll -= np.log1p(-p)
+
+            # Everything is updated except the re-sorting, so skip if possible
+            if count == 0: break
+
+            ### Re-sort row sums
+
+            # Essentially, we only need to re-sort the assigned rows. In
+            # greater detail, we take each row that was assigned to the
+            # list and either leave it in place or swap it with the last
+            # row that matches its value; this leaves the rows sorted
+            # (descending) since each row was decremented by only 1.
+
+            # Looping in reverse ensures that least rows are swapped first
+            for j in xrange(place, placestart-1, -1):
+                # Get the row label, its new value, and its inverse index
+                k = B_sample_sparse[j,0]
+                val = r[k]
+                irndxk = irndx[k]
+
+                # See if the list is still sorted
+                irndxk1 = irndxk + 1
+                if irndxk1 >= m or r[rndx[irndxk1]] <= val:
+                    continue
+
+                # Find the first place where k can be inserted
+                irndxk1 += 1
+                while irndxk1 < m and r[rndx[irndxk1]] > val:
+                    irndxk1 += 1
+                irndxk1 -= 1
+
+                # Perform swap
+                rndxk1 = rndx[irndxk1]
+                rndx[irndxk] = rndxk1
+                rndx[irndxk1] = k
+                irndx[k] = irndxk1
+                irndx[rndxk1] = irndxk
+            import sys; sys.exit()
+
+            ### Recursion
+
+            # At this point:
+            #   r[rndx] is sorted and represents row margins
+            #   rndx[irndx] = 0:m
+            #   c[cndx[(c1+1):]] is sorted and represents column margins
+            #   m, n, count, ccount*, cconj, etc. are valid
+            #   place points to new entries in B_sample_sparse
+
+        return cnll
+
+def compute_sample(logw,
+                   count_init, ccount2_init, m_init, n_init,
+                   r_init, rndx_init, irndx_init,
+                   csort, cndx, cconj_init,
+                   G):
+    ### Initialization
+
+    # Make local copy of variables to be mutated
+    r = r_init.copy()
+    m, n = m_init, n_init
+    rndx, irndx = rndx_init.copy(), irndx_init.copy()
+    cconj = cconj_init.copy()
+    count = count_init
+    ccount2 = ccount2_init
+
+    # Pre-generate uniform random variates
+    rvs = np.random.random(m * n)
+        
+    # Initialize intermediate storage
+    #
+    # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
+    # corresponds to 1, ..., index M-1 corresponds to c[0]+1
+    M = csort[0] + 3
+    S = np.zeros((M,m))
+    SS = np.zeros(M)
+
+    # Initialize B_sample_sparse
+    B_sample_sparse = -np.ones((count,2), dtype=np.int)
+
+    if c_support_loaded:
+        logQ, logP = np.zeros(1), np.zeros(1)
+        return core_sample(logw,
+                           count, ccount2, m, n,
+                           r, rndx, irndx, csort, cndx, cconj, G, rvs,
+                           S, SS, B_sample_sparse, logQ, logP)
+    else:
+        # Initialize logP, logQ, and random variates pointer
         logQ, logP = 0.0, 0.0
+        rand_p = 0
 
         # Most recent assigned column in B_sample_sparse
         place = -1
@@ -479,19 +947,16 @@ def approximate_from_margins_weights(r, c, w, T = None,
                 smax = min(smaxold, i)
 
                 # DP iteration (only needed parts of SS updated)
-                if c_support_loaded:
-                    SSS = update_S_SS(S, SS, p, q, smin, smax, i, m)
-                else:
-                    SSS = 0.0
-                    SS[smin] = 0.0
-                    for j in xrange(smin+1,smax+2):
-                        a = SS[j] * q
-                        b = SS[j+1] * p
-                        apb = a + b
-                        SSS += apb
-                        SS[j] = apb
-                        S[j,i] = b / (apb + eps0)
-                    SS[smax+2] = 0.0
+                SSS = 0.0
+                SS[smin] = 0.0
+                for j in xrange(smin+1,smax+2):
+                    a = SS[j] * q
+                    b = SS[j+1] * p
+                    apb = a + b
+                    SSS += apb
+                    SS[j] = apb
+                    S[j,i] = b / (apb + eps0)
+                SS[smax+2] = 0.0
 
                 # Check for impossible; if so, jump out of inner loop
                 if SSS <= 0: break
@@ -513,7 +978,9 @@ def approximate_from_margins_weights(r, c, w, T = None,
                 for i in xrange(m):
                     # Generate a one according to the transition probability
                     p = S[j,i]
-                    if np.random.random() < p:
+                    rv = rvs[rand_p]
+                    rand_p += 1
+                    if rv < p:
                         # Decrement row total
                         rlabel = rndx[i]
                         val = r[rlabel]
@@ -584,286 +1051,7 @@ def approximate_from_margins_weights(r, c, w, T = None,
                 
         return (B_sample_sparse, logQ, logP)
 
-    if T:
-        return [do_sample() for t in xrange(T)]
-    else:
-        return do_sample()[0]
     
-# Return the approximate nll of an observed binary matrix given
-# specified Bernoulli weights, conditioned on having the observed
-# margins.
-#
-# Inputs:
-#   A: observed data, (m x n) binary matrix
-#   w: weight matrix, (m x n) matrix with values in (0, +infty)
-# Output:
-#   ncll: negative conditional log-likelihood
-def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
-    assert(A.shape == w.shape)
-
-    # FIXME: this will probably break if A is a matrix (as opposed to an array)
-    r = A.sum(1)
-    c = A.sum(0)
-
-    # Sizing
-    m, n = len(r), len(c)
-
-    # Sort the row margins (descending)
-    rndx = np.argsort(-r)
-    rsort = r[rndx]
-
-    # Balance the weights
-    a_scale, b_scale = canonical_scalings(w)
-    wopt = a_scale * w * b_scale
-
-    # Reorder the columns
-    if sort_by_wopt_var:
-        cndx = np.lexsort((-wopt.var(0), -c))
-    else:
-        cndx = np.argsort(-c)
-    csort = c[cndx];
-    wopt = wopt[:,cndx]
-
-    # Compute G
-    G = compute_G(r, m, n, wopt)
-
-    # Generate the inverse index for the row orders to facilitate fast
-    # sorting during the updating
-    irndx = np.argsort(rndx)
-
-    # Compute the conjugate of c
-    cconj = conjugate(csort, m)
-
-    # Get the running total of number of ones to assign
-    count = np.sum(rsort)
-
-    # Get the running total of sum of c squared
-    ccount2 = np.sum(csort ** 2)
-
-    # Initialize B_sample_sparse
-    B_sample_sparse = -np.ones((count,2), dtype=np.int)
-    
-    # Initialize intermediate storage
-    #
-    # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
-    # corresponds to 1, ..., index M-1 corresponds to c[0]+1
-    M = csort[0] + 3
-    S = np.zeros((M,m))
-    SS = np.zeros(M)
-
-    # Most recent assigned column in B_sample_sparse
-    place = -1
-
-    # Initialize nll
-    cnll = 0.0
-
-    # Loop over columns for column-wise sampling
-    #
-    # Warning: things that "should" be fixed are modified in this
-    # loop, e.g., n, the number of columns!
-    for c1 in xrange(n):
-        ### Sample the next column
-
-        # Remember the starting point for this column in B_sample_sparse
-        placestart = place + 1
-
-        # Inspect column
-        clabel, colval = cndx[c1], csort[c1]
-        if colval == 0 or count == 0: break
-
-        # Update the conjugate
-        cconj[0:colval] -= 1
-
-        # Update the number of columns remaining
-        n -= 1
-
-        ### DP initialization
-
-        # Variables used inside DP
-        smin, smax = colval, colval
-        cumsums, cumconj = count, count - colval
-
-        # Update the count and the running column counts
-        count -= colval
-        ccount2 -= colval ** 2
-
-        # Start filling SS (indices corresponding to colval-1, colval, colval+1)
-        SS[colval:(colval+3)] = [0,1,0]
-
-        # Get the constants for computing the probabilities
-        if count == 0 or m*n == count:
-            weightA = 0
-        else:
-            wA = 1.0 * m * n / (count * (m * n - count))
-            weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
-
-        ### DP
-
-        # Loop over (remaining and sorted descending) rows in reverse
-        for i in reversed(range(m)):
-            # Get the value for this row, for use in computing the
-            # probability of a 1 for this row/column pair
-            rlabel = rndx[i]
-            val = r[rlabel]
-
-            # Use the Canfield, Greenhill, and McKay (2008)
-            # approximation to N(r,c)
-            p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
-            p = p1 / (n + 1.0 - val + p1)
-            q = 1.0 - p
-
-            # Incorporate weights
-            if n > 0 and val > 0:
-                Gk = G[val-1,rlabel,c1]
-                if Gk < 0:
-                    q = 0
-                else:
-                    p *= Gk
-
-            # Update the feasibility constraints
-            cumsums -= val
-            cumconj -= cconj[i]
-
-            # Incorporate the feasibility constraints into bounds on
-            # the running column sum
-            sminold, smaxold = smin, smax
-            smin = max(0, max(cumsums - cumconj, sminold - 1))
-            smax = min(smaxold, i)
-
-            # DP iteration (only needed parts of SS updated)
-            if c_support_loaded:
-                SSS = update_S_SS(S, SS, p, q, smin, smax, i, m)
-            else:
-                SSS = 0.0
-                SS[smin] = 0.0
-                for j in xrange(smin+1,smax+2):
-                    a = SS[j] * q
-                    b = SS[j+1] * p
-                    apb = a + b
-                    SSS += apb
-                    SS[j] = apb
-                    S[j,i] = b / (apb + eps0)
-                SS[smax+2] = 0.0
-
-            # Check for impossible; if so, jump out of inner loop
-            if SSS <= 0: break
-
-            # Normalize to prevent overflow/underflow
-            SS[(smin+1):(smax+2)] /= SSS
-
-        # Check for impossible; if so, jump out of outer loop
-        if SSS <= 0: break
-
-        ### Updating cnll
-
-        # Running total and target of how many entries filled (offset
-        # to match S)
-        j, jmax = 1, colval + 1
-
-        # Skip assigning anything when colval = 0
-        if j < jmax:
-            for i in xrange(m):
-                # Generate a one according to the transition probability
-                p = S[j,i]
-                rlabel = rndx[i]
-                if A[rlabel,clabel]:
-                    # Decrement row total
-                    val = r[rlabel]
-                    r[rlabel] -= 1
-
-                    # Record the entry
-                    place += 1
-                    cnll -= np.log(p)
-                    B_sample_sparse[place,:] = [rlabel,clabel]
-                    j += 1
-
-                    # Break the loop early, since all the remaining
-                    # p's must be 0
-                    if j == jmax: break
-                else:
-                    cnll -= np.log1p(-p)
-
-        # Everything is updated except the re-sorting, so skip if possible
-        if count == 0: break
-
-        ### Re-sort row sums
-
-        # Essentially, we only need to re-sort the assigned rows. In
-        # greater detail, we take each row that was assigned to the
-        # list and either leave it in place or swap it with the last
-        # row that matches its value; this leaves the rows sorted
-        # (descending) since each row was decremented by only 1.
-
-        # Looping in reverse ensures that least rows are swapped first
-        for j in xrange(place, placestart-1, -1):
-            # Get the row label, its new value, and its inverse index
-            k = B_sample_sparse[j,0]
-            val = r[k]
-            irndxk = irndx[k]
-
-            # See if the list is still sorted
-            irndxk1 = irndxk + 1
-            if irndxk1 >= m or r[rndx[irndxk1]] <= val:
-                continue
-
-            # Find the first place where k can be inserted
-            irndxk1 += 1
-            while irndxk1 < m and r[rndx[irndxk1]] > val:
-                irndxk1 += 1
-            irndxk1 -= 1
-
-            # Perform swap
-            rndxk1 = rndx[irndxk1]
-            rndx[irndxk] = rndxk1
-            rndx[irndxk1] = k
-            irndx[k] = irndxk1
-            irndx[rndxk1] = irndxk
-
-        ### Recursion
-
-        # At this point:
-        #   r[rndx] is sorted and represents unassigned row margins
-        #   rndx[irndx] = 0:m
-        #   c[cndx[(c1+1):]] is sorted and represents unassigned column margins
-        #   m, n, count, ccount*, cconj, etc. are valid
-        #   place points to new entries in B_sample_sparse
-
-    return cnll
-
-def compute_G(r, m, n, wopt):
-    logwopt = np.log(wopt)
-    r_max = np.max(r)
-
-    G = np.tile(-np.inf, (r_max+1, m, n-1))
-    G[0,:,:] = 0.0
-    G[1,:,n-2] = logwopt[:,n-1]
-    if c_support_loaded:
-        fill_G(r, r_max, m, n, wopt, logwopt, G)
-    else:
-        for i, ri in enumerate(r):
-            for j in xrange(n-2, 0, -1):
-                wij = logwopt[i,j]
-                for k in xrange(1, ri+1):
-                    b = G[k-1,i,j] + wij
-                    a = G[k,i,j]
-                    if a == -np.inf and b == -np.inf: continue
-                    if a > b:
-                        G[k,i,j-1] = a + np.log(1.0 + np.exp(b-a))
-                    else:
-                        G[k,i,j-1] = b + np.log(1.0 + np.exp(a-b))
-            for j in xrange(n-1):
-                for k in xrange(r_max):
-                    Gk_num = G[k,i,j]
-                    Gk_den = G[k+1,i,j]
-                    if np.isinf(Gk_den):
-                        G[k,i,j] = -1.0
-                    else:
-                        G[k,i,j] = wopt[i,j] * np.exp(Gk_num-Gk_den) * \
-                            ((n - j - k - 1.0) / (k + 1.0))
-                if np.isinf(Gk_den):
-                    G[r_max,i,j] = -1.0
-    return G
-
 ##############################################################################
 # End of adapted code
 ##############################################################################

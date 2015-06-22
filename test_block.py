@@ -9,26 +9,31 @@ from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic, Blockmodel
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
 from Experiment import RandomSubnetworks, Results, add_network_stats
-from Experiment import minimum_disagreement
+from Experiment import minimum_disagreement, rel_mse
 from Utility import logit
 
 # Parameters
-params = { 'N': 200,
-           'K': 3,
+params = { 'N': 600,
+           'K': 2,
            'class_conc': 10.0,
+           'Theta_diag': 4.0,
            'Theta_mean': 0.0,
-           'Theta_sd': 3.0,
-           'B': 5,
+           'Theta_sd': 1.0,
+           'B': 1,
            'beta_sd': 1.0,
-           'x_diff_cutoff': 0.3,
-           'alpha_unif': 0.7,
-           'alpha_norm_sd': 0.0,
+           'alpha_unif': 0.0,
+           'alpha_norm_sd': 2.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('density', 0.1),
-           'fit_nonstationary': False,
-           'fit_blockmodel_K': 3,
-           'num_reps': 6,
-           'sub_sizes': range(10, 110, 10),
+           'kappa_target': ('edges', 20),
+           'fit_nonstationary': True,
+           'fit_conditional': True,
+           'fit_K': 2,
+           'initialize_true_z': False,
+           'cycles': 20,
+           'sweeps': 2,
+           'verbose': False,
+           'num_reps': 5,
+           'sub_sizes': range(25, 155, 25),
            'plot_mse': True,
            'plot_network': True }
 
@@ -64,11 +69,11 @@ for b in range(params['B']):
 
     data_base_model.beta[name] = np.random.normal(0, params['beta_sd'])
 
-    x_node = np.random.normal(0, 1, params['N'])
     def f_x(i_1, i_2):
-        return abs(x_node[i_1] - x_node[i_2]) < params['x_diff_cutoff']
+        return np.random.uniform(-np.sqrt(3), np.sqrt(3))
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
+    
 # Initialize data (block)model from base model
 class_probs = np.random.dirichlet(np.repeat(params['class_conc'], params['K']))
 z = np.where(np.random.multinomial(1, class_probs, params['N']) == 1)[1]
@@ -76,22 +81,24 @@ net.new_node_covariate_int('z_true')[:] = z
 data_model = Blockmodel(data_base_model, params['K'], 'z_true')
 Theta = np.random.normal(params['Theta_mean'], params['Theta_sd'],
                          (params['K'],params['K']))
+Theta += params['Theta_diag'] * np.identity(params['K'])
 Theta -= np.mean(Theta)
 data_model.Theta = Theta
 
 net.generate(data_model)
-net.show_heatmap('z_true')
+if params['plot_network']:
+    net.show_heatmap('z_true')
 
 # Initialize fitting model
 fit_base_model = StationaryLogistic()
 for c in covariates:
     fit_base_model.beta[c] = None
-fit_model = Blockmodel(fit_base_model, params['fit_blockmodel_K'])
+fit_model = Blockmodel(fit_base_model, params['fit_K'])
 if params['fit_nonstationary']:
-    ns_fit_base_model = NonstationaryLogistic()
+    n_fit_base_model = NonstationaryLogistic()
     for c in covariates:
-        ns_fit_base_model.beta[c] = None
-    ns_fit_model = Blockmodel(ns_fit_base_model, params['fit_blockmodel_K'])
+        n_fit_base_model.beta[c] = None
+    n_fit_model = Blockmodel(n_fit_base_model, params['fit_K'])
 net.new_node_covariate_int('z')
 
 # Set up recording of results from experiment
@@ -109,18 +116,32 @@ for c in covariates:
 s_results.new('Class mismatch', 'n',
               lambda n: minimum_disagreement(n.node_covariates['z_true'][:], \
                                              n.node_covariates['z'][:]))
-s_results.new('MSE(P_{ij})', 'nm',
-              lambda n, d, f: np.mean((d.edge_probabilities(n) - \
-                                       f.edge_probabilities(n))**2))
-s_results.new('MSE(logit_P_{ij})', 'nm',
-              lambda n, d, f: np.mean((logit(d.edge_probabilities(n)) - \
-                                       logit(f.edge_probabilities(n)))**2))
-all_results = [s_results]
-if params['fit_nonstationary']:
-    ns_results = s_results.copy()
-    ns_results.title = 'Nonstationary fit'
-    all_results.append(ns_results)
+def rel_mse_p_ij(n, d, f):
+    P = d.edge_probabilities(n)
+    return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
+s_results.new('Rel. MSE(P)', 'nm', rel_mse_p_ij)
+def rel_mse_logit_p_ij(n, d, f):
+    logit_P = logit(d.edge_probabilities(n))
+    logit_Q = f.baseline_logit(n)
+    return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
+s_results.new('Rel. MSE(logit_P)', 'nm', rel_mse_logit_p_ij)
 
+all_results = { 's': s_results }
+if params['fit_nonstationary']:
+    n_results = s_results.copy()
+    n_results.title = 'Nonstationary fit'
+    all_results['n'] = n_results
+if params['fit_conditional']:
+    c_results = s_results.copy()
+    c_results.title = 'Conditional fit'
+    all_results['c'] = c_results
+
+def initialize(s, f):
+    if params['initialize_true_z']:
+        s.node_covariates['z'][:] = s.node_covariates['z_true'][:]
+    else:
+        s.node_covariates['z'][:] = np.random.randint(0, params['fit_K'], s.N)
+        
 for sub_size in params['sub_sizes']:
     print 'subnetwork size = %d' % sub_size
     
@@ -129,44 +150,66 @@ for sub_size in params['sub_sizes']:
         subnet = gen.sample()
         data_model.match_kappa(subnet, params['kappa_target'])
         subnet.generate(data_model)
-
-        fit_model.Theta[:,:] = 0.0
-        subnet.node_covariates['z'][:] = 0
-        fit_model.fit_sem(subnet, cycles = 20, sweeps = 2)
+        
+        initialize(subnet, fit_model)
+        fit_model.fit(subnet, params['cycles'], params['sweeps'],
+                      verbose = params['verbose'])
         s_results.record(sub_size, rep, subnet, data_model, fit_model)
+        print
 
+        if params['fit_conditional']:
+            initialize(subnet, fit_model)
+            fit_base_model.fit = fit_base_model.fit_conditional
+            fit_model.fit(subnet, params['cycles'], params['sweeps'])
+            c_results.record(sub_size, rep, subnet, data_model, fit_model)
+            print
+        
         if params['fit_nonstationary']:
-            ns_fit_model.Theta[:,:] = 0.0
-            subnet.node_covariates['z'][:] = 0
-            ns_fit_model.fit_sem(subnet, cycles = 10, sweeps = 2)
-            ns_results.record(sub_size, rep, subnet, data_model, ns_fit_model)
+            subnet.offset_extremes()
+            initialize(subnet, n_fit_model)
+            n_fit_model.fit(subnet, params['cycles'], params['sweeps'],
+                            verbose = params['verbose'])
+            n_results.record(sub_size, rep, subnet, data_model, n_fit_model)
+            print
 
 # Compute beta MSEs
 covariate_mses = []
 for c in covariates:
     name = 'MSE(beta_{%s})' % c
     covariate_mses.append(name)
-    for results in all_results:
+    for model in all_results:
+        results = all_results[model]
         results.estimate_mse(name,
                              'True beta_{%s}' % c, 'Estimated beta_{%s}' % c)
 
+for model in all_results:
+    results = all_results[model]
+    print results.title
+    results.summary()
+    print
+            
 # Plot inference performace, in terms of MSE(beta), MSE(P_ij), and
 # inferred class disagreement; also plot kappas chosen for data models
 if params['plot_mse']:
-    for results in all_results:
-        results.plot([(['MSE(beta_i)'] + covariate_mses,
-                       {'ymin': 0, 'ymax': 3.0, 'plot_mean': True}),
-                      ('MSE(P_{ij})', {'ymin': 0, 'ymax': 1}),
-                      ('MSE(logit_P_{ij})', {'ymin': 0, 'ymax': 5}),
-                      ('Class mismatch', {'ymin': 0, 'ymax': 1}),
-                      'Subnetwork kappa'])
+    for model in all_results:
+        results = all_results[model]
+        to_plot = [(['MSE(beta_i)'] + covariate_mses,
+                    {'ymin': 0, 'ymax': 0.5, 'plot_mean': True}),
+                   ('Rel. MSE(P)', {'ymin': 0, 'ymax': 2, 'baseline': 1}),
+                   ('Rel. MSE(logit_P)', {'ymin': 0, 'ymax': 2, 'baseline': 1}),
+                   ('Class mismatch', {'ymin': 0, 'ymax': 2})]
+        if model == 'n': to_plot.pop(2)
+        results.plot(to_plot)
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
     s_results.title = None
-    s_results.plot([('Average degree', {'ymin': 0, 'plot_mean': True}),
+    
+    s_results.plot([('Average out-degree', {'ymin': 0, 'plot_mean': True}),
+                    ('Average in-degree', {'ymin': 0, 'plot_mean': True}),
                     (['Out-degree', 'Max out-degree', 'Min out-degree'],
                      {'ymin': 0, 'plot_mean': True}),
                     (['In-degree', 'Max out-degree', 'Min in-degree'],
                      {'ymin': 0, 'plot_mean': True}),
-                    ('Self-loop density', {'ymin': 0, 'plot_mean': True})])
+                    ('Self-loop density', {'ymin': 0, 'plot_mean': True}),
+                    'Subnetwork kappa'])

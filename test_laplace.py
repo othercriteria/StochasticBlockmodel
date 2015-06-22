@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-# Test of "new style" network inference, minimal code to demo something...
+# Test of "new style" network inference, playing with Laplace
+# approximation confidence intervals
 # Daniel Klein, 5/16/2012
 
 import numpy as np
@@ -12,14 +13,14 @@ from Experiment import RandomSubnetworks
 from Utility import draw_confidence
 
 # Initialize full network
-N = 100
+N = 300
 net = Network(N)
 alpha_unif(net, 0.5)
 
 # Initialize the data model; generate covariates and associated coefficients
 data_model = NonstationaryLogistic()
 data_model.kappa = -7.0
-covariates = ['x_1', 'x_2'] # , 'x_3', 'x_4', 'x_5']
+covariates = ['x_1', 'x_2', 'x_3', 'x_4', 'x_5']
 for covariate in covariates:
     data_model.beta[covariate] = np.random.normal(0, 1.0)
 
@@ -45,7 +46,7 @@ ax.set_xlabel('beta_1')
 ax.set_ylabel('beta_2')
 
 # Set up random subnetwork generator, and run fitting experiments
-gen = RandomSubnetworks(net, 20)
+gen = RandomSubnetworks(net, 100)
 for rep in range(10):
     subnet = gen.sample()
 

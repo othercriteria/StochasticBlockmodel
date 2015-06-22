@@ -11,9 +11,9 @@ from Web import dump_to_json
 
 # Parameters
 params = { 'file_network': 'data/cit-HepTh/cit-HepTh.txt',
-           'import_limit_edges': 100,
+           'import_limit_edges': 10,
            'file_dates': 'data/cit-HepTh/cit-HepTh-dates.txt',
-           'pub_diff_classes': [30, 60, 90, 180, 360, 720],
+           'pub_diff_classes': [180, 360],
            'offset_extremes': True,
            'plot': True,
            'verbose': False }

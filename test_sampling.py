@@ -10,11 +10,12 @@ from Network import Network
 from Experiment import RandomSubnetworks, Results, add_network_stats
 
 # Parameters
-params = { 'N': 300,
+params = { 'N': 400,
            'D': 5,
            'num_reps': 1,
            'sub_sizes': range(10, 110, 10),
-           'sampling_methods': ['random_node', 'random_edge'],
+           'sampling_methods': ['random_node', 'random_edge',
+                                'link_trace', 'link_trace_f'],
            'plot_network': True }
 
 
@@ -46,7 +47,11 @@ for sub_size in params['sub_sizes']:
 
     generators = { 'random_node': RandomSubnetworks(net, sub_size),
                    'random_edge': RandomSubnetworks(net, sub_size,
-                                                    method = 'edge') }
+                                                    method = 'edge'),
+                   'link_trace': RandomSubnetworks(net, sub_size,
+                                                   method = 'link'),
+                   'link_trace_f': RandomSubnetworks(net, sub_size,
+                                                     method = 'link_f') }
     for generator in generators:
         if not generator in params['sampling_methods']: continue
         print generator

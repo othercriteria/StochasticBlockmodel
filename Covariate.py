@@ -45,14 +45,29 @@ class NodeCovariate:
         plt.hist(self.data, bins = 50)
         plt.show()
 
+    def copy(self):
+        new = NodeCovariate(self.names, self.dtype)
+        new.data = self.data.copy()
+        return new
+
 class EdgeCovariate:
     def __init__(self, names):
         self.names = names
-        self.data = sparse.lil_matrix((len(names),len(names)))
+        self.bipartite = (type(names) == tuple)
+        if self.bipartite:
+            self.rnames, self.cnames = self.names
+            self.data = sparse.lil_matrix((len(self.rnames),len(self.cnames)))
+        else:
+            self.data = sparse.lil_matrix((len(self.names),len(self.names)))
         self.dirty()
 
     def __str__(self):
-        return '<EdgeCovariate\n%s\n%s>' % (repr(self.names),repr(self.data))
+        if self.bipartite:
+            return '<EdgeCovariate (bipartite)\n%s\n%s\n%s>' % \
+              (repr(self.rnames), repr(self.cnames), repr(self.data))
+        else:
+            return '<EdgeCovariate\n%s\n%s>' % \
+              (repr(self.names), repr(self.data))
 
     def __getitem__(self, index):
         return self.data.__getitem__(index)
@@ -62,7 +77,11 @@ class EdgeCovariate:
         self.dirty()
 
     def copy(self):
-        new = EdgeCovariate(self.names)
+        if self.bipartite:
+            new = EdgeCovariate((self.rnames, self.cnames))
+        else:
+            new = EdgeCovariate(self.names)
+
         new.data = self.data.copy()
         return new
 
@@ -85,27 +104,44 @@ class EdgeCovariate:
         return self.data
 
     def subset(self, inds):
-        sub_names = self.names[inds]
+        if type(inds) == tuple:
+            sub_names = (self.names[inds[0]], self.names[inds[1]])
+        elif self.bipartite:
+            sub_names = (self.rnames[inds[0]], self.cnames[inds[1]])
+        else:
+            sub_names = self.names[inds]
         sub = EdgeCovariate(sub_names)
 
         self.tocsr()
-        sub.data[:,:] = self.data[inds][:,inds]
+        if self.bipartite or type(inds) == tuple:
+            sub.data[:,:] = self.data[inds[0]][:,inds[1]]
+        else:
+            sub.data[:,:] = self.data[inds][:,inds]
         
         return sub
 
     def from_binary_function_name(self, f):
-        for i, n_1 in enumerate(self.names):
-            for j, n_2 in enumerate(self.names):
+        if self.bipartite:
+            rnames, cnames = self.rnames, self.cnames
+        else:
+            rnames, cnames = self.names, self.names
+
+        for i, n_1 in enumerate(rnames):
+            for j, n_2 in enumerate(cnames):
                 val = f(n_1, n_2)
                 if val != 0:
-                    self.data[i, j] = val
+                    self.data[i,j] = val
         self.dirty()
 
     def from_binary_function_ind(self, f):
-        for i in range(len(self.names)):
-            for j in range(len(self.names)):
+        if self.bipartite:
+            rnames, cnames = self.rnames, self.cnames
+        else:
+            rnames, cnames = self.names, self.names
+        for i in range(len(rnames)):
+            for j in range(len(cnames)):
                 val = f(i, j)
                 if val != 0:
-                    self.data[i, j] = val
+                    self.data[i,j] = val
         self.dirty()
  

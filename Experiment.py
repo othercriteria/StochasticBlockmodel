@@ -5,24 +5,38 @@
 
 from __future__ import division
 import numpy as np
+from scipy.special import gamma
 import matplotlib.pyplot as plt
 
 class RandomSubnetworks:
-    def __init__(self, network, train_size, test_size = 0, method = 'node'):
+    # The sampling probabilities reported when report_prob is enabled
+    # are not necessarily for the subset of nodes sampled; they may
+    # just be for the particular realization (enumerating and summing
+    # over all of the link tracings that hit the same set of nodes
+    # seems like a hard problem).
+    def __init__(self, network, train_size, test_size = 0, method = 'node',
+                 report_prob = False):
         self.network = network
         self.train_size = train_size
         self.test_size = test_size
         self.method = method
 
         if self.method == 'node':
-            self.inds = np.arange(self.network.N)
+            if type(self.train_size) == tuple:
+                self.rinds = np.arange(self.network.N)
+                self.cinds = np.arange(self.network.N)
+            else:
+                self.inds = np.arange(self.network.N)
+        elif self.method in ('row', 'col'):
+            self.rinds = np.arange(self.network.M)
+            self.cinds = np.arange(self.network.N)
         elif self.method == 'edge':
             edges = self.network.network.nonzero()
             edges_i, edges_j = edges[0], edges[1]
             self.edges_i = edges_i
             self.edges_j = edges_j
             self.num_edges = len(edges_i)
-        elif self.method in ['link', 'link_f'] :
+        elif self.method in ('link', 'link_f') :
             edges = self.network.network.nonzero()
             neighbors = { n: set() for n in range(self.network.N) }
             for i, j in zip(edges[0], edges[1]):
@@ -32,10 +46,29 @@ class RandomSubnetworks:
             self.neighbors = { n: list(neighbors[n]) for n in neighbors }
 
     def sample(self):
+        M = self.network.M
+        N = self.network.N
+        s = self.train_size
         if self.method == 'node':
-            np.random.shuffle(self.inds)
-            sub_train = self.inds[0:self.train_size]
+            if type(s) == tuple:
+                s_r, s_c = s
+                np.random.shuffle(self.rinds)
+                np.random.shuffle(self.cinds)
+                return self.network.subnetwork((self.rinds[0:s_r],
+                                                self.cinds[0:s_c]))
+            else:
+                np.random.shuffle(self.inds)
+                sub_train = self.inds[0:s]
+                # XXX: this computation is currently broken
+                # p = (gamma((N - s) + 1) * gamma(s + 1)) / gamma(N + 1)
+        elif self.method == 'row':
+            np.random.shuffle(self.rinds)
+            sub_train = self.rinds[0:s]
+        elif self.method == 'col':
+            np.random.shuffle(self.cinds)
+            sub_train = self.cinds[0:s]
         elif self.method == 'edge':
+            p = 1.0
             added = set()
             while len(added) < self.train_size:
                 e = np.random.randint(self.num_edges)
@@ -63,7 +96,10 @@ class RandomSubnetworks:
             sub_train = np.array(list(added))
 
         if self.test_size == 0:
-            return self.network.subnetwork(sub_train)
+            if self.method in ('row', 'col'):
+                return self.network.subnetwork(sub_train, self.method)
+            else:
+                return self.network.subnetwork(sub_train)
         else:
             sub_full = self.inds[0:(self.train_size + self.test_size)]
             return (self.network.subnetwork(sub_train),
@@ -140,7 +176,7 @@ class Results:
         for field in self.results:
             data = self.results[field]['data']
             average_data = np.mean(data, 1)
-            print '%s: %s' % (field, str(average_data))
+            print '%s: %s' % (field, repr(average_data))
         
     def plot(self, requests = None):
         if requests == None:
@@ -199,7 +235,8 @@ class Results:
 
 # Add a suite of standard network statistics to a Results instance
 def add_network_stats(results):
-    results.new('Average degree', 'a', lambda a: 1.0 * np.sum(a) / a.shape[0])
+    results.new('Average out-degree', 'a', lambda a: 1.0 * np.sum(a)/a.shape[0])
+    results.new('Average in-degree', 'a', lambda a: 1.0 * np.sum(a)/a.shape[1])
     results.new('Max out-degree', 'a', lambda a: np.max(a.sum(1)))
     results.new('Min out-degree', 'a', lambda a: np.min(a.sum(1)))
     results.new('Max in-degree', 'a', lambda a: np.max(a.sum(0)))

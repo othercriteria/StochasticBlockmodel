@@ -18,10 +18,10 @@ params = { 'N': 300,
            'B': 5,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
-           'margin_scaling': ('density', 0.1),
+           'margin_scaling': ('degree', 2),
            'arbitrary_init': False,
            'gibbs_covers': [1.0],
-           'fit_nonstationary': True,
+           'fit_nonstationary': False,
            'num_reps': 10,
            'sub_sizes': range(10, 110, 10),
            'plot_mse_beta': True }
@@ -93,9 +93,11 @@ for sub_size in params['sub_sizes']:
         subnet.node_covariates['c'][:] = c
         
         for gibbs_cover in params['gibbs_covers']:
-            subnet.generate(data_model, coverage = gibbs_cover,
+            data_model.coverage = gibbs_cover
+            subnet.generate(data_model,
                             arbitrary_init = params['arbitrary_init'])
-            fit_model.fit_convex_opt(subnet)
+            subnet.offset_extremes()
+            fit_model.fit_conditional(subnet)
             gibbs_results[gibbs_cover].record(sub_size, rep,
                                               subnet, data_model, fit_model)
 

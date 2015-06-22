@@ -12,26 +12,29 @@ from Experiment import RandomSubnetworks, Results, add_network_stats, rel_mse
 from Utility import logit
 
 # Parameters
-params = { 'N': 220,
-           'B': 2,
+params = { 'N': 1300,
+           'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 2.0,
+           'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('degree', 2),
+           'contrived': False,
+           'kappa_target': ('density', 0.1),
            'offset_extremes': True,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'none',
-           'num_reps': 10,
+           'fit_method': 'conditional',
+           'p_approx': 'canfield',
+           'num_reps': 100,
            'sampling': 'new',
-           'sub_sizes': range(10, 60, 10),
-           'verbose': True,
+           'sub_sizes_r': np.repeat(2, 30),
+           'sub_sizes_c': np.floor(np.logspace(1.3, 3.1, 30)),
+           'verbose': False,
            'plot_mse': True,
-           'plot_network': True,
-           'plot_fit_info': True }
+           'plot_network': False,
+           'plot_fit_info': False }
 
 
 # Set random seed for reproducible output
@@ -63,8 +66,14 @@ for b in range(params['B']):
     else:
         data_model.beta[name] = np.random.normal(0, params['theta_sd'])
 
-    def f_x(i_1, i_2):
-        return np.random.normal(0, 1)
+    if params['contrived']:
+        blah = np.empty((params['N'],params['N']))
+        def f_x(i_1, i_2):
+            return (np.abs(net.node_covariates['alpha_out'][i_1] -
+                           net.node_covariates['alpha_in'][i_2]) / np.sqrt(8))
+    else:
+        def f_x(i_1, i_2):
+            return np.random.uniform(-np.sqrt(3), np.sqrt(3))
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Generate large network, if necessary
@@ -80,7 +89,7 @@ for c in covariates:
     fit_model.beta[c] = None
 
 # Set up recording of results from experiment
-results = Results(params['sub_sizes'], params['num_reps'])
+results = Results(params['sub_sizes_c'], params['num_reps'])
 add_network_stats(results)
 if params['sampling'] == 'new':
     results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
@@ -88,9 +97,9 @@ def true_est_theta_c(c):
     return (lambda d, f: d.beta[c]), (lambda d, f: f.beta[c])
 for c in covariates:
     # Need to do this hackily to avoid for-loop/lambda-binding weirdness.
-    f_true, f_estimated = true_est_theta_c(c)
+    f_true, f_est = true_est_theta_c(c)
     results.new('True theta_{%s}' % c, 'm', f_true)
-    results.new('Estimated theta_{%s}' % c, 'm', f_estimated)
+    results.new('Est. theta_{%s}' % c, 'm', f_est)
 if params['offset_extremes']:
     results.new('# Active', 'n', lambda n: np.isfinite(n.offset.matrix()).sum())
 else:
@@ -114,7 +123,10 @@ if params['baseline']:
             return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
         results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
 
-if params['fit_method'] in ['convex_opt', 'conditional']:
+if params['fit_method'] in ['convex_opt', 'conditional',
+                            'irls', 'conditional_is']:
+    results.new('Wall time (sec.)', 'm', lambda d, f: f.fit_info['wall_time'])
+if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
     def work(f):
         w = 0
         for work_type in ['nll_evals', 'grad_nll_evals', 'cnll_evals']:
@@ -122,15 +134,16 @@ if params['fit_method'] in ['convex_opt', 'conditional']:
                 w += f.fit_info[work_type]
         return w
     results.new('Work', 'm', lambda d, f: work(f))
-    results.new('Wall time (sec.)', 'm', lambda d, f: f.fit_info['wall_time'])
     results.new('||ET_final - T||_2', 'm',
                 lambda d, f: np.sqrt(np.sum((f.fit_info['grad_nll_final'])**2)))
 
-for sub_size in params['sub_sizes']:
+for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
+    sub_size = sub_size_c
     print 'subnetwork size = %d' % sub_size
+    print sub_size_r
 
     if params['sampling'] == 'new':
-        gen = RandomSubnetworks(net, sub_size)
+        gen = RandomSubnetworks(net, (sub_size_r, sub_size_c))
     else:
         gen = RandomSubnetworks(net, sub_size, method = params['sampling'])
 
@@ -143,7 +156,7 @@ for sub_size in params['sub_sizes']:
         if params['sampling'] == 'new':
             data_model.match_kappa(subnet, params['kappa_target'])
             subnet.generate(data_model)
-        
+
         if params['offset_extremes']:
             if not params['fit_method'] == 'conditional':
                 subnet.offset_extremes()
@@ -154,6 +167,8 @@ for sub_size in params['sub_sizes']:
                 print
             else:
                 fit_model.fit_convex_opt(subnet)
+        if params['fit_method'] == 'irls':
+            fit_model.fit_irls(subnet)
         elif params['fit_method'] == 'logistic':
             fit_model.fit_logistic(subnet)
         elif params['fit_method'] == 'logistic_l2':
@@ -163,7 +178,14 @@ for sub_size in params['sub_sizes']:
                 fit_model.beta[c] = 0.0
             fit_model.fit_mh(subnet)
         elif params['fit_method'] == 'conditional':
-            fit_model.fit_conditional(subnet, T = 0, verbose = True)
+            fit_model.fit_conditional(subnet, verbose = True,
+                                      p_approx = params['p_approx'])
+            if params['offset_extremes']:
+                subnet.offset_extremes()
+                fit_model.fit_convex_opt(subnet, fix_beta = True)
+        elif params['fit_method'] == 'conditional_is':
+            fit_model.fit_conditional(subnet, T = 50, verbose = True,
+                                      p_approx = params['p_approx'])
             if params['offset_extremes']:
                 subnet.offset_extremes()
                 fit_model.fit_convex_opt(subnet, fix_beta = True)
@@ -187,7 +209,7 @@ covariate_mses = []
 for c in covariates:
     name = 'MSE(theta_{%s})' % c
     covariate_mses.append(name)
-    results.estimate_mse(name, 'True theta_{%s}' % c, 'Estimated theta_{%s}' % c)
+    results.estimate_mse(name, 'True theta_{%s}' % c, 'Est. theta_{%s}' % c)
 results.summary()
 
 # Plot inference performace, in terms of MSE(theta) and MSE(P_ij)
@@ -208,6 +230,15 @@ if params['plot_mse']:
                         ['Info theta_{%s}' % c for c in covariates],
                         {'ymin': 0, 'plot_mean': True}))
     results.plot(to_plot)
+
+    to_plot = []
+    to_plot.append((['MSE(theta_i)'] + covariate_mses,
+                    {'plot_mean': True, 'loglog': True}))
+    if params['fisher_information']:
+        to_plot.append((['Info theta_i'] + \
+                        ['Info theta_{%s}' % c for c in covariates],
+                        {'plot_mean': True, 'loglog': True}))
+    results.plot(to_plot)
   
 # Plot network statistics
 if params['plot_network']:
@@ -222,8 +253,10 @@ if params['plot_network']:
     results.plot(to_plot)
 
 # Plot convex optimization fitting internal details
+if (params['plot_fit_info'] and params['fit_method'] == 'irls'):
+    results.plot([('Wall time (sec.)', {'ymin': 0})])
 if (params['plot_fit_info'] and
-    params['fit_method'] in ['convex_opt', 'conditional']):
+    params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']):
     results.plot([('Work', {'ymin': 0}),
                   ('Wall time (sec.)', {'ymin': 0}),
                   ('||ET_final - T||_2', {'ymin': 0})])
