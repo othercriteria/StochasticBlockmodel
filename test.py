@@ -12,25 +12,30 @@ from Experiment import RandomSubnetworks, Results, add_network_stats, rel_mse
 from Utility import logit
 
 # Parameters
-params = { 'N': 1300,
+params = { 'N': 130,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
            'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
+           'cov_unif_sd': 0.0,
+           'cov_norm_sd': 1.0,
+           'cov_disc_sd': 0.0,
            'contrived': False,
-           'kappa_target': ('density', 0.1),
+           'kappa_target': ('degree', 2),
            'offset_extremes': True,
            'fisher_information': False,
            'baseline': False,
-           'fit_nonstationary': True,
+           'fit_nonstationary': False,
            'fit_method': 'conditional',
            'p_approx': 'canfield',
            'num_reps': 100,
            'sampling': 'new',
-           'sub_sizes_r': np.repeat(2, 30),
-           'sub_sizes_c': np.floor(np.logspace(1.3, 3.1, 30)),
+           'sub_sizes_r': np.array([20]), #np.repeat(2, 30),
+           'sub_sizes_c': np.array([20]), #floor(np.logspace(1.0, 3.1, 30)),
+           'find_good': 0.1,
+           'find_bad': 0.0,
            'verbose': False,
            'plot_mse': True,
            'plot_network': False,
@@ -72,15 +77,25 @@ for b in range(params['B']):
             return (np.abs(net.node_covariates['alpha_out'][i_1] -
                            net.node_covariates['alpha_in'][i_2]) / np.sqrt(8))
     else:
-        def f_x(i_1, i_2):
-            return np.random.uniform(-np.sqrt(3), np.sqrt(3))
+        if params['cov_unif_sd'] > 0.0:
+            c = np.sqrt(12) / 2
+            def f_x(i_1, i_2):
+                return np.random.uniform(-c * params['cov_unif_sd'],
+                                         c * params['cov_unif_sd'])
+        elif params['cov_norm_sd'] > 0.0:
+            def f_x(i_1, i_2):
+                return np.random.normal(0, params['cov_norm_sd'])
+        elif params['cov_disc_sd'] > 0.0:
+            def f_x(i_1, i_2):
+                return (params['cov_disc_sd'] *
+                        (np.sign(np.random.random() - 0.5)))
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Generate large network, if necessary
 if not params['sampling'] == 'new':
     data_model.match_kappa(net, params['kappa_target'])
     net.generate(data_model)
- 
+
 if params['fit_nonstationary']:
     fit_model = NonstationaryLogistic()
 else:
@@ -201,7 +216,29 @@ for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
             fit_model.fit_convex_opt(subnet, fix_beta = True)
         elif params['fit_method'] == 'none':
             pass
-            
+
+        if params['find_good'] > 0:
+            abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
+            if abs_err < params['find_good']:
+                print abs_err
+                f = file('goodmat.mat', 'wb')
+                import scipy.io
+                Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
+                X = subnet.edge_covariates['x_0'].matrix()
+                scipy.io.savemat(f, { 'Y': Y, 'X': X })
+                import sys; sys.exit()
+
+        if params['find_bad'] > 0:
+            abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
+            if abs_err > params['find_bad']:
+                print abs_err
+                f = file('badmat.mat', 'wb')
+                import scipy.io
+                Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
+                X = subnet.edge_covariates['x_0'].matrix()
+                scipy.io.savemat(f, { 'Y': Y, 'X': X })
+                import sys; sys.exit()
+                        
         results.record(sub_size, rep, subnet, data_model, fit_model)
 
 # Compute beta MSEs
