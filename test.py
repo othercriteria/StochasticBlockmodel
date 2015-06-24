@@ -20,8 +20,8 @@ params = { 'N': 130,
            'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 1.0,
-           'cov_disc_sd': 0.0,
+           'cov_norm_sd': 0.0,
+           'cov_disc_sd': 1.0,
            'contrived': False,
            'kappa_target': ('degree', 2),
            'offset_extremes': True,
@@ -30,12 +30,12 @@ params = { 'N': 130,
            'fit_nonstationary': False,
            'fit_method': 'conditional',
            'p_approx': 'canfield',
-           'num_reps': 100,
+           'num_reps': 1000,
            'sampling': 'new',
            'sub_sizes_r': np.array([20]), #np.repeat(2, 30),
            'sub_sizes_c': np.array([20]), #floor(np.logspace(1.0, 3.1, 30)),
-           'find_good': 0.1,
-           'find_bad': 0.0,
+           'find_good': 0.0,
+           'find_bad': 2.0,
            'verbose': False,
            'plot_mse': True,
            'plot_network': False,
@@ -221,6 +221,13 @@ for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
             abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
             if abs_err < params['find_good']:
                 print abs_err
+
+                subnet.offset = None
+                fit_model.fit_conditional(subnet, T = 1000, verbose = True,
+                                          p_approx = params['p_approx'])
+                print fit_model.beta['x_0']
+                print fit_model.fit_info
+
                 f = file('goodmat.mat', 'wb')
                 import scipy.io
                 Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
@@ -232,6 +239,13 @@ for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
             abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
             if abs_err > params['find_bad']:
                 print abs_err
+
+                subnet.offset = None
+                fit_model.fit_conditional(subnet, T = 1000, verbose = True,
+                                          p_approx = params['p_approx'])
+                print fit_model.beta['x_0']
+                print fit_model.fit_info
+
                 f = file('badmat.mat', 'wb')
                 import scipy.io
                 Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
