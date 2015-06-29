@@ -1,0 +1,11 @@
+*.m
+.#*
+*~
+.DS_Store
+*prof
+*figs
+*.pyc
+outside_code/
+*.csv
+*.so
+*.o
