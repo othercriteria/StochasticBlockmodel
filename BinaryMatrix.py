@@ -281,7 +281,7 @@ def check_margins(r, c):
     assert(np.sum(r) == np.sum(c))
 
     # Check whether a satisfying matrix exists (Gale-Ryser conditions)
-    cc = conjugate(r, len(r))
+    cc = conjugate(r, max(len(r),len(c)))
     cd = c[np.argsort(-c)]
     assert(np.sum(c) == np.sum(cc))
     l = min(len(cc), len(cd))

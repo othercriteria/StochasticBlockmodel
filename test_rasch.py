@@ -6,41 +6,53 @@ from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import approximate_from_margins_weights as sample
 
 # Parameters
-M = 50
-N = 4
+M = 4
+N = 50
 theta = 2.0
 kappa = -1.628
-alpha_min = -0.86
-beta_min = -0.4
+alpha_min = -0.4
+beta_min = -0.86
 alpha_level = 0.2
 n_MC = 20
 trials = 50
 L = 61
 theta_l_min = -6.0
 theta_l_max = 6.0
+do_prune = True
 
 # Generate theta grid for inference
 theta_grid = np.linspace(theta_l_min, theta_l_max, L)
-
-# Generate covariate
-v = np.random.normal(0, 1.0, (M,N))
-
-# Generate Bernoulli probabilities according to logistic regression model
-logit_P = np.zeros((M,N))
-for i in range(1,M):
-    logit_P[i,:] += np.random.uniform(alpha_min, alpha_min+1)
-for j in range(1,N):
-    logit_P[:,j] += np.random.uniform(beta_min, beta_min+1)
-logit_P += kappa
-logit_P += theta * v
-P = 1.0 / (1.0 + np.exp(-logit_P))
 
 # Do experiment
 in_interval = np.empty(trials)
 length = np.empty(trials)
 for trial in range(trials):
+    # Generate covariate
+    v = np.random.normal(0, 1.0, (M,N))
+
+    # Generate Bernoulli probabilities according to logistic regression model
+    logit_P = np.zeros((M,N))
+    for i in range(1,M):
+        logit_P[i,:] += np.random.uniform(alpha_min, alpha_min+1)
+    for j in range(1,N):
+        logit_P[:,j] += np.random.uniform(beta_min, beta_min+1)
+    logit_P += kappa
+    logit_P += theta * v
+    P = 1.0 / (1.0 + np.exp(-logit_P))
+
     # Generate data for this trial
     X = np.random.random((M,N)) < P
+
+    # Pruning rows and columns of 0's and 1's may improve approximate sampler
+    if do_prune:
+        r, c = X.sum(1), X.sum(0)
+        r_p = (r == 0) + (r == N)
+        c_p = (c == 0) + (c == M)
+        X = X[-r_p][:,-c_p].copy()
+        v = v[-r_p][:,-c_p].copy()
+        M_p, N_p = X.shape
+    else:
+        M_p, N_p = M, N
 
     # Observed statistic
     t_X = np.sum(X * v)
@@ -55,7 +67,7 @@ for trial in range(trials):
         logit_P_l = theta_grid[l] * v
         
         Y_sparse = sample(r, c, np.exp(logit_P_l))
-        Y_dense = np.zeros((M,N), dtype = np.bool)
+        Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
         for i, j in Y_sparse:
             if i == -1: break
             Y_dense[i,j] = 1
