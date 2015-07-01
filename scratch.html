@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <title>Testing...</title>
+
+    <style>
+      text {
+          font: 8px sans-serif;
+          pointer-events: none;
+      }
+
+      text.shadow {
+          stroke: #fff;
+          stroke-width: 3px;
+          stroke-opacity: 0.8;
+      }
+      
+      circle.node {
+          stroke: #fff;
+          stroke-width: 1.5px;
+      }
+
+      circle.dummy {
+          fill: red;
+          stroke: #ccc;
+          stroke-width: 1.2px;
+      }
+      
+      line.link {
+          stroke: #999;
+          stroke-opacity: .6;
+      }
+
+      line.dummy {
+          stroke: #999;
+          stroke-opacity: .1;
+      }
+      
+    </style>
+
+    <script src="d3.v2.min.js"></script>
+
+    <script type="text/javascript">
+      window.onload = function()
+      {
+var width = 700, height = 700;
+var borderPadding = 20;
+var xBase = borderPadding, yBase = height - borderPadding;
+      
+var force = d3.layout.force()
+    .charge(-120)
+    .linkDistance(30)
+    .size([width, height]);
+
+var svg = d3.select("#chart").append("svg:svg")
+    .attr("width", width)
+    .attr("height", height);
+
+svg.append("svg:defs").append("marker")
+      .attr("id", "arrow")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 15)
+      .attr("refY", -1.5)
+      .attr("markerWidth", 6)
+      .attr("markerHeight", 6)
+      .attr("orient", "auto")
+    .append("svg:path")
+      .attr("d", "M0,-5L10,0L0,5");
+      
+d3.json("scratch.json", function(json) {
+  // Figure out transformation for alphas
+  var alpha_out_min = 100, alpha_out_max = -100;
+  var alpha_in_min = 100, alpha_in_max = -100;
+  json.nodes.forEach(function(node) {
+      alpha_out_min = Math.min(alpha_out_min, node.alpha_out);
+      alpha_out_max = Math.max(alpha_out_max, node.alpha_out);
+      alpha_in_min = Math.min(alpha_in_min, node.alpha_in);
+      alpha_in_max = Math.max(alpha_in_max, node.alpha_in);
+  });
+  var xScale = (width - 2*borderPadding) / (alpha_out_max - alpha_out_min);
+  var yScale = (height - 2*borderPadding) / (alpha_in_max - alpha_in_min);
+      
+  // Introduce dummy nodes and links needed to anchor according to alpha.
+  var dummy_nodes = [], dummy_links = [];
+  json.links.forEach(function(link) { link["type"] = "link"; });
+  json.nodes.forEach(function(node) {
+      node["type"] = "node";
+      dummy = {type: "dummy",
+               x: xBase + xScale * (node.alpha_out - alpha_out_min),
+               y: yBase - yScale * (node.alpha_in - alpha_in_min),
+               fixed: true};
+      dummy_nodes.push(dummy);
+      dummy_links.push({source: node, target: dummy, type: "dummy"});
+  });
+  var all_nodes = json.nodes.concat(dummy_nodes);
+  var all_links = json.links.concat(dummy_links);
+
+  force
+      .nodes(all_nodes)
+      .links(all_links)
+      .start();
+      
+  var links = svg.append("svg:g").selectAll("line")
+      .data(all_links)
+    .enter().append("line")
+      .attr("class", function(d) { return d.type; });
+  svg.selectAll("line.link")
+      .attr("marker-end", "url(#arrow)");
+
+  var nodes = svg.append("svg:g").selectAll("circle")
+      .data(all_nodes)
+    .enter().append("circle")
+      .attr("class", function(d) { return d.type; });
+
+  svg.selectAll("circle.node")
+      .attr("r", 5)
+      .call(force.drag);
+  svg.selectAll("circle.dummy")
+      .attr("r", 3);
+
+  var text = svg.append("svg:g").selectAll("g")
+      .data(json.nodes)
+    .enter().append("svg:g");
+  text.append("svg:text")
+      .attr("x", 8)
+      .attr("y", ".31em")
+      .attr("class", "shadow")
+      .text(function(d) { return d.name; });
+  text.append("svg:text")
+      .attr("x", 8)
+      .attr("y", ".31em")
+      .text(function(d) { return d.name; });
+      
+  force.on("tick", function() {
+    links.attr("x1", function(d) { return d.source.x; })
+          .attr("y1", function(d) { return d.source.y; })
+          .attr("x2", function(d) { return d.target.x; })
+          .attr("y2", function(d) { return d.target.y; });
+
+    nodes.attr("cx", function(d) { return d.x; })
+         .attr("cy", function(d) { return d.y; });
+
+    text.attr("transform", function(d) {
+      return "translate(" + d.x + "," + d.y + ")";
+    });
+  });
+});
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="chart"></div>
+  </body>
+  
+</html>
