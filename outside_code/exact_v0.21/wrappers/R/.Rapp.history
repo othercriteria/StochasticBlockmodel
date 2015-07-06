@@ -1,0 +1,255 @@
+reject <- function() {
+}
+reject <- function(n) {
+x <- rpois(n,1)
+return(abs((mean(x) - 1) / sqrt(mean(x)/n)) > 1.96)
+}
+summary(replicate(1000, reject(1)))
+summary(replicate(1000, reject(2)))
+summary(replicate(1000, reject(3)))
+summary(replicate(1000, reject(4)))
+summary(replicate(1000, reject(5)))
+summary(replicate(1000, reject(6)))
+summary(replicate(10000, reject(6)))
+summary(replicate(10000, reject(1)))
+summary(replicate(10000, reject(2)))
+summary(replicate(10000, reject(3)))
+summary(replicate(10000, reject(4)))
+summary(replicate(10000, reject(10)))
+summary(replicate(10000, reject(20)))
+plot(function(x) exp(x) / ((1 + exp(x))^2), -2, 2)
+plot(function(x) exp(x) / ((1 + exp(x))^2), -5, 5)
+plot(function(l) (1-l) * log(1 - exp(l)) - l^2, 0, 1)
+plot(function(l) (1-l) * log(1 - exp(l)) - l^2, 0.1, 0.9)
+plot(function(l) (1-l) * log(1 - exp(l)) - l^2, -2, 2)
+plot(function(l) -(1-l) * log(1 - exp(l)) - l^2, -2, 2)
+source("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c768246e9")#
+unlink("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c768246e9")
+lambda
+source("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c62fda7c7")#
+unlink("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c62fda7c7")
+p
+?for
+)
+help(for)
+help("for")
+choose(5,2)
+source("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c662d6af9")#
+unlink("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c662d6af9")
+kappa
+source("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c2fca35d7")#
+unlink("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c2fca35d7")
+kappa
+source("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c494cec4")#
+unlink("/var/folders/vs/hn8mqy3d4n124cm2_1b_pbhh0000gn/T//RtmpZbpbyL/file985c494cec4")
+kappa
+plot(function(l) -(1-1.0) * log(1 - exp(l)) - l * 1.0, -2, 2)
+plot(function(l) -(1-(-2.0)) * log(1 - exp(l)) - l * (-2.0), -2, 2)
+plot(function(l) -(1-(-2.0)) * log(1 - exp(l)) - l * (-2.0), -5, 5)
+plot(function(l) -(1-exp(-2.0)) * log(1 - exp(l)) - l * (-2.0), -5, 5)
+help(package="rcond")
+library(rcond)
+library(cond)
+help(package="cond")
+?glm
+?isnan
+?nan
+?isinf
+?inf
+nan?
+()
+?nan
+help.search("nan")
+data(houses)
+library(cond)
+data(houses)
+houses
+urine
+urine[urine$gravity > 1.02,:]
+urine[urine$gravity > 1.02,]
+?isfinite
+?isinfinite
+?finite
+dim(urine)
+dim(urine)
+urine
+print(urine)
+?print
+dat <- read.csv("debug.csv")
+dat
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+summary(fglm)
+?diag
+glm.diag(fglm)
+?glm.diag
+require(boot)
+glm.diag(fglm)
+glm.diag.plots(fglm)
+require(MASS)
+glm.profile(fglm, x)
+profile.glm(fglm, x)
+require(MASS)
+?profile
+profile(fglm, x)
+profile(fglm, "x")
+plot(profile(fglm, "x"))
+example(profile.glm)
+example(profile.glm)
+plot(profile(fglm))
+plot(profile(fglm,1:10))
+pairs(profile(fglm,1:5))
+?cond.glm
+cond(fglm, x)
+cond
+cond.gm
+cond.glm
+cond(fglm, x, trace = TRUE)
+cond(fglm, x, pts = 50)
+warnings()
+edit(glm.cond)
+edit(cond.glm)
+cond(fglm, x, pts = 50)
+cond(fglm, x)
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat[1:100,], family = binomial)
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat[1:200,], family = binomial)
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat[1:300,], family = binomial)
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+summary(fglm)
+plot(fglm)
+dat[177,]
+dat[177,2] <- 0
+dat[177,]
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+dat <- read.csv("debug.csv")
+dat[84,]
+dat[74,2] <- 0
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+cond(fglm, x)
+dat[74,2] <- 1
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+cond(fglm, x)
+plot(dat$y ~ dat$X)
+plot(jitter(dat$y,0.1) ~ dat$X)
+dat$X
+dat
+dat
+plot(jitter(dat$y,0.1) ~ dat$x)
+plot(jitter(dat$y,0.1) ~ dat$x | dat$row)
+plot(jitter(dat$y,0.1) ~ dat$x | dat$col)
+dat$col
+?lattice
+require(lattice)
+help(package="lattice")
+xyplot(y ~ x | col, data=dat)
+xyplot(y ~ x | row, data=dat)
+xyplot(y ~ x | row * col, data=dat)
+fglm <- glm(y ~ x + factor(row) + factor(col), data = dat, family = binomial)
+summary(fglm)
+cond(fglm, x)
+fcond <- cond(fglm, x)
+dat
+dat$row <- factor(dat$row)
+dat
+dat$col <- factor(dat$col)
+dat
+fglm <- glm(y ~ x + row + col, data = dat, family = binomial)
+summary(fglm)
+load("exact.R")
+?open
+?run
+?load
+summary(dat)
+dim(dat)
+?count
+?apply
+tapply(dat, col, sum)
+tapply(dat$y, dat$col, sum)
+tapply(dat$y, dat$row, sum)
+cond(fglm, x)
+cond(fglm, x, from = -4, to = 4)
+cond(fglm, x, from = -6, to = 6)
+cond(fglm, x, from = -5, to = 5)
+cond(fglm, x, from = -4, to = 4)
+cond(fglm, x, from = -3, to = 3)
+cond(fglm, x, from = -3.5, to = 3.5)
+cond(fglm, x, from = -3.8, to = 3.8)
+cond(fglm, x, from = -4, to = 4)
+cond(fglm, x, from = -2, to = 2)
+cond(fglm, x, from = -1, to = 1)
+cond(fglm, x, from = -2, to = 2)
+cond(fglm, x, from = -2.5, to = 2.5)
+cond(fglm, x, from = -3, to = 3)
+fglm$coefficients
+fglm$coefficients$x
+fglm$coefficients["x"]
+x_hat <- fglm$coefficients["x"]
+cond(fglm, x, from = xhat-1, to = xhat+1)
+x.hat <- fglm$coefficients["x"]
+cond(fglm, x, from = x.hat-1, to = x.hat+1)
+cond(fglm, x, from = x.hat-2, to = x.hat+2)
+cond(fglm, x, from = x.hat-1.5, to = x.hat+1.5)
+cond(fglm, x, from = x.hat-1.2, to = x.hat+1.2)
+cond(fglm, x, from = x.hat-1.1, to = x.hat+1.1)
+cond(fglm, x, from = x.hat-1, to = x.hat+1)
+cond(fglm, x, from = -5, to = x.hat+1)
+cond(fglm, x, from = x.hat-1, to = x.hat+1)
+cond(fglm, x, from = x.hat+0.5, to = x.hat+0.5)
+cond(fglm, x, from = x.hat-0.5, to = x.hat+0.5)
+summary(fglm)
+cond(fglm, x, from = x.hat-0.5, to = x.hat+0.5, pts = 50)
+cond(fglm, x, from = x.hat-0.8, to = x.hat+0.8, pts = 50)
+cond(fglm, x, from = x.hat-0.3, to = x.hat+0.3, pts = 50)
+cond(fglm, x, from = x.hat-1.5, to = x.hat+1.5, pts = 50)
+cond(fglm, x, from = x.hat-1.5, to = x.hat+1.5, pts = 20)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 20)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 30)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 40)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 50)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 50, n = 120)
+cond(fglm, x, from = x.hat-1, to = x.hat+1, pts = 50, n = 200)
+cond(fglm, x, from = x.hat-0.9, to = x.hat+0.9, pts = 50, n = 200)
+cond(fglm, x, from = -3, to = 3)
+cond(fglm, x, from = -4, to = 4)
+cond(fglm, x, from = -5, to = 5)
+exp(5)
+cond(fglm, x, from = -4.5, to = 4.5)
+exp(4.5)
+exp(4.5) / (1 + exp(4.5))
+log(.9 / .1)
+log(.95 / .05)
+log(.99 / .01)
+cond(fglm, x, from = -4.4, to = 4.4)
+cond(fglm, x, from = -4.3, to = 4.3)
+cond(fglm, x, from = -4.3, to = 4.2)
+cond(fglm, x, from = -4.2, to = 4.2)
+cond(fglm, x, from = -4.1, to = 4.1)
+log(.98 / .02)
+cond(fglm, x, from = -4.0, to = 4.0)
+summary(cond(fglm, x, from = -4.0, to = 4.0))
+summary(cond(fglm, x, from = -3.5, to = 3.5))
+summary(cond(fglm, x, from = -2.5, to = 2.5, n = 250))
+summary(cond(fglm, x, from = -4.5, to = 4.5))
+summary(cond(fglm, x, from = -4.0, to = 4.0))
+summary(cond(fglm, x, from = -4.0, to = 3.5))
+summary(cond(fglm, x, from = -3.5, to = 3.5))
+hist(dat$x)
+hist(dat$x)
+predict(cond(fglm, x, from = -3.5, to = 3.5))
+predict(fglm, x, from = -3.5, to = 3.5)
+predict(fglm)
+?predict.glm
+predict(fglm, type="response")
+plot(dat$y ~ predict(fglm, type="response"))
+dat$predict <- predict(fglm, type="response")
+plot(y ~ log(predict / (1 - predict)), data = dat)
+exp(-12)
+min(dat$predict)
+plot(cond(fglm, from=-3.5, to=3.5))
+plot(cond(fglm, x, from=-3.5, to=3.5))
+plot(cond(fglm, x, from=-3.5, to=3.5, n=250))
+plot(cond(fglm, x, from=-3.5, to=3.5, pts=50))
+plot(cond(fglm, x, from=-3.5, to=3.5, pts=100))
+plot(cond(fglm, x, from=-3.0, to=3.0, pts=50))
+plot(cond(fglm, x, from=0, to=3.0, pts=50))
+plot(cond(fglm, x, from=1, to=3.0, pts=50))
+plot(cond(fglm, x, from=1, to=3.5, pts=30))

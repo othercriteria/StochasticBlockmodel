@@ -1,0 +1,16 @@
+
+13 17 0
+14 13 14 10 12 2 10 1 10 11 6 2 17
+4 4 11 10 10 8 9 10 8 9 3 10 4 7 9 3 3
+
+This is an example of an input file for count.exe and sample.exe.
+The format is:
+
+    number_of_rows  number_of_columns  matrix_type
+    row_sum_1 row_sum_2 ...
+    col_sum_1 col_sum_2 ...
+
+Set matrix_type = 0 for binary matrices, or 1 for nonnegative integer matrices.
+
+Whitespace does not matter, and anything after the last number is ignored.
+
