@@ -339,8 +339,7 @@ def arbitrary_from_margins(r, c):
 # Adapting Matlab code provided by Matt Harrison (matt_harrison@brown.edu).
 ##############################################################################
 
-# Find row and column scalings to balance a matrix, using the
-# Sinkhorn(-Knopp) algorithm
+# Find row and column scalings to balance a matrix, using new "rc" method.
 #
 # FIXME: Assuming nonzero entries; check with manuscript and fix.
 _dict_canonical_scalings = {}
@@ -352,10 +351,36 @@ def canonical_scalings(w):
     max_iter = 10
     tol = 1e-8
 
-    # Balancing is only meaningful for a nonnegative matrix
-    assert(np.all(w >= 0.0))
-
     m, n = w.shape
+    
+    def sw_sums(a, b):
+        abw = a * b * w
+        sw = abw / (1 + abw)
+        sw[np.isnan(sw)] = 1
+        swr = sw.sum(1).reshape((m,1))
+        swc = sw.sum(0).reshape((1,n))
+        return swr, swc
+
+    r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
+    a = np.sqrt((r / n)) / (1 - (r / n))
+    b = np.sqrt((c / m) / (1 - (c / m)))
+    a[np.isnan(a)] = 1
+    b[np.isnan(b)] = 1
+    swr, swc = sw_sums(a, b)
+
+    tol_check = np.Inf
+    iter = 0
+    while tol_check > tol and iter < max_iter:
+        a = a * r / (swr + eps0)
+        b = b * c / (swc + eps0)
+        swr, swc = sw_sums(a, b)
+
+        tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
+        print tol_check
+        iter += 1
+
+    print a, b
+
     M, N = n * np.ones((m,1)), m * np.ones((1,n))
     r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
 
