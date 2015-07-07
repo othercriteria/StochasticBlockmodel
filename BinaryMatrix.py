@@ -348,13 +348,13 @@ def canonical_scalings(w):
     if w_hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[w_hash]
 
-    max_iter = 10
+    max_iter = 20
     tol = 1e-8
 
     m, n = w.shape
     
     def sw_sums(a, b):
-        abw = a * b * w
+        abw = a * w * b
         sw = abw / (1 + abw)
         sw[np.isnan(sw)] = 1
         swr = sw.sum(1).reshape((m,1))
@@ -362,7 +362,7 @@ def canonical_scalings(w):
         return swr, swc
 
     r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
-    a = np.sqrt((r / n)) / (1 - (r / n))
+    a = np.sqrt((r / n) / (1 - (r / n)))
     b = np.sqrt((c / m) / (1 - (c / m)))
     a[np.isnan(a)] = 1
     b[np.isnan(b)] = 1
@@ -376,29 +376,6 @@ def canonical_scalings(w):
         swr, swc = sw_sums(a, b)
 
         tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
-        print tol_check
-        iter += 1
-
-    print a, b
-
-    M, N = n * np.ones((m,1)), m * np.ones((1,n))
-    r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
-
-    a = M / r
-    a /= np.mean(a)
-    b = N / (a * w).sum(0)
-
-    tol_check = np.Inf
-    iter = 0
-    while tol_check > tol and iter < max_iter:
-        a_new = M / ((w * b).sum(1).reshape((m,1)))
-        a_new /= np.mean(a_new)
-        b_new = N / ((a_new * w).sum(0).reshape((1,n)))
-
-        # "L1"-ish tolerance in change during the last iteration
-        tol_check = np.sum(np.abs(a - a_new)) + np.sum(np.abs(b - b_new))
-        a, b = a_new, b_new
-
         iter += 1
 
     _dict_canonical_scalings[w_hash] = (a, b)
