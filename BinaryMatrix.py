@@ -300,18 +300,21 @@ def arbitrary_from_margins(r, c):
 ##############################################################################
 
 # Find row and column scalings to balance a matrix, using new "rc" method.
-#
-# FIXME: Assuming nonzero entries; check with manuscript and fix.
 _dict_canonical_scalings = {}
-def canonical_scalings(w, r = None, c = None):
+def canonical_scalings(w, r, c):
     w_hash = hashlib.sha1(w.view(np.uint8)).hexdigest()
-    if w_hash in _dict_canonical_scalings:
-        return _dict_canonical_scalings[w_hash]
+    r_hash = hashlib.sha1(r.flatten().view(np.uint8)).hexdigest()
+    c_hash = hashlib.sha1(c.flatten().view(np.uint8)).hexdigest()
+    hash = (w_hash, r_hash, c_hash)
+    if hash in _dict_canonical_scalings:
+        return _dict_canonical_scalings[hash]
 
     max_iter = 20
     tol = 1e-8
 
     m, n = w.shape
+    r = r.reshape((m,1))
+    c = c.reshape((1,n))
     
     def sw_sums(a, b):
         abw = a * w * b
@@ -321,10 +324,6 @@ def canonical_scalings(w, r = None, c = None):
         swc = sw.sum(0).reshape((1,n))
         return swr, swc
 
-    if r is None:
-        r = w.sum(1).reshape((m,1))
-    if c is None:
-        c = w.sum(0).reshape((1,n))
     a = np.sqrt((r / n) / (1 - (r / n)))
     b = np.sqrt((c / m) / (1 - (c / m)))
     a[np.isnan(a)] = 1
@@ -341,7 +340,7 @@ def canonical_scalings(w, r = None, c = None):
         tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
         iter += 1
 
-    # _dict_canonical_scalings[w_hash] = (a, b)
+    _dict_canonical_scalings[hash] = (a, b)
     return a, b
 
 # Suppose c is a sequence of nonnegative integers. Returns c_conj where:
@@ -416,7 +415,7 @@ def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
     rsort = r[rndx_init]
 
     # Balance the weights
-    a_scale, b_scale = canonical_scalings(w)
+    a_scale, b_scale = canonical_scalings(w, r, c)
     wopt = a_scale * w * b_scale
 
     # Reorder the columns
@@ -487,7 +486,7 @@ def approximate_conditional_nll(A, w, p_approx = 'canfield',
     rsort = r[rndx]
 
     # Balance the weights
-    a_scale, b_scale = canonical_scalings(w)
+    a_scale, b_scale = canonical_scalings(w, r, c)
     wopt = a_scale * w * b_scale
     if np.any(np.isnan(wopt)):
         wopt = w
@@ -1024,7 +1023,9 @@ if __name__ == '__main__':
 
     # Test of "rc" balancing
     m = np.random.normal(10, 1, size = (6,5))
-    a, b = canonical_scalings(m)
+    r, c = np.ones((6,1)), np.ones((1,5))
+    c[0] = 2
+    a, b = canonical_scalings(m, r, c)
     m_canonical = a * m * b
     print m_canonical.sum(1)
     print m_canonical.sum(0)
