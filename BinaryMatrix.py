@@ -70,46 +70,6 @@ try:
                                            arr_SS.ctypes.data_as(c_double_p),
                                            arr_B.ctypes.data_as(c_int_p))
 
-    support_library.core_cnll_g.argtypes = [c_int_p,
-                                            c_int, c_int, c_int, c_int,
-                                            c_int, c_int, c_int, c_int, c_int,
-                                            c_int_p, c_int_p, c_int_p,
-                                            c_int_p, c_int_p, c_int_p,
-                                            c_double_p,
-                                            c_double_p, c_double_p, c_int_p]
-    support_library.core_cnll_g.restype = c_double
-    def core_cnll_g(A,
-                    count, rcount2, rcount2c, rcount3c,
-                    ccount2, ccount2c, ccount3c, m, n,
-                    r, rndx, irndx, csort, cndx, cconj, G,
-                    S, SS, B):
-        arr_A = np.ascontiguousarray(A, dtype='int32')
-        arr_r = np.ascontiguousarray(r, dtype='int32')
-        arr_rndx = np.ascontiguousarray(rndx, dtype='int32')
-        arr_irndx = np.ascontiguousarray(irndx, dtype='int32')
-        arr_csort = np.ascontiguousarray(csort, dtype='int32')
-        arr_cndx = np.ascontiguousarray(cndx, dtype='int32')
-        arr_cconj = np.ascontiguousarray(cconj, dtype='int32')
-        arr_G = np.ascontiguousarray(G, dtype='float64')
-        arr_S = np.ascontiguousarray(S, dtype='float64')
-        arr_SS = np.ascontiguousarray(SS, dtype='float64')
-        arr_B = np.ascontiguousarray(B, dtype='int32')
-        return support_library.core_cnll_g(arr_A.ctypes.data_as(c_int_p),
-                                           count,
-                                           rcount2, rcount2c, rcount3c,
-                                           ccount2, ccount2c, ccount3c,
-                                           m, n,
-                                           arr_r.ctypes.data_as(c_int_p),
-                                           arr_rndx.ctypes.data_as(c_int_p),
-                                           arr_irndx.ctypes.data_as(c_int_p),
-                                           arr_csort.ctypes.data_as(c_int_p),
-                                           arr_cndx.ctypes.data_as(c_int_p),
-                                           arr_cconj.ctypes.data_as(c_int_p),
-                                           arr_G.ctypes.data_as(c_double_p),
-                                           arr_S.ctypes.data_as(c_double_p),
-                                           arr_SS.ctypes.data_as(c_double_p),
-                                           arr_B.ctypes.data_as(c_int_p))
-
     support_library.core_sample.argtypes = [c_double_p,
                                             c_int, c_int, c_int, c_int,
                                             c_int_p, c_int_p, c_int_p,
@@ -610,19 +570,11 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
     S = np.zeros((M,m))
     SS = np.zeros(M)
     
-    if c_support_loaded:
-        if p_approx == 'canfield':
-            cnll = core_cnll_c(A,
-                               count, ccount2, m, n,
-                               r, rndx, irndx, csort, cndx, cconj, G,
-                               S, SS, B_sample_sparse)
-        elif p_approx == 'greenhill':
-            cnll = core_cnll_g(A,
-                               count, rcount2, rcount2c, rcount3c,
-                               ccount2, ccount2c, ccount3c, m, n,
-                               r, rndx, irndx, csort, cndx, cconj, G,
-                               S, SS, B_sample_sparse)
-            
+    if c_support_loaded and p_approx == 'canfield':
+        cnll = core_cnll_c(A,
+                           count, ccount2, m, n,
+                           r, rndx, irndx, csort, cndx, cconj, G,
+                           S, SS, B_sample_sparse)
         return cnll
     else:
         # Most recent assigned column in B_sample_sparse
