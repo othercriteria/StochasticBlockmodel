@@ -303,7 +303,7 @@ def arbitrary_from_margins(r, c):
 #
 # FIXME: Assuming nonzero entries; check with manuscript and fix.
 _dict_canonical_scalings = {}
-def canonical_scalings(w):
+def canonical_scalings(w, r = None, c = None):
     w_hash = hashlib.sha1(w.view(np.uint8)).hexdigest()
     if w_hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[w_hash]
@@ -321,7 +321,10 @@ def canonical_scalings(w):
         swc = sw.sum(0).reshape((1,n))
         return swr, swc
 
-    r, c = w.sum(1).reshape((m,1)), w.sum(0).reshape((1,n))
+    if r is None:
+        r = w.sum(1).reshape((m,1))
+    if c is None:
+        c = w.sum(0).reshape((1,n))
     a = np.sqrt((r / n) / (1 - (r / n)))
     b = np.sqrt((c / m) / (1 - (c / m)))
     a[np.isnan(a)] = 1
@@ -338,7 +341,7 @@ def canonical_scalings(w):
         tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
         iter += 1
 
-    _dict_canonical_scalings[w_hash] = (a, b)
+    # _dict_canonical_scalings[w_hash] = (a, b)
     return a, b
 
 # Suppose c is a sequence of nonnegative integers. Returns c_conj where:
@@ -1019,7 +1022,7 @@ if __name__ == '__main__':
     A = arbitrary_from_margins(r, c)
     print np.sum(A, axis = 1), np.sum(A, axis = 0)
 
-    # Test of Sinkhorn balancing
+    # Test of "rc" balancing
     m = np.random.normal(10, 1, size = (6,5))
     a, b = canonical_scalings(m)
     m_canonical = a * m * b
