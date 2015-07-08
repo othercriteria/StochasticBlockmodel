@@ -21,7 +21,6 @@ params = { 'N': 600,
            'baseline': False,
            'fit_nonstationary': False,
            'fit_method': 'conditional',
-           'p_approx': 'canfield',
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1, 2.1, 20)),
            'verbose': False,
@@ -137,12 +136,9 @@ for sub_size in params['sub_sizes']:
                 fit_model.beta[c] = 0.0
             fit_model.fit_mh(subnet)
         elif params['fit_method'] == 'conditional':
-            fit_model.fit_conditional(subnet, verbose = True,
-                                      p_approx = params['p_approx'])
+            fit_model.fit_conditional(subnet, verbose = True)
         elif params['fit_method'] == 'conditional_is':
-            fit_model.fit_conditional(subnet, T = 50, verbose = True,
-                                      p_approx = params['p_approx'])
-        elif params['fit_method'] == 'composite':
+            fit_model.fit_conditional(subnet, T = 50, verbose = True)
             fit_model.fit_composite(subnet, T = 100, verbose = True)
         elif params['fit_method'] == 'brazzale':
             fit_model.fit_brazzale(subnet)

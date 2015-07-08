@@ -619,7 +619,7 @@ class StationaryLogistic(Stationary):
 
         self.fit_convex_opt(network, fix_beta = True)
 
-    def fit_conditional(self, network, p_approx = 'canfield',
+    def fit_conditional(self, network,
                         fit_grid = False, verbose = False, T = 0):
         B = len(self.beta)
         if fit_grid and not B in (1,2):
@@ -652,11 +652,9 @@ class StationaryLogistic(Stationary):
                     np.any(np.isnan(w))):
                     cnll = np.Inf
                 else:
-                    cnll = acnll(A, w,
-                                sort_by_wopt_var = False, p_approx = p_approx)
+                    cnll = acnll(A, w, sort_by_wopt_var = False)
             else:
                 z = approximate_from_margins_weights(r, c, w, T,
-                                                     p_approx = p_approx,
                                                      sort_by_wopt_var = True)
                 logf = np.empty(T)
                 for t in range(T):

@@ -57,13 +57,12 @@ void fill_G(int *r, int r_max, int m, int n,
   }
 }
 
-// Canfield approximation
-double core_cnll_c(int *A,
-		   int count, int ccount2, int m, int n,
-		   int *r, int *rndx, int *irndx,
-		   int *csort, int *cndx, int *cconj,
-		   double *G,
-		   double *S, double *SS, int *B) {
+double core_cnll(int *A,
+		 int count, int m, int n,
+		 int *r, int *rndx, int *irndx,
+		 int *csort, int *cndx, int *cconj,
+		 double *G,
+		 double *S, double *SS, int *B) {
   int i, j, c1;
   double SSS;
   
@@ -77,7 +76,7 @@ double core_cnll_c(int *A,
 
     int clabel = cndx[c1];
     int colval = csort[c1];
-    if ((colval == 0) || (count == 0)) {
+    if (count == 0) {
       break;
     }
 
@@ -93,34 +92,27 @@ double core_cnll_c(int *A,
     int cumconj = count - colval;
 
     count -= colval;
-    ccount2 -= colval * colval;
 
     SS[colval] = 0.0;
     SS[colval+1] = 1.0;
     SS[colval+2] = 0.0;
 
-    double weightA, wA;
-    if ((count == 0) || ((m*n) == count)) {
-      weightA = 0.0;
-    } else {
-      wA = 1.0 * m * n / (count * (m * n - count));
-      weightA = wA * (1 - wA * (ccount2 - 1.0 * count * count / n)) / 2.0;
-    }
-
     for(i = (m-1); i >= 0; --i) {
       int rlabel = rndx[i];
       int val = r[rlabel];
 
-      double p1 = val * exp(weightA * (1.0 - 2.0 * (val - 1.0 * count / m)));
-      double p = p1 / (n + 1.0 - val + p1);
+      double p = val / (n + 1.0);
       double q = 1.0 - p;
 
       if ((n > 0) && (val > 0)) {
 	double Gk = G_ind_n_init(val-1, rlabel, c1);
-	if (Gk < 0) {
+	if ((Gk < 0) || (q <= 0) || (p >= 1)) {
 	  q = 0.0;
+	  p = 1.0;
 	} else {
-	  p *= Gk;
+	  p = p / (1.0 - p) * Gk;
+	  p = p / (1.0 + p);
+	  q = 1.0 - p;
 	}
       }
 
@@ -219,9 +211,8 @@ double core_cnll_c(int *A,
   return cnll;
 }
 
-// Canfield approximation
 void core_sample(double *logw,
-		 int count, int ccount2, int m, int n,
+		 int count, int m, int n,
 		 int *r, int *rndx, int *irndx,
 		 int *csort, int *cndx, int *cconj,
 		 double *G, double *rvs,
@@ -240,7 +231,7 @@ void core_sample(double *logw,
 
     int clabel = cndx[c1];
     int colval = csort[c1];
-    if ((colval == 0) || (count == 0)) {
+    if (count == 0) {
       break;
     }
 
@@ -256,34 +247,27 @@ void core_sample(double *logw,
     int cumconj = count - colval;
 
     count -= colval;
-    ccount2 -= colval * colval;
 
     SS[colval] = 0.0;
     SS[colval+1] = 1.0;
     SS[colval+2] = 0.0;
 
-    double weightA, wA;
-    if ((count == 0) || ((m*n) == count)) {
-      weightA = 0.0;
-    } else {
-      wA = 1.0 * m * n / (count * (m * n - count));
-      weightA = wA * (1 - wA * (ccount2 - count * count / n)) / 2.0;
-    }
-
     for(i = (m-1); i >= 0; --i) {
       int rlabel = rndx[i];
       int val = r[rlabel];
 
-      double p1 = val * exp(weightA * (1.0 - 2.0 * (val - 1.0 * count / m)));
-      double p = p1 / (n + 1.0 - val + p1);
+      double p = val / (n + 1.0);
       double q = 1.0 - p;
 
       if ((n > 0) && (val > 0)) {
 	double Gk = G_ind_n_init(val-1, rlabel, c1);
-	if (Gk < 0) {
+	if ((Gk < 0) || (q <= 0) || (p >= 1)) {
 	  q = 0.0;
+	  p = 1.0;
 	} else {
-	  p *= Gk;
+	  p = p / (1.0 - p) * Gk;
+	  p = p / (1.0 + p);
+	  q = 1.0 - p;
 	}
       }
 

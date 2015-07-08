@@ -36,16 +36,16 @@ try:
                                arr_logwopt.ctypes.data_as(c_double_p),
                                arr_G.ctypes.data_as(c_double_p))
 
-    support_library.core_cnll_c.argtypes = [c_int_p,
-                                            c_int, c_int, c_int, c_int,
-                                            c_int_p, c_int_p, c_int_p,
-                                            c_int_p, c_int_p, c_int_p,
-                                            c_double_p,
-                                            c_double_p, c_double_p, c_int_p]
-    support_library.core_cnll_c.restype = c_double
-    def core_cnll_c(A,
-                    count, ccount2, m, n, r, rndx, irndx, csort, cndx, cconj, G,
-                    S, SS, B):
+    support_library.core_cnll.argtypes = [c_int_p,
+                                          c_int, c_int, c_int,
+                                          c_int_p, c_int_p, c_int_p,
+                                          c_int_p, c_int_p, c_int_p,
+                                          c_double_p,
+                                          c_double_p, c_double_p, c_int_p]
+    support_library.core_cnll.restype = c_double
+    def core_cnll(A,
+                  count, m, n, r, rndx, irndx, csort, cndx, cconj, G,
+                  S, SS, B):
         arr_A = np.ascontiguousarray(A, dtype='int32')
         arr_r = np.ascontiguousarray(r, dtype='int32')
         arr_rndx = np.ascontiguousarray(rndx, dtype='int32')
@@ -57,21 +57,21 @@ try:
         arr_S = np.ascontiguousarray(S, dtype='float64')
         arr_SS = np.ascontiguousarray(SS, dtype='float64')
         arr_B = np.ascontiguousarray(B, dtype='int32')
-        return support_library.core_cnll_c(arr_A.ctypes.data_as(c_int_p),
-                                           count, ccount2, m, n,
-                                           arr_r.ctypes.data_as(c_int_p),
-                                           arr_rndx.ctypes.data_as(c_int_p),
-                                           arr_irndx.ctypes.data_as(c_int_p),
-                                           arr_csort.ctypes.data_as(c_int_p),
-                                           arr_cndx.ctypes.data_as(c_int_p),
-                                           arr_cconj.ctypes.data_as(c_int_p),
-                                           arr_G.ctypes.data_as(c_double_p),
-                                           arr_S.ctypes.data_as(c_double_p),
-                                           arr_SS.ctypes.data_as(c_double_p),
-                                           arr_B.ctypes.data_as(c_int_p))
+        return support_library.core_cnll(arr_A.ctypes.data_as(c_int_p),
+                                         count, m, n,
+                                         arr_r.ctypes.data_as(c_int_p),
+                                         arr_rndx.ctypes.data_as(c_int_p),
+                                         arr_irndx.ctypes.data_as(c_int_p),
+                                         arr_csort.ctypes.data_as(c_int_p),
+                                         arr_cndx.ctypes.data_as(c_int_p),
+                                         arr_cconj.ctypes.data_as(c_int_p),
+                                         arr_G.ctypes.data_as(c_double_p),
+                                         arr_S.ctypes.data_as(c_double_p),
+                                         arr_SS.ctypes.data_as(c_double_p),
+                                         arr_B.ctypes.data_as(c_int_p))
 
     support_library.core_sample.argtypes = [c_double_p,
-                                            c_int, c_int, c_int, c_int,
+                                            c_int, c_int, c_int,
                                             c_int_p, c_int_p, c_int_p,
                                             c_int_p, c_int_p, c_int_p,
                                             c_double_p, c_double_p,
@@ -79,7 +79,7 @@ try:
                                             c_int_p, c_double_p, c_double_p]
     support_library.core_sample.restype = ctypes.c_void_p
     def core_sample(logw,
-                    count, ccount2, m, n, r, rndx, irndx, csort, cndx, cconj,
+                    count, m, n, r, rndx, irndx, csort, cndx, cconj,
                     G, rvs, S, SS, B, logQ, logP):
         arr_logw = np.ascontiguousarray(logw, dtype='float64')
         arr_r = np.ascontiguousarray(r, dtype='int32')
@@ -96,7 +96,7 @@ try:
         arr_logQ = np.ascontiguousarray(logQ, dtype='float64')
         arr_logP = np.ascontiguousarray(logP, dtype='float64')
         support_library.core_sample(arr_logw.ctypes.data_as(c_double_p),
-                                    count, ccount2, m, n,
+                                    count, m, n,
                                     arr_r.ctypes.data_as(c_int_p),
                                     arr_rndx.ctypes.data_as(c_int_p),
                                     arr_irndx.ctypes.data_as(c_int_p),
@@ -398,7 +398,7 @@ def conjugate(c, n):
 #     for i, j in B_sample_sparse:
 #         if i == -1: break 
 #         B_sample[i,j] = 1
-def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
+def approximate_from_margins_weights(r, c, w, T = None,
                                      sort_by_wopt_var = True):
     check_margins(r, c)
 
@@ -420,9 +420,9 @@ def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
 
     # Reorder the columns
     if sort_by_wopt_var:
-        cndx = np.lexsort((-wopt.var(0), -c))
+        cndx = np.lexsort((-wopt.var(0), c))
     else:
-        cndx = np.argsort(-c)
+        cndx = np.argsort(c)
     csort = c[cndx];
     wopt = wopt[:,cndx]
 
@@ -442,12 +442,9 @@ def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
     # Get the running total of number of ones to assign
     count_init = np.sum(rsort)
 
-    # Get the running total of sum of c squared
-    ccount2_init = np.sum(csort ** 2)
-
     def do_sample():
         return compute_sample(logw,
-                              count_init, ccount2_init, m_init, n_init,
+                              count_init, m_init, n_init,
                               r_init, rndx_init, irndx_init,
                               csort, cndx, cconj_init,
                               G)
@@ -466,14 +463,9 @@ def approximate_from_margins_weights(r, c, w, T = None, p_approx = 'canfield',
 #   w: weight matrix, (m x n) matrix with values in (0, +infty)
 # Output:
 #   ncll: negative conditional log-likelihood
-def approximate_conditional_nll(A, w, p_approx = 'canfield',
-                                sort_by_wopt_var = True):
+def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     assert(A.shape == w.shape)
 
-    if not p_approx in ('canfield', 'greenhill'):
-        print 'Warning: unknown approximation %s; using Canfield.' % p_approx
-        p_approx = 'canfield'
-    
     # FIXME: this will probably break if A is a matrix (as opposed to an array)
     r = A.sum(1, dtype=np.int)
     c = A.sum(0, dtype=np.int)
@@ -493,16 +485,16 @@ def approximate_conditional_nll(A, w, p_approx = 'canfield',
 
     # Reorder the columns
     if sort_by_wopt_var:
-        cndx = np.lexsort((-wopt.var(0), -c))
+        cndx = np.lexsort((-wopt.var(0), c))
     else:
-        cndx = np.argsort(-c)
+        cndx = np.argsort(c)
     csort = c[cndx];
     wopt = wopt[:,cndx]
 
     # Compute G
     G = compute_G(r, m, n, wopt)
 
-    return compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx)
+    return compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
     
 
 def compute_G(r, m, n, wopt):
@@ -539,7 +531,7 @@ def compute_G(r, m, n, wopt):
                     G[r_max,i,j] = -1.0
     return G
 
-def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
+def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G):
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
     irndx = np.argsort(rndx)
@@ -550,17 +542,6 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
     # Get the running total of number of ones to assign
     count = np.sum(rsort)
 
-    if p_approx == 'greenhill':
-        rcount2 = np.sum(rsort ** 2)
-        rcount2c = np.sum(rsort * (rsort - 1))
-        rcount3c = np.sum(rsort * (rsort - 1) * (rsort - 2))
-    
-    # Get the running total of sum of c squared
-    ccount2 = np.sum(csort ** 2)
-    if p_approx == 'greenhill':
-        ccount2c = np.sum(csort * (csort - 1))
-        ccount3c = np.sum(csort * (csort - 1) * (csort - 2))
-
     # Initialize B_sample_sparse
     B_sample_sparse = -np.ones((count,2), dtype=np.int)
     
@@ -568,16 +549,15 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
     #
     # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
     # corresponds to 1, ..., index M-1 corresponds to c[0]+1
-    M = csort[0] + 3
+    M = csort[-1] + 3
     S = np.zeros((M,m))
     SS = np.zeros(M)
     
-    if c_support_loaded and p_approx == 'canfield':
-        cnll = core_cnll_c(A,
-                           count, ccount2, m, n,
-                           r, rndx, irndx, csort, cndx, cconj, G,
-                           S, SS, B_sample_sparse)
-        return cnll
+    if c_support_loaded:
+        return core_cnll(A,
+                         count, m, n,
+                         r, rndx, irndx, csort, cndx, cconj, G,
+                         S, SS, B_sample_sparse)
     else:
         # Most recent assigned column in B_sample_sparse
         place = -1
@@ -597,7 +577,7 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
 
             # Inspect column
             clabel, colval = cndx[c1], csort[c1]
-            if colval == 0 or count == 0: break
+            if count == 0: break
 
             # Update the conjugate
             cconj[0:colval] -= 1
@@ -611,33 +591,11 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
             smin, smax = colval, colval
             cumsums, cumconj = count, count - colval
 
-            # Update the count and the running column counts
+            # Update the count
             count -= colval
-            ccount2 -= colval ** 2
-            if p_approx == 'greenhill':
-                ccount2c -= colval * (colval - 1)
-                ccount3c -= colval * (colval - 1) * (colval - 2)
 
             # Start filling SS (indices of colval-1, colval, colval+1)
             SS[colval:(colval+3)] = [0,1,0]
-
-            # Get the constants for computing the probabilities
-            if p_approx == 'canfield':
-                if count == 0 or m*n == count:
-                    weightA = 0.0
-                else:
-                    wA = 1.0 * m * n / (count * (m * n - count))
-                    weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
-            elif p_approx == 'greenhill':
-                d = 1.0 * ccount2c / count ** 2
-                d2 = (1.0 * ccount2c / (2 * count ** 2 + eps0) +
-                      1.0 * ccount2c / (2 * count ** 3 + eps0) +
-                      1.0 * ccount2c ** 2 / (4 * count ** 4 + eps0))
-                d3 = (-1.0 * ccount3c / (3 * count ** 3 + eps0) +
-                      1.0 * ccount2c ** 2 / (2 * count ** 4 + eps0))
-                d22 = (1.0 * ccount2c / (4 * count ** 4 + eps0) +
-                       1.0 * ccount3c / (2 * count ** 4 + eps0) +
-                       -1.0 * ccount2c ** 2 / (2 * count ** 5 + eps0))
                 
             ### DP
 
@@ -650,27 +608,19 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
 
                 # Combinatorial approximations to N(r,c) are used in
                 # the importance sampler cell probabilities.
-                if p_approx == 'canfield':
-                    # Canfield, Greenhill, and McKay (2008)
-                    p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
-                    p = p1 / (n + 1.0 - val + p1)
-                    q = 1.0 - p
-                elif p_approx == 'greenhill':
-                    # Greenhill, McKay, and Wang (2006)
-                    q = (1.0 /
-                         (1.0 +
-                          val * np.exp((2 * d2 + 3 * d3 * (val - 2) +
-                                        4 * d22 * (rcount2c - val + 1)) *
-                                       (val - 1))))
-                    p = 1.0 - q
+                p = val / (n + 1.0)
+                q = 1.0 - p
 
                 # Incorporate weights
                 if n > 0 and val > 0:
                     Gk = G[val-1,rlabel,c1]
-                    if Gk < 0:
-                        q = 0
+                    if (Gk < 0) or (q <= 0.0) or (p >= 1.0):
+                        q = 0.0
+                        p = 1.0
                     else:
-                        p *= Gk
+                        p = p / (1.0 - p) * Gk
+                        p = p / (1.0 + p)
+                        q = 1.0 - p
 
                 # Update the feasibility constraints
                 cumsums -= val
@@ -712,7 +662,7 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
             # Skip assigning anything when colval = 0
             if j < jmax:
                 for i in xrange(m):
-                    # Ones are generated according to the transition probability
+                    # 1's are generated according to the transition probability
                     p = S[j,i]
                     rlabel = rndx[i]
                     if A[rlabel,clabel]:
@@ -720,12 +670,6 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
                         val = r[rlabel]
                         r[rlabel] -= 1
 
-                        if p_approx == 'greenhill':
-                            # Update counts
-                            rcount2 -= 2 * val - 1
-                            rcount2c -= 2 * val - 2
-                            rcount3c -= 3 * (val - 1) * (val - 2)
-                        
                         # Record the entry
                         place += 1
                         cnll -= np.log(p)
@@ -781,13 +725,13 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G, p_approx):
             #   r[rndx] is sorted and represents row margins
             #   rndx[irndx] = 0:m
             #   c[cndx[(c1+1):]] is sorted and represents column margins
-            #   m, n, count, ccount*, cconj, etc. are valid
+            #   m, n, count, cconj, etc. are valid
             #   place points to new entries in B_sample_sparse
 
         return cnll
 
 def compute_sample(logw,
-                   count_init, ccount2_init, m_init, n_init,
+                   count_init, m_init, n_init,
                    r_init, rndx_init, irndx_init,
                    csort, cndx, cconj_init,
                    G):
@@ -799,7 +743,6 @@ def compute_sample(logw,
     rndx, irndx = rndx_init.copy(), irndx_init.copy()
     cconj = cconj_init.copy()
     count = count_init
-    ccount2 = ccount2_init
 
     # Pre-generate uniform random variates
     rvs = np.random.random(m * n)
@@ -808,7 +751,7 @@ def compute_sample(logw,
     #
     # Index 0 corresponds to -1, index 1 corresponds to 0, index 2
     # corresponds to 1, ..., index M-1 corresponds to c[0]+1
-    M = csort[0] + 3
+    M = csort[-1] + 3
     S = np.zeros((M,m))
     SS = np.zeros(M)
 
@@ -818,7 +761,7 @@ def compute_sample(logw,
     if c_support_loaded:
         logQ, logP = np.zeros(1), np.zeros(1)
         return core_sample(logw,
-                           count, ccount2, m, n,
+                           count, m, n,
                            r, rndx, irndx, csort, cndx, cconj, G, rvs,
                            S, SS, B_sample_sparse, logQ, logP)
     else:
@@ -855,19 +798,11 @@ def compute_sample(logw,
             smin, smax = colval, colval
             cumsums, cumconj = count, count - colval
 
-            # Update the count and the running column counts
+            # Update the count
             count -= colval
-            ccount2 -= colval ** 2
 
             # Start filling SS (indices corresponding to colval-1 ... colval+1)
             SS[colval:(colval+3)] = [0,1,0]
-
-            # Get the constants for computing the probabilities
-            if count == 0 or m*n == count:
-                weightA = 0
-            else:
-                wA = 1.0 * m * n / (count * (m * n - count))
-                weightA = wA * (1 - wA * (ccount2 - count**2 / n)) / 2
 
             ### DP
 
@@ -878,20 +813,22 @@ def compute_sample(logw,
                 rlabel = rndx[i]
                 val = r[rlabel]
 
-                # Use the Canfield, Greenhill, and McKay (2008)
-                # approximation to N(r,c)
-                p1 = val * np.exp(weightA * (1.0 - 2.0 * (val - count / m)))
-                p = p1 / (n + 1.0 - val + p1)
+                # Combinatorial approximations to N(r,c) are used in
+                # the importance sampler cell probabilities.
+                p = val / (n + 1.0)
                 q = 1.0 - p
 
                 # Incorporate weights
                 if n > 0 and val > 0:
                     Gk = G[val-1,rlabel,c1]
-                    if Gk < 0:
-                        q = 0
+                    if (Gk < 0) or (q <= 0.0) or (p >= 1.0):
+                        q = 0.0
+                        p = 1.0
                     else:
-                        p *= Gk
-
+                        p = p / (1.0 - p) * Gk
+                        p = p / (1.0 + p)
+                        q = 1.0 - p
+                                
                 # Update the feasibility constraints
                 cumsums -= val
                 cumconj -= cconj[i]
@@ -996,10 +933,10 @@ def compute_sample(logw,
             ### Recursion
 
             # At this point:
-            #   r[rndx] is sorted, represents unassigned row margins
+            #   r[rndx] sorted, represents unassigned row margins
             #   rndx[irndx] = 0:m
-            #   c[cndx[(c1+1):]] is sorted, represents unassigned column margins
-            #   m, n, count, ccount*, cconj, etc. are valid
+            #   c[cndx[(c1+1):]] sorted, represents unassigned column margins
+            #   m, n, count, cconj, etc. are valid
             #   place points to new entries in B_sample_sparse
             #
             # In other words, it is as if Initialization had just
