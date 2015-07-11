@@ -309,7 +309,7 @@ def canonical_scalings(w, r, c):
     if hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[hash]
 
-    max_iter = 20
+    max_iter = 1000
     tol = 1e-8
 
     m, n = w.shape
@@ -324,8 +324,10 @@ def canonical_scalings(w, r, c):
         swc = sw.sum(0).reshape((1,n))
         return swr, swc
 
-    a = np.sqrt((r / n) / (1 - (r / n)))
-    b = np.sqrt((c / m) / (1 - (c / m)))
+    p_i_dot = (1 / n) * w.sum(1).reshape((m,1))
+    p_dot_j = (1/  m) * w.sum(0).reshape((1,n))
+    a = np.sqrt((r / n) / (p_i_dot * (1 - (r / n))))
+    b = np.sqrt((c / m) / (p_dot_j * (1 - (c / m))))
     a[np.isnan(a)] = 1
     b[np.isnan(b)] = 1
     swr, swc = sw_sums(a, b)
