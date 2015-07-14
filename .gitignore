@@ -8,3 +8,6 @@
 *.csv
 *.so
 *.o
+*.mat
+*.json
+*.txt
