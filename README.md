@@ -1,3 +1,9 @@
+*The focus of this project has shifted radically since I've last taken
+ a thorough look at it. The primary challenge addressed is dealing
+ with network sparsity, where of the O(N^2) in a network on N actors,
+ only O(N) edges might be present. Algorithms for inference based on
+ (approximate) conditional inference appear effective in many cases.*
+
 Networks seems like a somewhat propitious environment for learning as, in some sense, we have O(N^2) observations for networks on N individuals. However, model complexity may also grow as O(N) so we are potentially faced with a nuisance parameter problem.
 
 I'm also trying to make sense of the theorems described in [2] and [4] concerning confidence sets for the learned parameter.
