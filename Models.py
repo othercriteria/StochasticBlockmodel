@@ -970,7 +970,7 @@ class StationaryLogistic(Stationary):
 
     # Implementation of ideas from "Conservative Hypothesis Tests and
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
-    def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 30,
+    def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 100,
                             L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
         N = network.N
         A = np.array(network.adjacency_matrix())
@@ -1877,29 +1877,28 @@ class Sampler:
 def center(x):
     return x - np.mean(x)
 
-def alpha_f(network, bipartite, f):
+def alpha_f(network, f):
     a = f(network.M)
     b = f(network.N)
 
-    if bipartite:
+    if network.bipartite:
         network.new_row_covariate('alpha_out')[:] = a
         network.new_col_covariate('alpha_in')[:] = b
     else:
         network.new_node_covariate('alpha_out')[:] = a
         network.new_node_covariate('alpha_in')[:] = b
 
-def alpha_zero(network, bipartite = False):
-    alpha_f(network, bipartite, lambda l: np.tile(0.0, l))
+def alpha_zero(network):
+    alpha_f(network, lambda l: np.tile(0.0, l))
     
-def alpha_norm(network, alpha_sd, bipartite = False):
-    alpha_f(network, bipartite,
-            lambda l: center(np.random.normal(0, alpha_sd, l)))
+def alpha_norm(network, alpha_sd):
+    alpha_f(network, lambda l: center(np.random.normal(0, alpha_sd, l)))
 
-def alpha_unif(network, alpha_sd, bipartite = False):
+def alpha_unif(network, alpha_sd):
     c = np.sqrt(12) / 2
-    alpha_f(network, bipartite,
+    alpha_f(network,
             lambda l: center(np.random.uniform(-alpha_sd*c, alpha_sd * c, l)))
 
-def alpha_gamma(network, alpha_loc, alpha_scale, bipartite = False):
-    alpha_f(network, bipartite,
+def alpha_gamma(network, alpha_loc, alpha_scale):
+    alpha_f(network,
             lambda l: center(np.random.gamma(alpha_loc, alpha_scale, l)))
