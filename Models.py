@@ -1346,9 +1346,11 @@ class NonstationaryLogistic(StationaryLogistic):
         self.fit_info['wall_time'] = time() - start_time
 
     def fit_irls(self, network, verbose = False, perturb = 1e-4):
+        M = network.M
         N = network.N
+        bipartite = network.bipartite
         B = len(self.beta)
-        P = B + 1 + 2*(N-1)
+        P = B + 1 + (M-1) + (N-1)
 
         if not self.fit_info:
             self.fit_info = {}
@@ -1356,46 +1358,50 @@ class NonstationaryLogistic(StationaryLogistic):
         start_time = time()
 
         alpha_zero(network)
-        alpha_out = network.node_covariates['alpha_out']
-        alpha_in = network.node_covariates['alpha_in']
+        if bipartite:
+            alpha_out = network.row_covariates['alpha_out']
+            alpha_in = network.col_covariates['alpha_in']
+        else:
+            alpha_out = network.node_covariates['alpha_out']
+            alpha_in = network.node_covariates['alpha_in']
         
         # Construct response and design matrices
         y = np.asarray(network.adjacency_matrix(), dtype='float64')
-        y = y.reshape((N*N,1))
-        X = np.zeros((N*N, P))
+        y = y.reshape((M*N,1))
+        X = np.zeros((M*N, P))
         for b, b_n in enumerate(self.beta):
-            X[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
+            X[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
         X[:,B] = 1.0
-        for r in range(N-1):
-            X_row = np.zeros((N,N))
+        for r in range(M-1):
+            X_row = np.zeros((M,N))
             X_row[r,:] = 1.0
-            X[:,B + 1 + r] = X_row.reshape((N*N,))
+            X[:,B + 1 + r] = X_row.reshape((M*N,))
         for c in range(N-1):
-            X_col = np.zeros((N,N))
+            X_col = np.zeros((M,N))
             X_col[:,c] = 1.0
-            X[:,B + 1 + (N-1) + c] = X_col.reshape((N*N,))
+            X[:,B + 1 + (M-1) + c] = X_col.reshape((M*N,))
 
         theta = np.zeros((P,1))
 
         def fitted_p(theta):
             theta_vec = np.reshape(theta, (P,))
-            alpha_out[0:N-1] = theta_vec[(B + 1):(B + 1 + (N-1))]
-            alpha_in[0:N-1] = theta_vec[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+            alpha_out[0:M-1] = theta_vec[(B + 1):(B + 1 + (M-1))]
+            alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta_vec[b]
             self.kappa = theta_vec[B]
-            return self.edge_probabilities(network).reshape((N*N,1))
+            return self.edge_probabilities(network).reshape((M*N,1))
 
         for iter in range(10):
             p = fitted_p(theta)
-            X_tilde = X * p + np.random.uniform(-perturb, perturb, (N*N, P))
+            X_tilde = X * p + np.random.uniform(-perturb, perturb, (M*N, P))
             X_t = np.transpose(X)
             hat = np.dot(inv(np.dot(X_t, X_tilde)), X_t)
             theta += np.dot(hat, (y - p))
 
         theta_vec = np.reshape(theta, (P,))
-        alpha_out[0:N-1] = theta_vec[(B + 1):(B + 1 + (N-1))]
-        alpha_in[0:N-1] = theta_vec[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+        alpha_out[0:M-1] = theta_vec[(B + 1):(B + 1 + (M-1))]
+        alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
         alpha_out_mean = np.mean(alpha_out[:])
         alpha_in_mean = np.mean(alpha_in[:])
         alpha_out[:] -= alpha_out_mean
