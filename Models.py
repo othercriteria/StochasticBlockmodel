@@ -723,6 +723,53 @@ class StationaryLogistic(Stationary):
 
         self.fit_info['wall_time'] = time() - start_time
 
+    def fit_c_conditional(self, network, verbose = False):
+        M = network.M
+        N = network.N
+        B = len(self.beta)
+
+        if not self.fit_info:
+            self.fit_info = {}
+        self.fit_info['c_cnll_evals'] = 0
+
+        start_time = time()
+
+        # Calculate observed sufficient statistics
+        T = np.empty(B + M)
+        A = np.array(network.adjacency_matrix())
+        r = np.sum(A, axis = 1, dtype=np.int)
+        c = np.sum(A, axis = 0, dtype=np.int)
+        T[B:(B + M)] = r
+        for b, b_n in enumerate(self.beta):
+            T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
+
+        # Initialize theta
+        theta = np.zeros(B + M)
+
+        def obj(theta):
+            print theta
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
+            c_cnll = 0
+            for j in range(N):
+                c_cnll += 0
+            c_cnll -= np.dot(theta, T)
+            self.fit_info['c_cnll_evals'] += 1
+            print c_cnll
+            return c_cnll
+
+        theta_opt = opt.fmin_cg(obj, theta).xopt
+        if (np.any(theta_opt == [b[0] for b in bounds]) or
+            np.any(theta_opt == [b[1] for b in bounds])):
+            print 'Warning: some constraints active in model fitting.'
+        for b, b_n in enumerate(self.beta):
+            self.beta[b_n] = theta_opt[b]
+
+        self.fit_convex_opt(network, fix_beta = True)
+
+        self.fit_info['wall_time'] = time() - start_time
+        
     def fit_composite(self, network, T = 100, verbose = False):
         B = len(self.beta)
 
@@ -1346,7 +1393,7 @@ class NonstationaryLogistic(StationaryLogistic):
         self.kappa = theta_opt[B] + alpha_out_mean + alpha_in_mean
 
         self.fit_info['wall_time'] = time() - start_time
-
+                
     def fit_irls(self, network, verbose = False, perturb = 1e-4):
         M = network.M
         N = network.N

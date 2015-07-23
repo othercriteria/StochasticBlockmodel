@@ -18,7 +18,7 @@ def logsumexp(x):
 def logabsdiffexp(x, y):
     def f(x, y):
         if x < y: x, y = y, x
-        return y + np.log(np.exp(x - y) - 1)
+        return y + np.log(np.expm1(x - y))
     return (np.vectorize(f))(x,y)
 
 # Get the "mean" log-odds from a collection of log-odds

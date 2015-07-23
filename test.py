@@ -20,19 +20,19 @@ params = { 'N': 130,
            'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 0.0,
-           'cov_disc_sd': 1.0,
+           'cov_norm_sd': 1.0,
+           'cov_disc_sd': 0.0,
            'contrived': False,
-           'kappa_target': ('density', 0.1),
-           'offset_extremes': True,
+           'kappa_target': ('degree', 2),
+           'offset_extremes': False,
            'fisher_information': False,
            'baseline': False,
-           'fit_nonstationary': False,
-           'fit_method': 'conditional',
+           'fit_nonstationary': True,
+           'fit_method': 'c_conditional',
            'num_reps': 10,
            'sampling': 'new',
-           'sub_sizes_r': np.repeat(2, 30),
-           'sub_sizes_c': np.floor(np.logspace(1.0, 3.1, 30)),
+           'sub_sizes_r': np.floor(np.sqrt(np.floor(np.logspace(1.0, 2.1, 30)))),
+           'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
            'verbose': False,
@@ -137,7 +137,7 @@ if params['baseline']:
             return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
         results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
 
-if params['fit_method'] in ['convex_opt', 'conditional',
+if params['fit_method'] in ['convex_opt', 'conditional', 'c_conditional',
                             'irls', 'conditional_is']:
     results.new('Wall time (sec.)', 'm', lambda d, f: f.fit_info['wall_time'])
 if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
@@ -181,7 +181,7 @@ for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
                 print
             else:
                 fit_model.fit_convex_opt(subnet)
-        if params['fit_method'] == 'irls':
+        elif params['fit_method'] == 'irls':
             fit_model.fit_irls(subnet)
         elif params['fit_method'] == 'logistic':
             fit_model.fit_logistic(subnet)
@@ -198,6 +198,11 @@ for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
                 fit_model.fit_convex_opt(subnet, fix_beta = True)
         elif params['fit_method'] == 'conditional_is':
             fit_model.fit_conditional(subnet, T = 50, verbose = True)
+            if params['offset_extremes']:
+                subnet.offset_extremes()
+                fit_model.fit_convex_opt(subnet, fix_beta = True)
+        elif params['fit_method'] == 'c_conditional':
+            fit_model.fit_c_conditional(subnet, verbose = True)
             if params['offset_extremes']:
                 subnet.offset_extremes()
                 fit_model.fit_convex_opt(subnet, fix_beta = True)
