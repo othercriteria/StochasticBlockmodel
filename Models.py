@@ -1244,7 +1244,7 @@ class NonstationaryLogistic(StationaryLogistic):
 
         if network.offset:
             O = network.offset.matrix()
-        alpha_zero(network, bipartite = bipartite)
+        alpha_zero(network)
 
         # Calculate observed sufficient statistics
         T = np.empty(B + 1 + (M-1) + (N-1))
@@ -1409,33 +1409,39 @@ class NonstationaryLogistic(StationaryLogistic):
     def fit_logistic(self, network):
         import statsmodels.api as sm
 
+        M = network.M
         N = network.N
+        bipartite = network.bipartite
         B = len(self.beta)
         alpha_zero(network)
 
-        y = network.adjacency_matrix().reshape((N*N,))
-        Phi = np.zeros((N*N,B + 1 + 2*(N-1)))
+        y = network.adjacency_matrix().reshape((M*N,))
+        Phi = np.zeros((M*N,B + 1 + (M-1) + (N-1)))
         for b, b_n in enumerate(self.beta):
-            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
+            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
         Phi[:,B] = 1.0
-        for r in range(N-1):
-            phi_row = np.zeros((N,N))
+        for r in range(M-1):
+            phi_row = np.zeros((M,N))
             phi_row[r,:] = 1.0
-            Phi[:,B + 1 + r] = phi_row.reshape((N*N,))
+            Phi[:,B + 1 + r] = phi_row.reshape((M*N,))
         for c in range(N-1):
-            phi_col = np.zeros((N,N))
+            phi_col = np.zeros((M,N))
             phi_col[:,c] = 1.0
-            Phi[:,B + 1 + (N-1) + c] = phi_col.reshape((N*N,))
+            Phi[:,B + 1 + (M-1) + c] = phi_col.reshape((M*N,))
         if network.offset:
-            offset = network.offset.matrix().reshape((N*N,))
+            offset = network.offset.matrix().reshape((M*N,))
             coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
 
-        alpha_out = network.node_covariates['alpha_out']
-        alpha_in = network.node_covariates['alpha_in']
-        alpha_out[0:N-1] = coefs[(B + 1):(B + 1 + (N-1))]
-        alpha_in[0:N-1] = coefs[(B + 1 + (N-1)):(B + 1 + 2*(N-1))]
+        if bipartite:
+            alpha_out = network.row_covariates['alpha_out']
+            alpha_in = network.col_covariates['alpha_in']
+        else:
+            alpha_out = network.node_covariates['alpha_out']
+            alpha_in = network.node_covariates['alpha_in']
+        alpha_out[0:M-1] = coefs[(B + 1):(B + 1 + (M-1))]
+        alpha_in[0:N-1] = coefs[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
         alpha_out_mean = np.mean(alpha_out[:])
         alpha_in_mean = np.mean(alpha_in[:])
         alpha_out[:] -= alpha_out_mean
