@@ -842,14 +842,16 @@ class StationaryLogistic(Stationary):
         
         from sklearn.linear_model import LogisticRegression
 
+        M = network.M
         N = network.N
         B = len(self.beta)
 
-        y = network.adjacency_matrix().reshape((N*N,))
-        Phi = np.zeros((N*N,B))
+        y = network.adjacency_matrix().reshape((M*N,))
+        Phi = np.zeros((M*N,B))
         for b, b_n in enumerate(self.beta):
-            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
-        lr = LogisticRegression(fit_intercept = True, C = 1.0 / prior_precision,
+            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
+        lr = LogisticRegression(fit_intercept = True,
+                                C = 1.0 / prior_precision,
                                 penalty = 'l2')
         lr.fit(Phi, y)
         coefs, intercept = lr.coef_[0], lr.intercept_[0]
@@ -860,12 +862,12 @@ class StationaryLogistic(Stationary):
 
         if variance_covariance:
             S_0_inv = prior_precision * np.eye(B + 1)
-            Phi_kappa = np.hstack([Phi, np.ones((N*N,1))])
+            Phi_kappa = np.hstack([Phi, np.ones((M*N,1))])
             w = np.empty(B + 1)
             w[0:B] = coefs
             w[B] = intercept
             C = 0.0
-            for i in range(N*N):
+            for i in range(M*N):
                 y = inv_logit(np.dot(w, Phi_kappa[i,:]))
                 C += y * (1.0 - y) * (np.outer(Phi_kappa[i,:], Phi_kappa[i,:]))
             S_N = np.linalg.inv(S_0_inv + C)
