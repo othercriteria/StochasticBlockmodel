@@ -734,18 +734,17 @@ class StationaryLogistic(Stationary):
 
         start_time = time()
 
-        # Calculate observed sufficient statistics
-        T = np.empty(B + M)
+        # Pre-compute column statistics
         T_c = {}
         A = np.array(network.adjacency_matrix())
-        r = np.sum(A, axis = 1, dtype=np.int)
         c = np.sum(A, axis = 0, dtype=np.int)
-        T[B:(B + M)] = r
         for b, b_n in enumerate(self.beta):
             T_b = A * network.edge_covariates[b_n].matrix()
-            T[b] = np.sum(T_b)
             for j in range(N):
                 T_c[(j,b)] = T_b[:,j]
+        z = {}
+        for j in range(N):
+            z[j] = A[:,j].flatten()
 
         # Initialize theta
         theta = np.zeros(B + M)
@@ -757,53 +756,47 @@ class StationaryLogistic(Stationary):
             c_cnll = 0
             for j in range(N):
                 c_j = c[j]
+
+                if ((c_j == 0) or (c_j == M)):
+                    continue
+
                 logit_P = np.zeros(M)
                 logit_P += theta[B:(B + M)]
                 for b in range(B):
                     logit_P += theta[b] * T_c[(j,b)]
                 P = inv_logit(logit_P)
                 log_P = np.log(P)
-                log1m_P = np.log(1 - P)
+                log1m_P = np.log1p(-P)
+
+                if np.sum(P) == 0:
+                    continue
 
                 # Probability of column sum equal to c_j
-                if np.sum(P) == 0:
-                    log_p_c_j = -np.Inf
-                else:
-                    log_p_c = np.zeros(c_j + 1)
-                    for k in range(0, M):
-                        log_bk, log1m_bk = log_P[k], log1m_P[k]
+                log_p_c = np.zeros(c_j + 1)
+                for k in range(0, M):
+                    log_bk, log1m_bk = log_P[k], log1m_P[k]
 
-                        if k <= c_j:
-                            i_init = k
-                            if k < c_j:
-                                log_p_c[k+1] = log_p_c[k] + log_bk
-                        else:
-                            i_init = c_j
+                    if k <= c_j:
+                        i_init = k
+                        if k < c_j:
+                            log_p_c[k+1] = log_p_c[k] + log_bk
+                    else:
+                        i_init = c_j
 
-                        for i in range(i_init, 0, -1):
-                            x = log_p_c[i-1] + log_bk
-                            y = log_p_c[i] + log1m_bk
-                            if x < y:
-                                log_p_c[i] = y + np.log1p(np.exp(x-y))
-                            else:
-                                log_p_c[i] = x + np.log1p(np.exp(y-x))
+                    for i in range(i_init, 0, -1):
+                        x = log_p_c[i-1] + log_bk
+                        y = log_p_c[i] + log1m_bk
+                        x, y = min(x, y), max(x, y)
+                        log_p_c[i] = y + np.log1p(np.exp(x-y))
 
-                        log_p_c[0] = log_p_c[0] + log1m_bk
+                    log_p_c[0] += log1m_bk
 
-                    log_p_c_j = log_p_c[c_j]
-
-                c_cnll -= log_p_c[c_j]
+                c_cnll += log_p_c[c_j]
 
                 # Marginal probability of columns with given column sum
-                z_c_j = set(permutations([True] * c_j + [False] * (M - c_j)))
-                log_p_z_all = []
-                for z in z_c_j:
-                    z = np.array(z)
-                    log_p_z = np.sum(log_P[z]) + np.sum(log1m_P[-z])
-                    log_p_z_all.append(log_p_z)
-                c_cnll += logsumexp(log_p_z_all)
+                z_j = z[j]
+                c_cnll -= np.sum(log_P[z_j]) + np.sum(log1m_P[-z_j])
 
-            c_cnll -= np.dot(theta, T)
             self.fit_info['c_cnll_evals'] += 1
             if verbose:
                 print c_cnll, theta
