@@ -235,13 +235,6 @@ class Network:
     def is_sparse(self):
         return sparse.issparse(self.network)
 
-    def sparse_adjacency_matrix(self):
-        if self.is_sparse():
-            return np.array(self.network)
-        else:
-            print 'Asked for sparse adjacency matrix of non-sparse network.'
-            raise
-
     def offset_extremes(self):
         if not self.offset:
             self.initialize_offset()
