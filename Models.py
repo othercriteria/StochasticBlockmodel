@@ -109,9 +109,9 @@ class IndependentBernoulli:
         
         N = network.N
         if r is None:
-            r = np.asarray(network.adjacency_matrix()).sum(1)
+            r = np.asarray(network.as_dense()).sum(1)
         if c is None:
-            c = np.asarray(network.adjacency_matrix()).sum(0)
+            c = np.asarray(network.as_dense()).sum(0)
 
         start_time = time()
         if arbitrary_init:
@@ -322,7 +322,7 @@ class Stationary(IndependentBernoulli):
         
         # Calculate observed sufficient statistic
         T = np.empty(1)
-        A = network.adjacency_matrix()
+        A = network.as_dense()
         T[0] = np.sum(A, dtype=np.int)
 
         theta = np.empty(1)
@@ -363,7 +363,7 @@ class Stationary(IndependentBernoulli):
 
         N = network.N
 
-        y = network.adjacency_matrix().reshape((N*N,))
+        y = network.as_dense().reshape((N*N,))
         Phi = np.zeros((N*N,1))
         Phi[:,0] = 1.0
         if network.offset:
@@ -454,7 +454,7 @@ class StationaryLogistic(Stationary):
 
         # Calculate observed sufficient statistics
         T = np.empty(B + 1)
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
@@ -515,7 +515,7 @@ class StationaryLogistic(Stationary):
     def fit_saddlepoint(self, network, verbose = False):
         B = len(self.beta)
         N = network.N
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
 
         if not self.fit_info:
             self.fit_info = {}
@@ -592,7 +592,7 @@ class StationaryLogistic(Stationary):
             return
 
         N = network.N
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         o = network.offset.matrix()
         x = network.edge_covariates[self.beta.keys()[0]].matrix()
 
@@ -632,7 +632,7 @@ class StationaryLogistic(Stationary):
 
         start_time = time()
 
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
 
         # Initialize theta
@@ -823,7 +823,7 @@ class StationaryLogistic(Stationary):
 
         start_time = time()
 
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         r, c = A.sum(1), A.sum(0)
 
         # Initialize theta
@@ -908,7 +908,7 @@ class StationaryLogistic(Stationary):
         N = network.N
         B = len(self.beta)
 
-        y = network.adjacency_matrix().reshape((N*N,))
+        y = network.as_dense().reshape((N*N,))
         Phi = np.zeros((N*N,B + 1))
         Phi[:,B] = 1.0
         for b, b_n in enumerate(self.beta):
@@ -938,7 +938,7 @@ class StationaryLogistic(Stationary):
         N = network.N
         B = len(self.beta)
 
-        y = network.adjacency_matrix().reshape((M*N,))
+        y = network.as_dense().reshape((M*N,))
         Phi = np.zeros((M*N,B))
         for b, b_n in enumerate(self.beta):
             Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
@@ -1067,7 +1067,7 @@ class StationaryLogistic(Stationary):
     def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 100,
                             L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
         N = network.N
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
 
         x = network.edge_covariates[b].matrix()
 
@@ -1159,7 +1159,7 @@ class StationaryLogistic(Stationary):
     def confidence_harrison_2(self, network, a, alpha_level = 0.05, n_MC = 20,
                               L = 20, beta_l_min = -6.0, beta_l_max = 6.0):
         N = network.N
-        A = network.adjacency_matrix()
+        A = network.as_dense()
         b_1, b_2 = self.beta.keys()
 
         x_1 = network.edge_covariates[b_1].matrix()
@@ -1432,7 +1432,6 @@ class NonstationaryLogistic(StationaryLogistic):
     def fit_irls(self, network, verbose = False, perturb = 1e-4):
         M = network.M
         N = network.N
-        bipartite = network.bipartite
         B = len(self.beta)
         P = B + 1 + (M-1) + (N-1)
 
@@ -1442,15 +1441,11 @@ class NonstationaryLogistic(StationaryLogistic):
         start_time = time()
 
         alpha_zero(network)
-        if bipartite:
-            alpha_out = network.row_covariates['alpha_out']
-            alpha_in = network.col_covariates['alpha_in']
-        else:
-            alpha_out = network.node_covariates['alpha_out']
-            alpha_in = network.node_covariates['alpha_in']
+        alpha_out = network.row_covariates['alpha_out']
+        alpha_in = network.col_covariates['alpha_in']
         
         # Construct response and design matrices
-        y = np.asarray(network.adjacency_matrix(), dtype='float64')
+        y = np.asarray(network.as_dense(), dtype='float64')
         y = y.reshape((M*N,1))
         X = np.zeros((M*N, P))
         for b, b_n in enumerate(self.beta):
@@ -1501,11 +1496,10 @@ class NonstationaryLogistic(StationaryLogistic):
 
         M = network.M
         N = network.N
-        bipartite = network.bipartite
         B = len(self.beta)
         alpha_zero(network)
 
-        y = network.adjacency_matrix().reshape((M*N,))
+        y = network.as_dense().reshape((M*N,))
         Phi = np.zeros((M*N,B + 1 + (M-1) + (N-1)))
         for b, b_n in enumerate(self.beta):
             Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
@@ -1764,7 +1758,7 @@ class Blockmodel(IndependentBernoulli):
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
 
         self.sem_trace = []
 
@@ -1840,7 +1834,7 @@ class Blockmodel(IndependentBernoulli):
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
 
         z_to_nll_cache = {}
         cov_name_to_inds = {}
@@ -1916,13 +1910,13 @@ class FixedMargins(IndependentBernoulli):
     def generate(self, network, **opts):
         if not self.r_name in network.node_covariates:
             print 'Covariate "%s" not found.' % self.r_name
-            r = np.asarray(network.adjacency_matrix()).sum(1)
+            r = np.asarray(network.as_dense()).sum(1)
         else:
             r = network.node_covariates[self.r_name][:]
 
         if not self.c_name in network.node_covariates:
             print 'Covariate "%s" not found.' % self.c_name
-            c = np.asarray(network.adjacency_matrix()).sum(0)
+            c = np.asarray(network.as_dense()).sum(0)
         else:
             c = network.node_covariates[self.c_name][:]
 
