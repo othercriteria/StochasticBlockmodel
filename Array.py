@@ -42,17 +42,17 @@ class Array:
         return self.col_covariates[name]
 
     def new_edge_covariate(self, name):
-        self.edge_covariates[name] = EdgeCovariate((self.rnames, self.cnames))
+        self.edge_covariates[name] = EdgeCovariate(self.rnames, self.cnames)
         return self.edge_covariates[name]
 
     def initialize_offset(self):
-        self.offset = EdgeCovariates((self.rnames, self.cnames))
+        self.offset = EdgeCovariate(self.rnames, self.cnames)
         return self.offset
 
-    def subarray(self, rinds = None, cinds = None)
-        if not rinds:
+    def subarray(self, rinds = None, cinds = None):
+        if rinds is None:
             rinds = np.arange(self.M)
-        if not cinds:
+        if cinds is None:
             cinds = np.arange(self.N)
 
         sub_M = len(rinds)
@@ -75,10 +75,10 @@ class Array:
             sub.col_covariates[col_covariate] = src.subset(cinds)
         for edge_covariate in self.edge_covariates:
             src = self.edge_covariates[edge_covariate]
-            sub.edge_covariates[edge_covariate] = src.subset((rinds, cinds))
+            sub.edge_covariates[edge_covariate] = src.subset(rinds, cinds)
 
         if self.offset:
-            sub.offset = self.offset.subset((rinds, cinds))
+            sub.offset = self.offset.subset(rinds, cinds)
 
         return sub
 
@@ -96,7 +96,7 @@ class Array:
             return self.array
 
     def offset_extremes(self):
-        if not self.offset:
+        if self.offset is None:
             self.initialize_offset()
 
         # (Separately) sort rows and columns of adjacency matrix by

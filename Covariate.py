@@ -51,23 +51,15 @@ class NodeCovariate:
         return new
 
 class EdgeCovariate:
-    def __init__(self, names):
-        self.names = names
-        self.bipartite = (type(names) == tuple)
-        if self.bipartite:
-            self.rnames, self.cnames = self.names
-            self.data = sparse.lil_matrix((len(self.rnames),len(self.cnames)))
-        else:
-            self.data = sparse.lil_matrix((len(self.names),len(self.names)))
+    def __init__(self, rnames, cnames):
+        self.rnames = rnames
+        self.cnames = cnames
+        self.data = sparse.lil_matrix((len(self.rnames),len(self.cnames)))
         self.dirty()
 
     def __str__(self):
-        if self.bipartite:
-            return '<EdgeCovariate (bipartite)\n%s\n%s\n%s>' % \
+        return '<EdgeCovariate\n%s\n%s\n%s>' % \
               (repr(self.rnames), repr(self.cnames), repr(self.data))
-        else:
-            return '<EdgeCovariate\n%s\n%s>' % \
-              (repr(self.names), repr(self.data))
 
     def __getitem__(self, index):
         return self.data.__getitem__(index)
@@ -77,12 +69,9 @@ class EdgeCovariate:
         self.dirty()
 
     def copy(self):
-        if self.bipartite:
-            new = EdgeCovariate((self.rnames, self.cnames))
-        else:
-            new = EdgeCovariate(self.names)
-
+        new = EdgeCovariate(self.rnames, self.cnames)
         new.data = self.data.copy()
+
         return new
 
     def tocsr(self):
@@ -96,52 +85,33 @@ class EdgeCovariate:
         if self.is_dirty:
             self.cached_matrix = self.data.toarray()
             self.is_dirty = False
-            return self.cached_matrix
-        else:
-            return self.cached_matrix
+
+        return self.cached_matrix
 
     def sparse_matrix(self):
         return self.data
 
-    def subset(self, inds):
-        if type(inds) == tuple:
-            sub_names = (self.names[inds[0]], self.names[inds[1]])
-        elif self.bipartite:
-            sub_names = (self.rnames[inds[0]], self.cnames[inds[1]])
-        else:
-            sub_names = self.names[inds]
-        sub = EdgeCovariate(sub_names)
-
+    def subset(self, rinds, cinds):
+        # TODO: Check if this is actually necessary.
         self.tocsr()
-        if self.bipartite or type(inds) == tuple:
-            sub.data[:,:] = self.data[inds[0]][:,inds[1]]
-        else:
-            sub.data[:,:] = self.data[inds][:,inds]
         
+        sub = EdgeCovariate(self.rnames[rinds], self.cnames[cinds])
+        sub.data[:,:] = self.data[rinds][:,cinds]
+
         return sub
 
     def from_binary_function_name(self, f):
-        if self.bipartite:
-            rnames, cnames = self.rnames, self.cnames
-        else:
-            rnames, cnames = self.names, self.names
-
-        for i, n_1 in enumerate(rnames):
-            for j, n_2 in enumerate(cnames):
+        for i, n_1 in enumerate(self.rnames):
+            for j, n_2 in enumerate(self.cnames):
                 val = f(n_1, n_2)
                 if val != 0:
                     self.data[i,j] = val
         self.dirty()
 
     def from_binary_function_ind(self, f):
-        if self.bipartite:
-            rnames, cnames = self.rnames, self.cnames
-        else:
-            rnames, cnames = self.names, self.names
-        for i in range(len(rnames)):
-            for j in range(len(cnames)):
+        for i in range(len(self.rnames)):
+            for j in range(len(self.cnames)):
                 val = f(i, j)
                 if val != 0:
                     self.data[i,j] = val
         self.dirty()
- 
