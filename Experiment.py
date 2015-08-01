@@ -54,8 +54,8 @@ class RandomSubnetworks:
                 s_r, s_c = s
                 np.random.shuffle(self.rinds)
                 np.random.shuffle(self.cinds)
-                return self.network.subnetwork((self.rinds[0:s_r],
-                                                self.cinds[0:s_c]))
+                return self.network.subarray(self.rinds[0:s_r],
+                                             self.cinds[0:s_c])
             else:
                 np.random.shuffle(self.inds)
                 sub_train = self.inds[0:s]
@@ -151,7 +151,7 @@ class Results:
             f = self.results[result]['f']
             f_type = self.results[result]['f_type']
             if f_type == 'a':
-                val = f(network.adjacency_matrix())
+                val = f(network.as_dense())
             elif f_type == 'n':
                 val = f(network)
             elif f_type == 'm':

@@ -59,7 +59,7 @@ class IndependentBernoulli:
 
     def nll(self, network, submatrix = None):
         P = self.edge_probabilities(network, submatrix)
-        A = np.asarray(network.adjacency_matrix())
+        A = np.asarray(network.as_dense())
         if submatrix:
             i_sub, j_sub = submatrix
             A = A[i_sub][:,j_sub]
@@ -736,7 +736,7 @@ class StationaryLogistic(Stationary):
 
         # Pre-compute column statistics
         T_c = {}
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         c = np.sum(A, axis = 0, dtype=np.int)
         for b, b_n in enumerate(self.beta):
             T_b = A * network.edge_covariates[b_n].matrix()
@@ -1250,19 +1250,14 @@ class NonstationaryLogistic(StationaryLogistic):
     def edge_probabilities(self, network, submatrix = None):
         M = network.M
         N = network.N
-        bipartite = network.bipartite
         if submatrix:
             i_sub, j_sub = submatrix
             m, n = len(i_sub), len(j_sub)
         else:
             m, n = M, N
 
-        if bipartite:
-            alpha_out = network.row_covariates['alpha_out']
-            alpha_in = network.col_covariates['alpha_in']
-        else:
-            alpha_out = network.node_covariates['alpha_out']
-            alpha_in = network.node_covariates['alpha_in']
+        alpha_out = network.row_covariates['alpha_out']
+        alpha_in = network.col_covariates['alpha_in']
         if submatrix:
             alpha_out = alpha_out[i_sub]
             alpha_in = alpha_in[j_sub]
@@ -1325,7 +1320,6 @@ class NonstationaryLogistic(StationaryLogistic):
     def fit_convex_opt(self, network, verbose = False, fix_beta = False):
         M = network.M
         N = network.N
-        bipartite = network.bipartite
         B = len(self.beta)
 
         if not self.fit_info:
@@ -1342,7 +1336,7 @@ class NonstationaryLogistic(StationaryLogistic):
 
         # Calculate observed sufficient statistics
         T = np.empty(B + 1 + (M-1) + (N-1))
-        A = np.array(network.adjacency_matrix())
+        A = np.array(network.as_dense())
         r = np.sum(A, axis = 1, dtype=np.int)[0:(M-1)]
         c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
         T[(B + 1):(B + 1 + (M-1))] = r
@@ -1375,12 +1369,8 @@ class NonstationaryLogistic(StationaryLogistic):
                 if np.isfinite(o_col):
                     theta[B + 1 + (M-1) + j] -= o_col
 
-        if bipartite:
-            alpha_out = network.row_covariates['alpha_out']
-            alpha_in = network.col_covariates['alpha_in']
-        else:
-            alpha_out = network.node_covariates['alpha_out']
-            alpha_in = network.node_covariates['alpha_in']
+        alpha_out = network.row_covariates['alpha_out']
+        alpha_in = network.col_covariates['alpha_in']
         def obj(theta):
             if np.any(np.isnan(theta)):
                 print 'Warning: computing objective for nan-containing vector.'
@@ -1534,12 +1524,8 @@ class NonstationaryLogistic(StationaryLogistic):
         else:
             coefs = sm.Logit(y, Phi).fit().params
 
-        if bipartite:
-            alpha_out = network.row_covariates['alpha_out']
-            alpha_in = network.col_covariates['alpha_in']
-        else:
-            alpha_out = network.node_covariates['alpha_out']
-            alpha_in = network.node_covariates['alpha_in']
+        alpha_out = network.row_covariates['alpha_out']
+        alpha_in = network.col_covariates['alpha_in']
         alpha_out[0:M-1] = coefs[(B + 1):(B + 1 + (M-1))]
         alpha_in[0:N-1] = coefs[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
         alpha_out_mean = np.mean(alpha_out[:])
@@ -1987,12 +1973,8 @@ def alpha_f(network, f):
     a = f(network.M)
     b = f(network.N)
 
-    if network.bipartite:
-        network.new_row_covariate('alpha_out')[:] = a
-        network.new_col_covariate('alpha_in')[:] = b
-    else:
-        network.new_node_covariate('alpha_out')[:] = a
-        network.new_node_covariate('alpha_in')[:] = b
+    network.new_row_covariate('alpha_out')[:] = a
+    network.new_col_covariate('alpha_in')[:] = b
 
 def alpha_zero(network):
     alpha_f(network, lambda l: np.tile(0.0, l))
