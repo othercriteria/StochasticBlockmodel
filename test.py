@@ -28,17 +28,18 @@ params = { 'N': 130,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'c_conditional',
-           'num_reps': 10,
+           'fit_method': 'convex_opt',
+           'num_reps': 3,
            'sampling': 'new',
-           'sub_sizes_c': np.floor(0.2 * (np.floor(np.logspace(1.0, 2.1, 30)))),
-           'sub_sizes_r': np.floor(np.logspace(1.0, 2.1, 30)),
+           'sub_sizes_r': np.floor(0.2 * (np.floor(np.logspace(1.0, 2.1, 30)))),
+           'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
            'verbose': False,
+           'plot_xaxis': 'c',
            'plot_mse': True,
-           'plot_network': False,
-           'plot_fit_info': False }
+           'plot_network': True,
+           'plot_fit_info': True }
 
 
 # Set random seed for reproducible output
@@ -103,7 +104,8 @@ for c in covariates:
     fit_model.beta[c] = None
 
 # Set up recording of results from experiment
-results = Results(params['sub_sizes_c'], params['num_reps'])
+results = Results(params['sub_sizes_r'], params['sub_sizes_c'],
+                  params['num_reps'])
 add_network_stats(results)
 if params['sampling'] == 'new':
     results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
@@ -152,12 +154,11 @@ if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
                 lambda d, f: np.sqrt(np.sum((f.fit_info['grad_nll_final'])**2)))
 
 for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
-    sub_size = sub_size_c
-    print 'subnetwork size = %d' % sub_size
-    print sub_size_r
+    sub_size = (sub_size_r, sub_size_c)
+    print 'subnetwork size =', sub_size
 
     if params['sampling'] == 'new':
-        gen = RandomSubnetworks(net, (sub_size_r, sub_size_c))
+        gen = RandomSubnetworks(net, sub_size)
     else:
         gen = RandomSubnetworks(net, sub_size, method = params['sampling'])
 
@@ -280,7 +281,7 @@ if params['plot_mse']:
         to_plot.append((['Info theta_i'] + \
                         ['Info theta_{%s}' % c for c in covariates],
                         {'ymin': 0, 'plot_mean': True}))
-    results.plot(to_plot)
+    results.plot(to_plot, {'xaxis': params['plot_xaxis']})
 
     to_plot = []
     to_plot.append((['MSE(theta_i)'] + covariate_mses,
@@ -289,7 +290,7 @@ if params['plot_mse']:
         to_plot.append((['Info theta_i'] + \
                         ['Info theta_{%s}' % c for c in covariates],
                         {'plot_mean': True, 'loglog': True}))
-    results.plot(to_plot)
+    results.plot(to_plot, {'xaxis': params['plot_xaxis']})
   
 # Plot network statistics
 if params['plot_network']:
@@ -301,16 +302,18 @@ if params['plot_network']:
                ('Self-loop density', {'ymin': 0, 'plot_mean': True})]
     if params['sampling'] == 'new':
         to_plot.append('Subnetwork kappa')
-    results.plot(to_plot)
+    results.plot(to_plot, {'xaxis': params['plot_xaxis']})
 
 # Plot convex optimization fitting internal details
 if (params['plot_fit_info'] and params['fit_method'] == 'irls'):
-    results.plot([('Wall time (sec.)', {'ymin': 0})])
+    results.plot([('Wall time (sec.)', {'ymin': 0})],
+                 {'xaxis': params['plot_xaxis']})
 if (params['plot_fit_info'] and
     params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']):
     results.plot([('Work', {'ymin': 0}),
                   ('Wall time (sec.)', {'ymin': 0}),
-                  ('||ET_final - T||_2', {'ymin': 0})])
+                  ('||ET_final - T||_2', {'ymin': 0})],
+                 {'xaxis': params['plot_xaxis']})
 
 # Report parameters for the run
 print 'Parameters:'

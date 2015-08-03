@@ -105,26 +105,37 @@ class RandomSubnetworks:
             return (self.network.subnetwork(sub_train),
                     self.network.subnetwork(sub_full))
 
-# A major purpose of this package is studying the consistency. Hence,
-# a natural experimental setup will be repeating an inference
-# procedure on a range of network sizes. This class is designed to
-# expedite such experiments.
+# A major purpose of this package is studying consistency and other
+# distributional properties of estimators. Hence, a natural
+# experimental setup will be repeating an inference procedure on a
+# range of network sizes. This class is designed to expedite such
+# experiments.
 
 class Results:
-    def __init__(self, sub_sizes, num_reps, title = None):
-        self.sub_sizes = sub_sizes
-        self.N_subs = len(sub_sizes)
-        self.N_reps = num_reps
+    def __init__(self, M_sizes, N_sizes, num_reps, title = None):
+        self.M_sizes = M_sizes
+        self.N_sizes = N_sizes
+
+        len_M = len(self.M_sizes)
+        len_N = len(self.N_sizes)
+        if not (len_M == len_N):
+            print 'Warning: mismatch in M-dims and N-dims lengths.'
+            num_both = min(len_M, len_N)
+            self.M_sizes = self.M_sizes[0:num_both]
+            self.N_sizes = self.N_sizes[0:num_both]
+        self.num_conditions = len(self.M_sizes)
+        self.num_reps = num_reps
         self.title = title
         self.results = {}
 
-        self.sub_size_to_ind = {}
-        for i, sub_size in enumerate(sub_sizes):
-            self.sub_size_to_ind[sub_size] = i
+        self.size_to_ind = {}
+        for i, size in enumerate(zip(M_sizes, N_sizes)):
+            self.size_to_ind[size] = i
 
     # Return a copy of the result structure, with new allocated storage
     def copy(self):
-        dup = Results(self.sub_sizes, self.N_reps, title = self.title)
+        dup = Results(self.M_sizes, self.N_sizes,
+                      self.num_reps, title = self.title)
 
         for result_name in self.results:
             result = self.results[result_name]
@@ -141,11 +152,12 @@ class Results:
     def new(self, name, f_type, f):
         assert(f_type in ['a', 'n', 'm', 'nm'])
         self.results[name] = { 'f': f, 'f_type': f_type,
-                               'data': np.empty((self.N_subs, self.N_reps)) }
+                               'data': np.empty((self.num_conditions,
+                                                 self.num_reps)) }
 
         return name
 
-    def record(self, sub_size, rep, network,
+    def record(self, size, rep, network,
                data_model = None, fit_model = None):
         for result in self.results:
             f = self.results[result]['f']
@@ -160,16 +172,16 @@ class Results:
                 val = f(network, data_model, fit_model)
 
             data = self.results[result]['data']
-            data[self.sub_size_to_ind[sub_size], rep] = val
+            data[self.size_to_ind[size], rep] = val
 
     # To be called after all results have been recorded...
     def estimate_mse(self, name, true, estimate):
-        self.results[name] = {'data': np.empty((self.N_subs,1))}
+        self.results[name] = {'data': np.empty((self.num_conditions,1))}
 
         t = self.results[true]['data']
         e = self.results[estimate]['data']
 
-        for n in range(self.N_subs):
+        for n in range(self.num_conditions):
             self.results[name]['data'][n,0] = np.mean((t[n]-e[n])**2)
 
     def summary(self):
@@ -178,8 +190,17 @@ class Results:
             average_data = np.mean(data, 1)
             print '%s: %s' % (field, repr(average_data))
         
-    def plot(self, requests = None):
-        if requests == None:
+    def plot(self, requests = None, general = {'xaxis': 'c'}):
+        if general['xaxis'] == 'c':
+            sizes = self.N_sizes
+            sizes_label = 'N'
+        elif general['xaxis'] == 'r':
+            sizes = self.M_sizes
+            sizes_label = 'M'
+        else:
+            print 'Warning: expecting \'xaxis\' to be \'r\' or \'c\'.'
+
+        if requests is None:
             requests = self.results.keys()
         num_plots = len(requests)
 
@@ -205,14 +226,14 @@ class Results:
                 result = self.results[name]
                 data = result['data']
                 if 'plot_mean' in options and options['plot_mean']:
-                    ax.plot(self.sub_sizes, data.mean(1))
+                    ax.plot(sizes, data.mean(1))
                 else:
                     for rep in range(data.shape[1]):
-                        ax.scatter(self.sub_sizes, data[:,rep])
+                        ax.scatter(sizes, data[:,rep])
 
             if 'baseline' in options:
-                ax.plot(self.sub_sizes,
-                        np.repeat(options['baseline'], len(self.sub_sizes)),
+                ax.plot(sizes,
+                        np.repeat(options['baseline'], len(sizes)),
                         'k:')
 
             ax.set_ylabel(plot_name)
@@ -227,7 +248,7 @@ class Results:
                 ax.set_xscale('log')
                 ax.set_yscale('log')
 
-        axarr[-1].set_xlabel('N_sub')
+        axarr[-1].set_xlabel(sizes_label)
         f.subplots_adjust(hspace = 0)
         plt.setp([a.get_xticklabels() for a in axarr[:-1]], visible = False)
 
@@ -235,8 +256,12 @@ class Results:
 
 # Add a suite of standard network statistics to a Results instance
 def add_network_stats(results):
-    results.new('Average out-degree', 'a', lambda a: 1.0 * np.sum(a)/a.shape[0])
-    results.new('Average in-degree', 'a', lambda a: 1.0 * np.sum(a)/a.shape[1])
+    results.new('Average degree', 'a',
+                lambda a: 1.0 * np.sum(a) / (a.shape[0] * a.shape[1]))
+    results.new('Average out-degree', 'a',
+                lambda a: 1.0 * np.sum(a) / a.shape[0])
+    results.new('Average in-degree', 'a',
+                lambda a: 1.0 * np.sum(a) / a.shape[1])
     results.new('Max out-degree', 'a', lambda a: np.max(a.sum(1)))
     results.new('Min out-degree', 'a', lambda a: np.min(a.sum(1)))
     results.new('Max in-degree', 'a', lambda a: np.max(a.sum(0)))
