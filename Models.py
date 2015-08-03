@@ -289,21 +289,21 @@ class Stationary(IndependentBernoulli):
         N = network.N
 
         # kappa_target should be a tuple of the following form:
-        #  ('edges', 0 < x)
-        #  ('row_degree', 0 < x)
-        #  ('col_degree', 0 < x)
+        #  ('sum', 0 < x)
+        #  ('row_sum', 0 < x)
+        #  ('col_sum', 0 < x)
         #  ('density', 0 < x < 1) 
         target, val = kappa_target
         def obj(kappa):
             self.kappa = kappa
             P = self.edge_probabilities(network)
             exp_edges = np.sum(P)
-            if target == 'edges':
+            if target == 'sum':
                 return abs(exp_edges - val)
-            elif target in 'row_degree':
+            elif target in 'row_sum':
                 exp_degree = exp_edges / (1.0 * M)
                 return abs(exp_degree - val)
-            elif target == 'col_degree':
+            elif target == 'col_sum':
                 exp_degree = exp_edges / (1.0 * N)
                 return abs(exp_degree - val)
             elif target == 'density':
@@ -715,10 +715,15 @@ class StationaryLogistic(Stationary):
                     theta -= a_n * grad
                 theta_opt = theta
             else:
-                theta_opt = opt.fmin(obj, theta)
-
-            for b, b_n in enumerate(self.beta):
-                self.beta[b_n] = theta_opt[b]
+                if B == 1:
+                    obj_scalar = lambda x: obj(np.array([x]))
+                    res = opt.minimize_scalar(obj_scalar, method = 'bounded',
+                                              bounds = (-10, 10))
+                    self.beta[self.beta.keys()[0]] = res.x
+                else:
+                    theta_opt = opt.fmin(obj, theta)
+                    for b, b_n in enumerate(self.beta):
+                        self.beta[b_n] = theta_opt[b]
 
         self.fit_convex_opt(network, fix_beta = True)
 
@@ -748,13 +753,15 @@ class StationaryLogistic(Stationary):
             z[j] = A[:,j].flatten()
 
         # Initialize theta
-        theta = np.zeros(B + M)
+        theta = np.zeros(B + (M-1))
 
         def obj(theta):
             if np.any(np.isnan(theta)):
-                print 'Warning: computing objective for nan-containing vector.'
+                print 'Warning: computing objective for vector with nan.'
                 return np.Inf
             c_cnll = 0
+            alpha = np.zeros(M)
+            alpha[0:(M-1)] = theta[B:(B + (M-1))]
             for j in range(N):
                 c_j = c[j]
 
@@ -762,15 +769,16 @@ class StationaryLogistic(Stationary):
                     continue
 
                 logit_P = np.zeros(M)
-                logit_P += theta[B:(B + M)]
+
+                logit_P += alpha
                 for b in range(B):
                     logit_P += theta[b] * T_c[(j,b)]
                 P = inv_logit(logit_P)
-                log_P = np.log(P)
-                log1m_P = np.log1p(-P)
-
                 if np.sum(P) == 0:
                     continue
+
+                log_P = np.log(P)
+                log1m_P = np.log1p(-P)
 
                 # Probability of column sum equal to c_j
                 log_p_c = np.zeros(c_j + 1)
@@ -803,7 +811,7 @@ class StationaryLogistic(Stationary):
                 print c_cnll, theta
             return c_cnll
 
-        bounds = [(-8,8)] * B + [(-8,8)] * M
+        bounds = [(-8,8)] * B + [(-6,6)] * (M-1)
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, bounds = bounds,
                                       approx_grad = True)[0]
         if (np.any(theta_opt == [b[0] for b in bounds]) or
