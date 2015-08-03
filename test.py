@@ -8,7 +8,7 @@ import numpy as np
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
-from Experiment import RandomSubnetworks, Results, add_network_stats, rel_mse
+from Experiment import RandomSubnetworks, Results, add_array_stats, rel_mse
 from Utility import logit
 
 # Parameters
@@ -23,15 +23,15 @@ params = { 'N': 130,
            'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
            'contrived': False,
-           'kappa_target': ('degree', 2),
+           'kappa_target': ('density', 0.5),
            'offset_extremes': False,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'c_conditional',
            'num_reps': 3,
            'sampling': 'new',
-           'sub_sizes_r': np.floor(0.2 * (np.floor(np.logspace(1.0, 2.1, 30)))),
+           'sub_sizes_r': np.repeat(2, 30), #np.floor(0.2 * (np.floor(np.logspace(1.0, 2.1, 30)))),
            'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
@@ -106,7 +106,7 @@ for c in covariates:
 # Set up recording of results from experiment
 results = Results(params['sub_sizes_r'], params['sub_sizes_c'],
                   params['num_reps'])
-add_network_stats(results)
+add_array_stats(results)
 if params['sampling'] == 'new':
     results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
 def true_est_theta_c(c):
@@ -119,7 +119,7 @@ for c in covariates:
 if params['offset_extremes']:
     results.new('# Active', 'n', lambda n: np.isfinite(n.offset.matrix()).sum())
 else:
-    results.new('# Active', 'n', lambda n: n.N ** 2)
+    results.new('# Active', 'n', lambda n: n.M * n.N)
 if params['fisher_information']:
     def info_theta_c(c):
         def f_info_theta_c(d, f):
@@ -293,12 +293,11 @@ if params['plot_mse']:
   
 # Plot network statistics
 if params['plot_network']:
-    to_plot = [('Average degree', {'ymin': 0, 'plot_mean': True}),
-               (['Out-degree', 'Max out-degree', 'Min out-degree'],
+    to_plot = [('Density', {'ymin': 0, 'plot_mean': True}),
+               (['Row-sum', 'Max row-sum', 'Min row-sum'],
                 {'ymin': 0, 'plot_mean': True}),
-               (['In-degree', 'Max out-degree', 'Min in-degree'],
-                {'ymin': 0, 'plot_mean': True}),
-               ('Self-loop density', {'ymin': 0, 'plot_mean': True})]
+               (['Col-sum', 'Max col-sum', 'Min col-sum'],
+                {'ymin': 0, 'plot_mean': True})]
     if params['sampling'] == 'new':
         to_plot.append('Subnetwork kappa')
     results.plot(to_plot, {'xaxis': params['plot_xaxis']})

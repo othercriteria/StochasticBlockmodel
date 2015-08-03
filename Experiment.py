@@ -265,19 +265,21 @@ class Results:
 
         plt.show()
 
-# Add a suite of standard network statistics to a Results instance
-def add_network_stats(results):
-    results.new('Average degree', 'a',
+# Add a suite of standard array statistics to a Results instance
+def add_array_stats(results, network = False):
+    results.new('Density', 'a',
                 lambda a: 1.0 * np.sum(a) / (a.shape[0] * a.shape[1]))
-    results.new('Average out-degree', 'a',
+    results.new('Average row-sum', 'a',
                 lambda a: 1.0 * np.sum(a) / a.shape[0])
-    results.new('Average in-degree', 'a',
+    results.new('Average col-sum', 'a',
                 lambda a: 1.0 * np.sum(a) / a.shape[1])
-    results.new('Max out-degree', 'a', lambda a: np.max(a.sum(1)))
-    results.new('Min out-degree', 'a', lambda a: np.min(a.sum(1)))
-    results.new('Max in-degree', 'a', lambda a: np.max(a.sum(0)))
-    results.new('Min in-degree', 'a', lambda a: np.min(a.sum(0)))
-    results.new('Self-loop density', 'a', lambda a: np.mean(np.diagonal(a)))
+    results.new('Max row-sum', 'a', lambda a: np.max(a.sum(1)))
+    results.new('Min row-sum', 'a', lambda a: np.min(a.sum(1)))
+    results.new('Max col-sum', 'a', lambda a: np.max(a.sum(0)))
+    results.new('Min col-sum', 'a', lambda a: np.min(a.sum(0)))
+    if network:
+        results.new('Self-loop density', 'a',
+                    lambda a: np.mean(np.diagonal(a)))
 
 # Find the minimum of a disagreement function from true class labels
 # over distinct relabelings of the estimated class labels

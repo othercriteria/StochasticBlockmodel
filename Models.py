@@ -290,7 +290,8 @@ class Stationary(IndependentBernoulli):
 
         # kappa_target should be a tuple of the following form:
         #  ('edges', 0 < x)
-        #  ('degree', 0 < x)
+        #  ('row_degree', 0 < x)
+        #  ('col_degree', 0 < x)
         #  ('density', 0 < x < 1) 
         target, val = kappa_target
         def obj(kappa):
@@ -299,7 +300,7 @@ class Stationary(IndependentBernoulli):
             exp_edges = np.sum(P)
             if target == 'edges':
                 return abs(exp_edges - val)
-            elif target in ('degree', 'row_degree') :
+            elif target in 'row_degree':
                 exp_degree = exp_edges / (1.0 * M)
                 return abs(exp_degree - val)
             elif target == 'col_degree':
