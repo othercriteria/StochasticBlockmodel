@@ -123,13 +123,24 @@ class Results:
             num_both = min(len_M, len_N)
             self.M_sizes = self.M_sizes[0:num_both]
             self.N_sizes = self.N_sizes[0:num_both]
+
+        # Remove redundant conditions
+        sizes_seen = set()
+        nonredundant = np.zeros_like(M_sizes, dtype=np.bool)
+        for i, size in enumerate(zip(M_sizes, N_sizes)):
+            if not size in sizes_seen:
+                nonredundant[i] = True
+            sizes_seen.add(size)
+        self.M_sizes = self.M_sizes[nonredundant]
+        self.N_sizes = self.N_sizes[nonredundant]
+
         self.num_conditions = len(self.M_sizes)
         self.num_reps = num_reps
         self.title = title
         self.results = {}
 
         self.size_to_ind = {}
-        for i, size in enumerate(zip(M_sizes, N_sizes)):
+        for i, size in enumerate(zip(self.M_sizes, self.N_sizes)):
             self.size_to_ind[size] = i
 
     # Return a copy of the result structure, with new allocated storage

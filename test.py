@@ -153,8 +153,7 @@ if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
     results.new('||ET_final - T||_2', 'm',
                 lambda d, f: np.sqrt(np.sum((f.fit_info['grad_nll_final'])**2)))
 
-for sub_size_r, sub_size_c in zip(params['sub_sizes_r'], params['sub_sizes_c']):
-    sub_size = (sub_size_r, sub_size_c)
+for sub_size in zip(results.M_sizes, results.N_sizes):
     print 'subnetwork size =', sub_size
 
     if params['sampling'] == 'new':
