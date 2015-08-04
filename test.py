@@ -24,18 +24,19 @@ params = { 'N': 130,
            'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
            'kappa_target': ('row_sum', 2),
-           'offset_extremes': False,
+           'pre_offset': False,
+           'post_fit': True,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'conditional',
            'num_reps': 3,
            'sampling': 'new',
            'sub_sizes_r': np.floor(np.log(np.floor(np.logspace(1.0, 2.1, 30)))),
            'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
-           'verbose': False,
+           'verbose': True,
            'plot_xaxis': 'c',
            'plot_mse': True,
            'plot_network': True,
@@ -112,7 +113,7 @@ for c in covariates:
     f_true, f_est = true_est_theta_c(c)
     results.new('True theta_{%s}' % c, 'm', f_true)
     results.new('Est. theta_{%s}' % c, 'm', f_est)
-if params['offset_extremes']:
+if params['pre_offset'] or params['post_fit']:
     results.new('# Active', 'n', lambda n: np.isfinite(n.offset.matrix()).sum())
 else:
     results.new('# Active', 'n', lambda n: n.M * n.N)
@@ -128,7 +129,7 @@ if params['baseline']:
         P = d.edge_probabilities(n)
         return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
     results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
-    if not params['offset_extremes']:
+    if not (params['pre_offset'] or params['post_fit']):
         def rel_mse_logit_p_ij(n, d, f):
             logit_P = logit(d.edge_probabilities(n))
             logit_Q = f.baseline_logit(n)
@@ -168,18 +169,13 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
             data_model.match_kappa(subnet, params['kappa_target'])
             subnet.generate(data_model)
 
-        if params['offset_extremes']:
-            if not params['fit_method'] == 'conditional':
-                subnet.offset_extremes()
+        if params['pre_offset']:
+            subnet.offset_extremes()
 
         if params['fit_method'] == 'convex_opt':
-            if params['verbose']:
-                fit_model.fit_convex_opt(subnet, verbose = True)
-                print
-            else:
-                fit_model.fit_convex_opt(subnet)
+            fit_model.fit_convex_opt(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'irls':
-            fit_model.fit_irls(subnet)
+            fit_model.fit_irls(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'logistic':
             fit_model.fit_logistic(subnet)
         elif params['fit_method'] == 'logistic_l2':
@@ -189,32 +185,25 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 fit_model.beta[c] = 0.0
             fit_model.fit_mh(subnet)
         elif params['fit_method'] == 'conditional':
-            fit_model.fit_conditional(subnet, verbose = True)
-            if params['offset_extremes']:
-                subnet.offset_extremes()
-                fit_model.fit_convex_opt(subnet, fix_beta = True)
+            fit_model.fit_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'conditional_is':
-            fit_model.fit_conditional(subnet, T = 50, verbose = True)
-            if params['offset_extremes']:
-                subnet.offset_extremes()
-                fit_model.fit_convex_opt(subnet, fix_beta = True)
+            fit_model.fit_conditional(subnet, T = 50,
+                                      verbose = params['verbose'])
         elif params['fit_method'] == 'c_conditional':
-            fit_model.fit_c_conditional(subnet, verbose = True)
-            if params['offset_extremes']:
-                subnet.offset_extremes()
-                fit_model.fit_convex_opt(subnet, fix_beta = True)
+            fit_model.fit_c_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'composite':
-            fit_model.fit_composite(subnet, T = 100, verbose = True)
-            if params['offset_extremes']:
-                subnet.offset_extremes()
-                fit_model.fit_convex_opt(subnet, fix_beta = True)
+            fit_model.fit_composite(subnet, T = 100,
+                                    verbose = params['verbose'])
         elif params['fit_method'] == 'brazzale':
             fit_model.fit_brazzale(subnet)
         elif params['fit_method'] == 'saddlepoint':
             fit_model.fit_saddlepoint(subnet)
-            fit_model.fit_convex_opt(subnet, fix_beta = True)
         elif params['fit_method'] == 'none':
             pass
+
+        if params['post_fit']:
+            subnet.offset_extremes()
+            fit_model.fit_convex_opt(subnet, fix_beta = True)
 
         if params['find_good'] > 0:
             abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
@@ -252,6 +241,9 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                         
         results.record(sub_size, rep, subnet, data_model, fit_model)
 
+        if params['verbose']:
+            print
+
 # Compute beta MSEs
 covariate_mses = []
 for c in covariates:
@@ -269,7 +261,7 @@ if params['plot_mse']:
     if params['baseline']:
         to_plot.append(('Rel. MSE(P_ij)',
                         {'ymin': 0, 'ymax': 2, 'baseline': 1}))
-        if not params['offset_extremes']:
+        if not (params['pre_offset'] or params['post_fit']):
             to_plot.append(('Rel. MSE(logit P_ij)',
                            {'ymin':0, 'ymax': 2, 'baseline': 1}))
     to_plot.append(('# Active', {'ymin': 0}))
