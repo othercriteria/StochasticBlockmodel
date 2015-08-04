@@ -8,6 +8,16 @@ import numpy as np
 from scipy.special import gamma
 import matplotlib.pyplot as plt
 
+# Convenience object for consistent generation of test data
+class Seed:
+    def __init__(self, seed = 0):
+        self.seed = seed
+        np.random.seed(self.seed)
+
+    def next(self):
+        self.seed += 1
+        np.random.seed(self.seed)
+
 class RandomSubnetworks:
     # The sampling probabilities reported when report_prob is enabled
     # are not necessarily for the subset of nodes sampled; they may

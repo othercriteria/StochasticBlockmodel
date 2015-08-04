@@ -8,11 +8,12 @@ import numpy as np
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
-from Experiment import RandomSubnetworks, Results, add_array_stats, rel_mse
+from Experiment import RandomSubnetworks, Seed, \
+     Results, add_array_stats, rel_mse
 from Utility import logit
 
 # Parameters
-params = { 'N': 1300,
+params = { 'N': 130,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
@@ -22,28 +23,28 @@ params = { 'N': 1300,
            'cov_unif_sd': 0.0,
            'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
-           'contrived': False,
            'kappa_target': ('row_sum', 2),
            'offset_extremes': False,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
-           'num_reps': 10,
+           'fit_method': 'convex_opt',
+           'num_reps': 3,
            'sampling': 'new',
-           'sub_sizes_r': np.floor(np.log(np.floor(np.logspace(1.0, 3.1, 30)))),
-           'sub_sizes_c': np.floor(np.logspace(1.0, 3.1, 30)),
+           'sub_sizes_r': np.floor(np.log(np.floor(np.logspace(1.0, 2.1, 30)))),
+           'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
            'verbose': False,
            'plot_xaxis': 'c',
            'plot_mse': True,
            'plot_network': True,
-           'plot_fit_info': True }
+           'plot_fit_info': True,
+           'random_seed': 137 }
 
 
 # Set random seed for reproducible output
-np.random.seed(137)
+seed = Seed(params['random_seed'])
 
 # Initialize full network
 net = Network(params['N'])
@@ -71,24 +72,19 @@ for b in range(params['B']):
     else:
         data_model.beta[name] = np.random.normal(0, params['theta_sd'])
 
-    if params['contrived']:
-        blah = np.empty((params['N'],params['N']))
+    if params['cov_unif_sd'] > 0.0:
+        c = np.sqrt(12) / 2
         def f_x(i_1, i_2):
-            return (np.abs(net.node_covariates['alpha_out'][i_1] -
-                           net.node_covariates['alpha_in'][i_2]) / np.sqrt(8))
-    else:
-        if params['cov_unif_sd'] > 0.0:
-            c = np.sqrt(12) / 2
-            def f_x(i_1, i_2):
-                return np.random.uniform(-c * params['cov_unif_sd'],
-                                         c * params['cov_unif_sd'])
-        elif params['cov_norm_sd'] > 0.0:
-            def f_x(i_1, i_2):
-                return np.random.normal(0, params['cov_norm_sd'])
-        elif params['cov_disc_sd'] > 0.0:
-            def f_x(i_1, i_2):
-                return (params['cov_disc_sd'] *
-                        (np.sign(np.random.random() - 0.5)))
+            return np.random.uniform(-c * params['cov_unif_sd'],
+                                     c * params['cov_unif_sd'])
+    elif params['cov_norm_sd'] > 0.0:
+        def f_x(i_1, i_2):
+            return np.random.normal(0, params['cov_norm_sd'])
+    elif params['cov_disc_sd'] > 0.0:
+        def f_x(i_1, i_2):
+            return (params['cov_disc_sd'] *
+                    (np.sign(np.random.random() - 0.5)))
+
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Generate large network, if necessary
@@ -162,6 +158,7 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
         gen = RandomSubnetworks(net, sub_size, method = params['sampling'])
 
     for rep in range(params['num_reps']):
+        seed.next()
         subnet = gen.sample()
 
         if params['fisher_information']:
@@ -317,3 +314,7 @@ if (params['plot_fit_info'] and
 print 'Parameters:'
 for field in params:
     print '%s: %s' % (field, str(params[field]))
+
+# Should not vary between runs with the same number of arrays tested
+seed.next()
+print 'URN from Seed:', np.random.random()
