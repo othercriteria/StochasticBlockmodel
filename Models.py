@@ -1638,62 +1638,63 @@ class NonstationaryLogistic(StationaryLogistic):
     # useful (it gives a lower bound on the variances/covariances of
     # an unbised estimator), so that is calculated by default.
     def fisher_information(self, network, inverse = True):
+        M = network.M
         N = network.N
         B = len(self.beta)
 
         P = self.edge_probabilities(network)
 
-        x = np.empty((B,N,N))
+        x = np.empty((B,M,N))
         for i, b in enumerate(self.beta):
             x[i] = network.edge_covariates[b].matrix()
 
         P_bar = P * (1.0 - P)
 
-        I = np.zeros((2*N-1+B,2*N-1+B))
-        for i in range(N-1):
+        I = np.zeros(((M-1) + (N-1) + 1 + B, (M-1) + (N-1) + 1 + B))
+        for i in range(M-1):
             for j in range(N-1):
-                v = P_bar[i+1,j+1]
-                I[i,N-1+j] = v
-                I[N-1+j,i] = v
-        for i in range(N-1):
-            v = np.sum(P_bar[i+1,:])
+                v = P_bar[i,j]
+                I[i,(M-1)+j] = v
+                I[(M-1)+j,i] = v
+        for i in range(M-1):
+            v = np.sum(P_bar[i,:])
             I[i,i] = v
-            I[2*N-2,i] = v
-            I[i,2*N-2] = v
+            I[(M-1) + (N-1),i] = v
+            I[i,(M-1) + (N-1)] = v
             for b in range(B):
-                v = np.sum(x[b,i+1,:] * P_bar[i+1,:])
-                I[2*N-1+b,i] = v
-                I[i,2*N-1+b] = v
+                v = np.sum(x[b,i,:] * P_bar[i,:])
+                I[(M-1) + (N-1) + 1 + b,i] = v
+                I[i,(M-1) + (N-1) + 1 + b] = v
         for j in range(N-1):
-            v = np.sum(P_bar[:,j+1])
-            I[N-1+j,N-1+j] = v
-            I[2*N-2,N-1+j] = v
-            I[N-1+j,2*N-2] = v
+            v = np.sum(P_bar[:,j])
+            I[(M-1) + j,(M-1) + j] = v
+            I[(M-1) + (N-1),(M-1) + j] = v
+            I[(M-1) + j,(M-1) + (N-1)] = v
             for b in range(B):
-                v = np.sum(x[b,:,j+1] * P_bar[:,j+1])
-                I[2*N-1+b,N-1+j] = v
-                I[N-1+j,2*N-1+b] = v
-        I[2*N-2,2*N-2] = np.sum(P_bar)
+                v = np.sum(x[b,:,j] * P_bar[:,j])
+                I[(M-1) + (N-1) + 1 + b,(M-1) + j] = v
+                I[(M-1) + j,(M-1) + (N-1) + 1 + b] = v
+        I[(M-1) + (N-1),(M-1) + (N-1)] = np.sum(P_bar)
         for b in range(B):
             v = np.sum(x[b] * P_bar)
-            I[2*N-1+b,2*N-2] = v
-            I[2*N-2,2*N-1+b] = v
+            I[(M-1) + (N-1) + 1 + b,(M-1) + (N-1)] = v
+            I[(M-1) + (N-1),(M-1) + (N-1) + 1 + b] = v
         for b_1 in range(B):
             for b_2 in range(B):
                 v = np.sum(x[b_1] * x[b_2] * P_bar)
-                I[2*N-1+b_1,2*N-1+b_2] = v
-                I[2*N-1+b_2,2*N-1+b_1] = v
+                I[(M-1) + (N-1) + 1 + b_1,(M-1) + (N-1) + 1 + b_2] = v
+                I[(M-1) + (N-1) + 1 + b_2,(M-1) + (N-1) + 1 + b_1] = v
 
         if inverse: I_inv = inv(I)
 
-        I_names = ['alpha_{%s}' % n for n in network.names[1:]] + \
-            ['beta_{%s}' % n for n in network.names[1:]] + \
+        I_names = ['alpha_{%s}' % n for n in network.rnames[0:(M-1)]] + \
+            ['beta_{%s}' % n for n in network.cnames[0:(N-1)]] + \
             ['kappa'] + \
             ['theta_{%s}' % b for b in self.beta]
         self.I = {}
         if inverse: self.I_inv = {}
-        for i in range(2*N-1+B):
-            for j in range(2*N-1+B):
+        for i in range((M-1) + (N-1) + 1 + B):
+            for j in range((M-1) + (N-1) + 1 + B):
                 if i == j:
                     self.I[I_names[i]] = I[i,i]
                     if inverse: self.I_inv[I_names[i]] = I_inv[i,i]
