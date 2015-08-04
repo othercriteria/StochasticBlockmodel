@@ -46,8 +46,8 @@ params = { 'N': 130,
            'plot_network': True,
            'plot_fit_info': True,
            'random_seed': 137,
-           'dump_fits': 'out.json',
-           'load_fits': None }
+           'dump_fits': None,
+           'load_fits': 'out.json' }
 
 if len(sys.argv) == 2:
     with open(sys.argv[1], 'r') as params_file:
@@ -59,10 +59,34 @@ if len(sys.argv) == 2:
         print
         params[k] = new_params[k]
 
+if params['dump_fits'] and params['load_fits']:
+    print 'Warning: simultaneously dumping and loading is a bad idea.'
+        
 if params['dump_fits']:
-    fits = []
     pick = lambda x: pickle.dumps(x, protocol = 0)
+    fits = []
 
+if params['load_fits']:
+    unpick = lambda x: pickle.loads(x)
+    
+    with open(params['load_fits'], 'r') as fits_file:
+        loaded_params_pick, loaded_fits = json.load(fits_file)
+
+    loaded_params = dict([(k,unpick(v)) for (k,v) in loaded_params_pick])
+
+    # Compare on parameters that control data generationa and inference
+    functional_params = ['N', 'B', 'theta_sd', 'theta_fixed',
+                         'alpha_unif_sd', 'alpha_norm_sd', 'alpha_gamma_sd',
+                         'cov_unif_sd', 'cov_norm_sd', 'cov_disc_sd',
+                         'kappa_target', 'pre_offset', 'post_fit',
+                         'fit_nonstationary', 'fit_method', 'num_reps',
+                         'sampling', 'sub_sizes_r', 'sub_sizes_c',
+                         'random_seed']
+
+    for p in functional_params:
+        if not np.all(loaded_params[p] == params[p]):
+            print 'Warning: load mismatch on', p
+    
 # Set random seed for reproducible output
 seed = Seed(params['random_seed'])
 
@@ -189,7 +213,16 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
             subnet.generate(data_model)
 
         if params['load_fits']:
-            pass
+            fit = loaded_fits.pop()
+            fit_model.beta = unpick(fit['theta'])
+            if 'alpha' in fit:
+                subnet.row_covariates['alpha_out'] = unpick(fit['alpha'])
+            if 'beta' in fit:
+                subnet.col_covariates['alpha_in'] = unpick(fit['beta'])
+            if 'kappa' in fit:
+                fit_model.kappa = fit['kappa']
+            if 'offset' in fit:
+                subnet.offset = unpick(fit['offset'])
         else:
             if params['pre_offset']:
                 subnet.offset_extremes()
@@ -286,7 +319,7 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
 
 if params['dump_fits']:
     with open(params['dump_fits'], 'w') as outfile:
-        json.dump(fits, outfile)
+        json.dump(([(p, pick(params[p])) for p in params], fits), outfile)
 
 # Compute beta MSEs
 covariate_mses = []
