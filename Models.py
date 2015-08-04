@@ -1289,28 +1289,30 @@ class NonstationaryLogistic(StationaryLogistic):
         return inv_logit(logit_P)
 
     def baseline(self, network):
+        M = network.M
         N = network.N
         P = self.edge_probabilities(network)
         def params_to_Q(params):
-            a = params[0:N]
-            b = params[N:(2*N)]
-            c = params[2*N]
-            logit_Q = np.zeros((N,N))
-            for i in range(N):
+            a = params[0:M]
+            b = params[M:(M + N)]
+            c = params[(M+N)]
+            logit_Q = np.zeros((M,N))
+            for i in range(M):
                 logit_Q[i,:] += a[i]
             for j in range(N):
                 logit_Q[:,j] += b[j]
             logit_Q += c
             return inv_logit(logit_Q)
-        params = np.zeros(2*N + 1)
+        params = np.zeros(M + N + 1)
         def obj(params):
             Q = params_to_Q(params)
-            return np.reshape((P - Q), (N*N,))
+            return np.reshape((P - Q), (M*N,))
         best_params = opt.leastsq(obj, params)[0]
         Q = params_to_Q(best_params)
         return Q
 
     def baseline_logit(self, network):
+        M = network.M
         N = network.N
         logit_P = logit(self.edge_probabilities(network))
         a, b = logit_P.mean(1), logit_P.mean(0)
@@ -1318,8 +1320,8 @@ class NonstationaryLogistic(StationaryLogistic):
         a -= a_mean
         b -= b_mean
         c = a_mean + b_mean
-        logit_Q = np.zeros((N,N))
-        for i in range(N):
+        logit_Q = np.zeros((M,N))
+        for i in range(M):
             logit_Q[i,:] += a[i]
         for j in range(N):
             logit_Q[:,j] += b[j]
