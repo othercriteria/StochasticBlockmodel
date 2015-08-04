@@ -223,6 +223,8 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 fit_model.kappa = fit['kappa']
             if 'offset' in fit:
                 subnet.offset = unpick(fit['offset'])
+            if 'fit_info' in fit:
+                fit_model.fit_info = unpick(fit['fit_info'])
         else:
             if params['pre_offset']:
                 subnet.offset_extremes()
@@ -273,6 +275,8 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 if not subnet.offset is None:
                     subnet.offset.dirty()
                     fit['offset'] = pick(subnet.offset)
+                if not fit_model.fit_info is None:
+                    fit['fit_info'] = pick(fit_model.fit_info)
 
                 fits.append(fit)
 
