@@ -22,10 +22,10 @@ params = { 'N': 130,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 1.0,
+           'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 1.0,
+           'cov_norm_sd': 0.0,
            'cov_disc_sd': 0.0,
            'kappa_target': ('col_sum', 1),
            'pre_offset': False,
@@ -33,7 +33,8 @@ params = { 'N': 130,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'convex_opt',
+           'is_T': 100,
            'num_reps': 3,
            'sampling': 'new',
            'sub_sizes_r': np.floor(np.log(np.floor(np.logspace(1.0, 2.1, 30)))),
@@ -47,11 +48,17 @@ params = { 'N': 130,
            'plot_fit_info': True,
            'random_seed': 137,
            'dump_fits': None,
-           'load_fits': 'out.json' }
+           'load_fits': None }
+
+# Convenience functions for (un)pickling
+pick = lambda x: pickle.dumps(x, protocol = 0)
+unpick = lambda x: pickle.loads(x)
 
 if len(sys.argv) == 2:
     with open(sys.argv[1], 'r') as params_file:
-        new_params = json.load(params_file)
+        new_params_pick = json.load(params_file)
+        print new_params_pick
+        new_params = dict([(k,unpick(v)) for (k,v) in new_params_pick])
     for k in new_params:
         print k
         print 'old:', params[k]
@@ -63,12 +70,9 @@ if params['dump_fits'] and params['load_fits']:
     print 'Warning: simultaneously dumping and loading is a bad idea.'
         
 if params['dump_fits']:
-    pick = lambda x: pickle.dumps(x, protocol = 0)
     fits = []
 
 if params['load_fits']:
-    unpick = lambda x: pickle.loads(x)
-    
     with open(params['load_fits'], 'r') as fits_file:
         loaded_params_pick, loaded_fits = json.load(fits_file)
 
@@ -80,7 +84,7 @@ if params['load_fits']:
                          'cov_unif_sd', 'cov_norm_sd', 'cov_disc_sd',
                          'kappa_target', 'pre_offset', 'post_fit',
                          'fit_nonstationary', 'fit_method', 'num_reps',
-                         'sampling', 'sub_sizes_r', 'sub_sizes_c',
+                         'is_T', 'sampling', 'sub_sizes_r', 'sub_sizes_c',
                          'random_seed']
 
     for p in functional_params:
@@ -244,7 +248,7 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
             elif params['fit_method'] == 'conditional':
                 fit_model.fit_conditional(subnet, verbose = params['verbose'])
             elif params['fit_method'] == 'conditional_is':
-                fit_model.fit_conditional(subnet, T = 50,
+                fit_model.fit_conditional(subnet, T = params['is_T'],
                                           verbose = params['verbose'])
             elif params['fit_method'] == 'c_conditional':
                 fit_model.fit_c_conditional(subnet,
