@@ -80,6 +80,7 @@ class EdgeCovariate:
     # Indicate that matrix should not used a cached version
     def dirty(self):
         self.is_dirty = True
+        self.cached_matrix = None
 
     def matrix(self):
         if self.is_dirty:

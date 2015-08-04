@@ -4,6 +4,8 @@
 # Daniel Klein, 5/16/2012
 
 import sys
+import json
+import pickle
 
 import numpy as np
 
@@ -25,9 +27,9 @@ params = { 'N': 130,
            'cov_unif_sd': 0.0,
            'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
-           'kappa_target': ('row_sum', 2),
+           'kappa_target': ('col_sum', 1),
            'pre_offset': False,
-           'post_fit': True,
+           'post_fit': False,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
@@ -38,15 +40,16 @@ params = { 'N': 130,
            'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
-           'verbose': True,
+           'verbose': False,
            'plot_xaxis': 'c',
            'plot_mse': True,
            'plot_network': True,
            'plot_fit_info': True,
-           'random_seed': 137 }
+           'random_seed': 137,
+           'dump_fits': 'out.json',
+           'load_fits': None }
 
 if len(sys.argv) == 2:
-    import json
     with open(sys.argv[1], 'r') as params_file:
         new_params = json.load(params_file)
     for k in new_params:
@@ -55,6 +58,10 @@ if len(sys.argv) == 2:
         print 'new:', new_params[k]
         print
         params[k] = new_params[k]
+
+if params['dump_fits']:
+    fits = []
+    pick = lambda x: pickle.dumps(x, protocol = 0)
 
 # Set random seed for reproducible output
 seed = Seed(params['random_seed'])
@@ -181,41 +188,60 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
             data_model.match_kappa(subnet, params['kappa_target'])
             subnet.generate(data_model)
 
-        if params['pre_offset']:
-            subnet.offset_extremes()
-
-        if params['fit_method'] == 'convex_opt':
-            fit_model.fit_convex_opt(subnet, verbose = params['verbose'])
-        elif params['fit_method'] == 'irls':
-            fit_model.fit_irls(subnet, verbose = params['verbose'])
-        elif params['fit_method'] == 'logistic':
-            fit_model.fit_logistic(subnet)
-        elif params['fit_method'] == 'logistic_l2':
-            fit_model.fit_logistic_l2(subnet, prior_precision = 1.0)
-        elif params['fit_method'] == 'mh':
-            for c in covariates:
-                fit_model.beta[c] = 0.0
-            fit_model.fit_mh(subnet)
-        elif params['fit_method'] == 'conditional':
-            fit_model.fit_conditional(subnet, verbose = params['verbose'])
-        elif params['fit_method'] == 'conditional_is':
-            fit_model.fit_conditional(subnet, T = 50,
-                                      verbose = params['verbose'])
-        elif params['fit_method'] == 'c_conditional':
-            fit_model.fit_c_conditional(subnet, verbose = params['verbose'])
-        elif params['fit_method'] == 'composite':
-            fit_model.fit_composite(subnet, T = 100,
-                                    verbose = params['verbose'])
-        elif params['fit_method'] == 'brazzale':
-            fit_model.fit_brazzale(subnet)
-        elif params['fit_method'] == 'saddlepoint':
-            fit_model.fit_saddlepoint(subnet)
-        elif params['fit_method'] == 'none':
+        if params['load_fits']:
             pass
+        else:
+            if params['pre_offset']:
+                subnet.offset_extremes()
 
-        if params['post_fit']:
-            subnet.offset_extremes()
-            fit_model.fit_convex_opt(subnet, fix_beta = True)
+            if params['fit_method'] == 'convex_opt':
+                fit_model.fit_convex_opt(subnet, verbose = params['verbose'])
+            elif params['fit_method'] == 'irls':
+                fit_model.fit_irls(subnet, verbose = params['verbose'])
+            elif params['fit_method'] == 'logistic':
+                fit_model.fit_logistic(subnet)
+            elif params['fit_method'] == 'logistic_l2':
+                fit_model.fit_logistic_l2(subnet, prior_precision = 1.0)
+            elif params['fit_method'] == 'mh':
+                for c in covariates:
+                    fit_model.beta[c] = 0.0
+                fit_model.fit_mh(subnet)
+            elif params['fit_method'] == 'conditional':
+                fit_model.fit_conditional(subnet, verbose = params['verbose'])
+            elif params['fit_method'] == 'conditional_is':
+                fit_model.fit_conditional(subnet, T = 50,
+                                          verbose = params['verbose'])
+            elif params['fit_method'] == 'c_conditional':
+                fit_model.fit_c_conditional(subnet,
+                                            verbose = params['verbose'])
+            elif params['fit_method'] == 'composite':
+                fit_model.fit_composite(subnet, T = 100,
+                                        verbose = params['verbose'])
+            elif params['fit_method'] == 'brazzale':
+                fit_model.fit_brazzale(subnet)
+            elif params['fit_method'] == 'saddlepoint':
+                fit_model.fit_saddlepoint(subnet)
+            elif params['fit_method'] == 'none':
+                pass
+
+            if params['post_fit']:
+                subnet.offset_extremes()
+                fit_model.fit_convex_opt(subnet, fix_beta = True)
+
+            if params['dump_fits']:
+                fit = {}
+                fit['theta'] = pick(fit_model.beta)
+                if 'alpha_out' in subnet.row_covariates:
+                    fit['alpha'] = pick(subnet.row_covariates['alpha_out'])
+                if 'alpha_in' in subnet.row_covariates:
+                    fit['beta'] = pick(subnet.col_covariates['alpha_in'])
+                if not fit_model.kappa is None:
+                    fit['kappa'] = fit_model.kappa
+                if not subnet.offset is None:
+                    subnet.offset.dirty()
+                    fit['offset'] = pick(subnet.offset)
+
+                fits.append(fit)
 
         if params['find_good'] > 0:
             abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
@@ -223,7 +249,8 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 print abs_err
 
                 subnet.offset = None
-                fit_model.fit_conditional(subnet, T = 1000, verbose = True)
+                fit_model.fit_conditional(subnet, T = 1000,
+                                          verbose = True)
                 print fit_model.beta['x_0']
                 print fit_model.fit_info
 
@@ -232,7 +259,7 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
                 X = subnet.edge_covariates['x_0'].matrix()
                 scipy.io.savemat(f, { 'Y': Y, 'X': X })
-                import sys; sys.exit()
+                sys.exit()
 
         if params['find_bad'] > 0:
             abs_err = abs(fit_model.beta['x_0'] - data_model.beta['x_0'])
@@ -240,7 +267,8 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 print abs_err
 
                 subnet.offset = None
-                fit_model.fit_conditional(subnet, T = 1000, verbose = True)
+                fit_model.fit_conditional(subnet, T = 1000,
+                                          verbose = True)
                 print fit_model.beta['x_0']
                 print fit_model.fit_info
 
@@ -249,12 +277,16 @@ for sub_size in zip(results.M_sizes, results.N_sizes):
                 Y = np.array(subnet.adjacency_matrix(), dtype=np.float)
                 X = subnet.edge_covariates['x_0'].matrix()
                 scipy.io.savemat(f, { 'Y': Y, 'X': X })
-                import sys; sys.exit()
-                        
+                sys.exit()
+
         results.record(sub_size, rep, subnet, data_model, fit_model)
 
         if params['verbose']:
             print
+
+if params['dump_fits']:
+    with open(params['dump_fits'], 'w') as outfile:
+        json.dump(fits, outfile)
 
 # Compute beta MSEs
 covariate_mses = []
