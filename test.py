@@ -3,6 +3,8 @@
 # Test of "new style" network inference
 # Daniel Klein, 5/16/2012
 
+import sys
+
 import numpy as np
 
 from Network import Network
@@ -43,6 +45,16 @@ params = { 'N': 130,
            'plot_fit_info': True,
            'random_seed': 137 }
 
+if len(sys.argv) == 2:
+    import json
+    with open(sys.argv[1], 'r') as params_file:
+        new_params = json.load(params_file)
+    for k in new_params:
+        print k
+        print 'old:', params[k]
+        print 'new:', new_params[k]
+        print
+        params[k] = new_params[k]
 
 # Set random seed for reproducible output
 seed = Seed(params['random_seed'])
