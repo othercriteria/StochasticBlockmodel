@@ -20,7 +20,7 @@ try:
     c_int = ctypes.c_int
     c_double = ctypes.c_double
 
-    support_library = ctypes.cdll.LoadLibrary('support.so')
+    support_library = ctypes.cdll.LoadLibrary('./support.so')
 
     support_library.fill_G.argtypes = [c_int_p, c_int, c_int, c_int,
                                        c_double_p, c_double_p, c_double_p]
