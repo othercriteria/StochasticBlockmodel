@@ -954,8 +954,12 @@ class StationaryLogistic(Stationary):
         lr = LogisticRegression(fit_intercept = True,
                                 C = 1.0 / prior_precision,
                                 penalty = 'l2')
-        lr.fit(Phi, y)
-        coefs, intercept = lr.coef_[0], lr.intercept_[0]
+        try:
+            lr.fit(Phi, y)
+            coefs, intercept = lr.coef_[0], lr.intercept_[0]
+        except:
+            print 'Warning: regularized logistic fit failed.'
+            coefs, intercept = np.zeros(B), 0
 
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = coefs[b]
