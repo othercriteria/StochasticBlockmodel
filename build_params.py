@@ -10,9 +10,9 @@ import pickle
 import numpy as np
 
 # Parameters
-generations = 5
-reps = 3
-c_shape = ('sub_sizes_c', np.floor(np.logspace(1.2, 2.1, 30)))
+generations = 10
+reps = 100
+c_shape = ('sub_sizes_c', np.floor(np.logspace(1.2, 3.3, 30)))
 
 
 pick = lambda x: pickle.dumps(x, protocol = 0)
@@ -20,6 +20,7 @@ params = {}
 def register(x):
     params[x[0]] = x[1]
 
+register(('num_reps', reps))
 register(c_shape)
 register(('N', int(np.floor(np.max(c_shape[1])) + 100)))
 
@@ -50,7 +51,7 @@ for alpha_dist in (('alpha_unif_sd', 1.0),
                                 ('fit_method', 'conditional_is')):
                     register(method)
 
-                    if method[1] in ('convex_opt', 'irls', 'logistic_l2'):
+                    if method[1] in ('convex_opt', 'irls'):
                         register(('pre_offset', True))
                         register(('post_fit', False))
                     else:
