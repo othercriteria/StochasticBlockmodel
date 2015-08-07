@@ -11,18 +11,12 @@ import numpy as np
 
 # Parameters
 generations = 10
-reps = 100
-c_shape = ('sub_sizes_c', np.floor(np.logspace(1.2, 3.3, 30)))
+reps = 10
+n_grid = 30
+c_shape = ('sub_sizes_c', np.floor(np.logspace(1.2, 3.3, n_grid)))
 
 
 pick = lambda x: pickle.dumps(x, protocol = 0)
-params = {}
-def register(x):
-    params[x[0]] = x[1]
-
-register(('num_reps', reps))
-register(c_shape)
-register(('N', int(np.floor(np.max(c_shape[1])) + 100)))
 
 generation_delta = reps * len(c_shape)
 
@@ -31,24 +25,32 @@ info = ''
 for alpha_dist in (('alpha_unif_sd', 1.0),
                    ('alpha_norm_sd', 1.0),
                    ('alpha_gamma_sd', 1.0)):
-    register(alpha_dist)
     for cov_dist in (('cov_unif_sd', 1.0),
                      ('cov_norm_sd', 1.0),
                      ('cov_disc_sd', 1.0)):
-        register(cov_dist)
         for density in (('kappa_target', ('row_sum', 2)),
                         ('kappa_target', ('density', 0.1))):
-            register(density)
-            for r_shape in (('sub_sizes_r', np.repeat(2, 30)),
+            for r_shape in (('sub_sizes_r', np.repeat(2, n_grid)),
                             ('sub_sizes_r', np.floor(np.log(c_shape[1]))),
                             ('sub_sizes_r', np.floor(0.2 * c_shape[1]))):
-                register(r_shape)
                 for method in  (('fit_method', 'convex_opt'),
                                 ('fit_method', 'c_conditional'),
                                 ('fit_method', 'irls'),
                                 ('fit_method', 'logistic_l2'),
                                 ('fit_method', 'conditional'),
                                 ('fit_method', 'conditional_is')):
+                    params = {}
+                    def register(x):
+                        params[x[0]] = x[1]
+
+                    register(('num_reps', reps))
+                    register(c_shape)
+                    register(('N', int(np.floor(np.max(c_shape[1])) + 100)))
+
+                    register(alpha_dist)
+                    register(cov_dist)
+                    register(density)
+                    register(r_shape)
                     register(method)
 
                     if method[1] in ('convex_opt', 'irls'):
