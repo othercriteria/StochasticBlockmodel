@@ -1443,7 +1443,7 @@ class NonstationaryLogistic(StationaryLogistic):
         self.kappa = theta_opt[B] + alpha_out_mean + alpha_in_mean
 
         self.fit_info['wall_time'] = time() - start_time
-                
+
     def fit_irls(self, network, verbose = False, perturb = 1e-4):
         M = network.M
         N = network.N
@@ -1462,7 +1462,7 @@ class NonstationaryLogistic(StationaryLogistic):
         # Construct response and design matrices
         y = np.asarray(network.as_dense(), dtype='float64')
         y = y.reshape((M*N,1))
-        X = np.zeros((M*N, P))
+        X = np.zeros((M*N,P))
         for b, b_n in enumerate(self.beta):
             X[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
         X[:,B] = 1.0
@@ -1480,7 +1480,7 @@ class NonstationaryLogistic(StationaryLogistic):
         def fitted_p(theta):
             theta_vec = np.reshape(theta, (P,))
             alpha_out[0:M-1] = theta_vec[(B + 1):(B + 1 + (M-1))]
-            alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
+            alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):P]
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta_vec[b]
             self.kappa = theta_vec[B]
@@ -1488,14 +1488,16 @@ class NonstationaryLogistic(StationaryLogistic):
 
         for iter in range(10):
             p = fitted_p(theta)
-            X_tilde = X * p + np.random.uniform(-perturb, perturb, (M*N, P))
+            X_tilde = X * p
+            X_tilde += np.random.uniform(-perturb, perturb, (M*N, P))
             X_t = np.transpose(X)
             hat = np.dot(inv(np.dot(X_t, X_tilde)), X_t)
+            del X_tilde
             theta += np.dot(hat, (y - p))
 
         theta_vec = np.reshape(theta, (P,))
         alpha_out[0:M-1] = theta_vec[(B + 1):(B + 1 + (M-1))]
-        alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
+        alpha_in[0:N-1] = theta_vec[(B + 1 + (M-1)):P]
         alpha_out_mean = np.mean(alpha_out[:])
         alpha_in_mean = np.mean(alpha_in[:])
         alpha_out[:] -= alpha_out_mean
