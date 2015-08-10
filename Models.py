@@ -7,7 +7,7 @@ from __future__ import division
 import numpy as np
 import scipy.optimize as opt
 from scipy.stats import norm
-from scipy.linalg import inv
+from scipy.linalg import inv, solve
 from time import time
 from itertools import permutations
 import hashlib
@@ -1489,9 +1489,10 @@ class NonstationaryLogistic(StationaryLogistic):
         for iter in range(10):
             p = fitted_p(theta)
             X_tilde = X * p
-            X_tilde += np.random.uniform(-perturb, perturb, (M*N, P))
+            for j in range(P):
+                X_tilde[:,j] += np.random.uniform(-perturb, perturb, M*N)
             X_t = np.transpose(X)
-            hat = np.dot(inv(np.dot(X_t, X_tilde)), X_t)
+            hat = solve(np.dot(X_t, X_tilde), X_t, overwrite_a = True)
             del X_tilde
             theta += np.dot(hat, (y - p))
 
