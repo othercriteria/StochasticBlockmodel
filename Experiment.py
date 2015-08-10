@@ -153,6 +153,18 @@ class Results:
         for i, size in enumerate(zip(self.M_sizes, self.N_sizes)):
             self.size_to_ind[size] = i
 
+    def merge(self, other):
+        if not (np.all(self.M_sizes == other.M_sizes) and
+                np.all(self.N_sizes == other.N_sizes)):
+            print 'Warning: mismatched conditions in Results to merge.'
+
+        self.num_reps = self.num_reps + other.num_reps
+        for result_name in self.results:
+            old_data = self.results[result_name]['data']
+            other_data = other.results[result_name]['data']
+            merged_data = np.hstack([old_data, other_data])
+            self.results[result_name]['data'] = merged_data
+
     # Return a copy of the result structure, with new allocated storage
     def copy(self):
         dup = Results(self.M_sizes, self.N_sizes,
@@ -210,7 +222,7 @@ class Results:
             data = self.results[field]['data']
             average_data = np.mean(data, 1)
             print '%s: %s' % (field, repr(average_data))
-        
+
     def plot(self, requests = None, general = {'xaxis': 'c'}):
         if general['xaxis'] == 'c':
             sizes = self.N_sizes

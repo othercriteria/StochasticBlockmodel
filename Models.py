@@ -729,7 +729,7 @@ class StationaryLogistic(Stationary):
 
         self.fit_info['wall_time'] = time() - start_time
 
-    def fit_c_conditional(self, network, verbose = False):
+    def fit_c_conditional(self, network, verbose = False, evaluate = True):
         M = network.M
         N = network.N
         B = len(self.beta)
@@ -751,9 +751,6 @@ class StationaryLogistic(Stationary):
         z = {}
         for j in range(N):
             z[j] = A[:,j].flatten()
-
-        # Initialize theta
-        theta = np.zeros(B + (M-1))
 
         def obj(theta):
             if np.any(np.isnan(theta)):
@@ -811,18 +808,31 @@ class StationaryLogistic(Stationary):
                 print c_cnll, theta
             return c_cnll
 
-        bounds = [(-8,8)] * B + [(-6,6)] * (M-1)
-        theta_opt = opt.fmin_l_bfgs_b(obj, theta, bounds = bounds,
-                                      approx_grad = True)[0]
-        if (np.any(theta_opt == [b[0] for b in bounds]) or
-            np.any(theta_opt == [b[1] for b in bounds])):
-            print 'Warning: some constraints active in model fitting.'
-        for b, b_n in enumerate(self.beta):
-            self.beta[b_n] = theta_opt[b]
+        if evaluate:
+            theta = np.zeros(B + (M-1))
+            for b, b_n in enumerate(self.beta):
+                theta[b] = self.beta[b_n]
+            theta[B:(B + (M-1))] = network.row_covariates['alpha_out'][0:(M-1)]
+            c_cnll = obj(theta)
+            self.fit_info['wall_time'] = time() - start_time
 
-        self.fit_convex_opt(network, fix_beta = True)
+            return c_cnll
+        else:
+            # Initialize theta
+            theta = np.zeros(B + (M-1))
 
-        self.fit_info['wall_time'] = time() - start_time
+            bounds = [(-8,8)] * B + [(-6,6)] * (M-1)
+            theta_opt = opt.fmin_l_bfgs_b(obj, theta, bounds = bounds,
+                                          approx_grad = True)[0]
+            if (np.any(theta_opt == [b[0] for b in bounds]) or
+                np.any(theta_opt == [b[1] for b in bounds])):
+                print 'Warning: some constraints active in model fitting.'
+            for b, b_n in enumerate(self.beta):
+                self.beta[b_n] = theta_opt[b]
+
+            self.fit_convex_opt(network, fix_beta = True)
+
+            self.fit_info['wall_time'] = time() - start_time
         
     def fit_composite(self, network, T = 100, verbose = False):
         B = len(self.beta)
