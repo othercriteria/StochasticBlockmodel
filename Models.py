@@ -1511,11 +1511,14 @@ class NonstationaryLogistic(StationaryLogistic):
         for iter in range(10):
             p = fitted_p(theta)
             X_tilde = X * p
+            del p
             for j in range(P):
                 X_tilde[:,j] += np.random.uniform(-perturb, perturb, M*N)
             X_t = np.transpose(X)
-            hat = solve(np.dot(X_t, X_tilde), X_t, overwrite_a = True)
+            X_t_X_tilde = np.dot(X_t, X_tilde)
             del X_tilde
+            hat = solve(X_t_X_tilde, X_t, overwrite_a = True)
+            p = fitted_p(theta)
             theta += np.dot(hat, (y - p))
 
         theta_vec = np.reshape(theta, (P,))
