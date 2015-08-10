@@ -621,7 +621,8 @@ class StationaryLogistic(Stationary):
         self.fit_convex_opt(network, fix_beta = True)
 
     def fit_conditional(self, network,
-                        fit_grid = False, verbose = False, T = 0):
+                        fit_grid = False, verbose = False, T = 0,
+                        evaluate = False):
         B = len(self.beta)
         if fit_grid and not B in (1,2):
             print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
@@ -635,9 +636,6 @@ class StationaryLogistic(Stationary):
 
         A = np.array(network.as_dense())
         r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
-
-        # Initialize theta
-        theta = np.zeros(B)
 
         def obj(theta):
             if np.any(np.isnan(theta)):
@@ -699,31 +697,45 @@ class StationaryLogistic(Stationary):
                 self.beta[self.beta.keys()[0]] = theta_0_opt
                 self.beta[self.beta.keys()[1]] = theta_1_opt
         else:
-            if T > 0:
-                # Use Kiefer-Wolfowitz stochastic approximation
-                scale = 1.0 / obj(np.repeat(0, B))
-                for n in range(1, 40):
-                    a_n = 2.0 * scale * n ** (-1.0)
-                    c_n = 0.5 * n ** (-1.0 / 3)
-                    grad = np.empty(B)
-                    for b in range(B):
-                        e = np.zeros(B)
-                        e[b] = 1.0
-                        y_p = obj(theta + c_n * e)
-                        y_m = obj(theta - c_n * e)
-                        grad[b] = (y_p - y_m) / c_n
-                    theta -= a_n * grad
-                theta_opt = theta
+            if evaluate:
+                theta = np.zeros(B)
+                for b, b_n in enumerate(self.beta):
+                    theta[b] = self.beta[b_n]
+
+                cnll = obj(theta)
+                self.fit_info['wall_time'] = time() - start_time
+
+                return cnll
             else:
-                if B == 1:
-                    obj_scalar = lambda x: obj(np.array([x]))
-                    res = opt.minimize_scalar(obj_scalar, method = 'bounded',
-                                              bounds = (-10, 10))
-                    self.beta[self.beta.keys()[0]] = res.x
+                # Initialize theta
+                theta = np.zeros(B)
+
+                if T > 0:
+                    # Use Kiefer-Wolfowitz stochastic approximation
+                    scale = 1.0 / obj(np.repeat(0, B))
+                    for n in range(1, 40):
+                        a_n = 2.0 * scale * n ** (-1.0)
+                        c_n = 0.5 * n ** (-1.0 / 3)
+                        grad = np.empty(B)
+                        for b in range(B):
+                            e = np.zeros(B)
+                            e[b] = 1.0
+                            y_p = obj(theta + c_n * e)
+                            y_m = obj(theta - c_n * e)
+                            grad[b] = (y_p - y_m) / c_n
+                        theta -= a_n * grad
+                    theta_opt = theta
                 else:
-                    theta_opt = opt.fmin(obj, theta)
-                    for b, b_n in enumerate(self.beta):
-                        self.beta[b_n] = theta_opt[b]
+                    if B == 1:
+                        obj_scalar = lambda x: obj(np.array([x]))
+                        res = opt.minimize_scalar(obj_scalar,
+                                                  method = 'bounded',
+                                                  bounds = (-10, 10))
+                        self.beta[self.beta.keys()[0]] = res.x
+                    else:
+                        theta_opt = opt.fmin(obj, theta)
+                        for b, b_n in enumerate(self.beta):
+                            self.beta[b_n] = theta_opt[b]
 
         self.fit_convex_opt(network, fix_beta = True)
 

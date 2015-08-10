@@ -28,13 +28,13 @@ params = { 'N': 130,
            'cov_unif_sd': 1.0,
            'cov_norm_sd': 0.0,
            'cov_disc_sd': 0.0,
-           'kappa_target': ('row_sum', 2),
+           'kappa_target': ('density', 0.1),
            'pre_offset': False,
            'post_fit': False,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'conditional',
            'is_T': 100,
            'num_reps': 3,
            'sampling': 'new',
@@ -144,11 +144,14 @@ def do_experiment(params):
     add_array_stats(results)
     results.new('UMLE diff.', 'nm',
                 lambda n, d, f: f.nll(n) - NonstationaryLogistic().nll(n))
-    results.new('CMLE diff.', 'nm',
+    results.new('CMLE-A diff.', 'nm',
                 lambda n, d, f: (acnll(n.as_dense(),
                                        np.exp(f.edge_probabilities(n))) - \
                                  acnll(n.as_dense(),
                                        np.ones_like(n.as_dense()))))
+    results.new('CMLE-IS diff.', 'nm',
+                lambda n, d, f: (f.fit_conditional(n, evaluate = True, T = 100) -\
+                                 NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 100)))
     results.new('C-CMLE diff.', 'nm',
                 lambda n, d, f: (f.fit_c_conditional(n, evaluate = True) - \
                                  NonstationaryLogistic().fit_c_conditional(n, evaluate = True)))
@@ -397,7 +400,9 @@ def do_plots(results, covariate_naming, params):
     if params['plot_nll']:
         results.plot(['UMLE diff.'],
                      {'xaxis': params['plot_xaxis']})
-        results.plot(['CMLE diff.'],
+        results.plot(['CMLE-A diff.'],
+                     {'xaxis': params['plot_xaxis']})
+        results.plot(['CMLE-IS diff.'],
                      {'xaxis': params['plot_xaxis']})
         results.plot(['C-CMLE diff.'],
                      {'xaxis': params['plot_xaxis']})
