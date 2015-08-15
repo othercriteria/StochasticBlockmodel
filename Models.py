@@ -741,7 +741,7 @@ class StationaryLogistic(Stationary):
 
         self.fit_info['wall_time'] = time() - start_time
 
-    def fit_c_conditional(self, network, verbose = False, evaluate = True):
+    def fit_c_conditional(self, network, verbose = False, evaluate = False):
         M = network.M
         N = network.N
         B = len(self.beta)

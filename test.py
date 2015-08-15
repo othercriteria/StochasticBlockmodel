@@ -8,6 +8,7 @@ import json
 import pickle
 
 import numpy as np
+import matplotlib.backends.backend_pdf as pltpdf
 
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
@@ -22,10 +23,10 @@ params = { 'N': 130,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
-           'alpha_unif_sd': 1.0,
+           'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
-           'cov_unif_sd': 1.0,
+           'cov_unif_sd': 0.0,
            'cov_norm_sd': 0.0,
            'cov_disc_sd': 0.0,
            'kappa_target': ('density', 0.1),
@@ -34,7 +35,7 @@ params = { 'N': 130,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'convex_opt',
            'is_T': 100,
            'num_reps': 3,
            'sampling': 'new',
@@ -45,12 +46,13 @@ params = { 'N': 130,
            'verbose': True,
            'plot_xaxis': 'c',
            'plot_mse': True,
-           'plot_nll': True,
+           'plot_nll': False,
            'plot_network': True,
            'plot_fit_info': True,
            'random_seed': 137,
            'dump_fits': None,
-           'load_fits': None }
+           'load_fits': None,
+           'interactive': False }
 
 # Convenience functions for (un)pickling
 pick = lambda x: pickle.dumps(x, protocol = 0)
@@ -140,21 +142,25 @@ def do_experiment(params):
 
     # Set up recording of results from experiment
     results = Results(params['sub_sizes_r'], params['sub_sizes_c'],
-                      params['num_reps'])
+                      params['num_reps'], interactive = params['interactive'])
     add_array_stats(results)
-    results.new('UMLE diff.', 'nm',
-                lambda n, d, f: f.nll(n) - NonstationaryLogistic().nll(n))
-    results.new('CMLE-A diff.', 'nm',
-                lambda n, d, f: (acnll(n.as_dense(),
-                                       np.exp(f.edge_probabilities(n))) - \
-                                 acnll(n.as_dense(),
-                                       np.ones_like(n.as_dense()))))
-    results.new('CMLE-IS diff.', 'nm',
-                lambda n, d, f: (f.fit_conditional(n, evaluate = True, T = 100) -\
-                                 NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 100)))
-    results.new('C-CMLE diff.', 'nm',
-                lambda n, d, f: (f.fit_c_conditional(n, evaluate = True) - \
-                                 NonstationaryLogistic().fit_c_conditional(n, evaluate = True)))
+    if params['plot_nll']:
+        from scipy.stats import chi2
+        results.new('UMLE diff.', 'nm',
+                    lambda n, d, f: f.nll(n) - NonstationaryLogistic().nll(n))
+        results.new('UMLE sig.', 'n',
+                    lambda n: -0.5 * chi2.ppf(0.95, n.M + n.N - 1))
+        results.new('CMLE-A diff.', 'nm',
+                    lambda n, d, f: (acnll(n.as_dense(),
+                                           np.exp(f.edge_probabilities(n))) - \
+                                     acnll(n.as_dense(),
+                                           np.ones_like(n.as_dense()))))
+        results.new('CMLE-IS diff.', 'nm',
+                    lambda n, d, f: (f.fit_conditional(n, evaluate = True, T = 100) -\
+                                     NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 100)))
+        results.new('C-CMLE diff.', 'nm',
+                    lambda n, d, f: (f.fit_c_conditional(n, evaluate = True) - \
+                                     NonstationaryLogistic().fit_c_conditional(n, evaluate = True)))
     if params['sampling'] == 'new':
         results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
     def true_est_theta_c(c):
@@ -365,6 +371,9 @@ def do_experiment(params):
     return results, covariate_naming
 
 def do_plots(results, covariate_naming, params):
+    if not params['interactive']:
+        pdf = pltpdf.PdfPages('out.pdf')
+
     # Plot inference performace, in terms of MSE(theta) and MSE(P_ij)
     if params['plot_mse']:
         covariates = [c[0] for c in covariate_naming]
@@ -386,6 +395,8 @@ def do_plots(results, covariate_naming, params):
                             ['Info theta_{%s}' % c for c in covariates],
                             {'ymin': 0, 'plot_mean': True}))
         results.plot(to_plot, {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
 
         to_plot = []
         to_plot.append((['MSE(theta_i)'] + covariate_mse_names,
@@ -395,17 +406,27 @@ def do_plots(results, covariate_naming, params):
                             ['Info theta_{%s}' % c for c in covariates],
                             {'plot_mean': True, 'loglog': True}))
         results.plot(to_plot, {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
 
     # Plot change in NLLs from initialization
     if params['plot_nll']:
-        results.plot(['UMLE diff.'],
+        results.plot(['UMLE diff.', 'UMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
         results.plot(['CMLE-A diff.'],
                      {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
         results.plot(['CMLE-IS diff.'],
                      {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
         results.plot(['C-CMLE diff.'],
                      {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
         
     # Plot network statistics
     if params['plot_network']:
@@ -417,6 +438,8 @@ def do_plots(results, covariate_naming, params):
         if params['sampling'] == 'new':
             to_plot.append('Subnetwork kappa')
         results.plot(to_plot, {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
 
     # Plot convex optimization fitting internal details
     if (params['plot_fit_info'] and params['fit_method'] == 'irls'):
@@ -429,6 +452,11 @@ def do_plots(results, covariate_naming, params):
                       ('Wall time (sec.)', {'ymin': 0}),
                       ('||ET_final - T||_2', {'ymin': 0})],
                      {'xaxis': params['plot_xaxis']})
+        if not params['interactive']:
+            pdf.savefig()
+
+    if not params['interactive']:
+        pdf.close()
 
 if len(sys.argv) >= 2:
     results = None

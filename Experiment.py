@@ -122,7 +122,8 @@ class RandomSubnetworks:
 # experiments.
 
 class Results:
-    def __init__(self, M_sizes, N_sizes, num_reps, title = None):
+    def __init__(self, M_sizes, N_sizes, num_reps, title = None,
+                 interactive = True):
         self.M_sizes = M_sizes
         self.N_sizes = N_sizes
 
@@ -147,6 +148,7 @@ class Results:
         self.num_conditions = len(self.M_sizes)
         self.num_reps = num_reps
         self.title = title
+        self.interactive = interactive
         self.results = {}
 
         self.size_to_ind = {}
@@ -168,7 +170,8 @@ class Results:
     # Return a copy of the result structure, with new allocated storage
     def copy(self):
         dup = Results(self.M_sizes, self.N_sizes,
-                      self.num_reps, title = self.title)
+                      self.num_reps,
+                      title = self.title, interactive = self.interactive)
 
         for result_name in self.results:
             result = self.results[result_name]
@@ -285,7 +288,8 @@ class Results:
         f.subplots_adjust(hspace = 0)
         plt.setp([a.get_xticklabels() for a in axarr[:-1]], visible = False)
 
-        plt.show()
+        if self.interactive:
+            plt.show()
 
 # Add a suite of standard array statistics to a Results instance
 def add_array_stats(results, network = False):
