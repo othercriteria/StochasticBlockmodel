@@ -7,6 +7,13 @@ import sys
 import json
 import pickle
 
+# Putting this in front of expensive imports
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('inputs', help = 'list of JSON files to set parameters',
+                    type = argparse.FileType('r'), nargs = '*')
+args = parser.parse_args()
+
 import numpy as np
 import matplotlib.backends.backend_pdf as pltpdf
 
@@ -458,14 +465,13 @@ def do_plots(results, covariate_naming, params):
     if not params['interactive']:
         pdf.close()
 
-if len(sys.argv) >= 2:
+if len(args.inputs) > 0:
     results = None
-    for params_path in sys.argv[1:]:
-        with open(params_path, 'r') as params_file:
-            new_params_pick = json.load(params_file)
-            new_params = dict([(k,unpick(v)) for (k,v) in new_params_pick])
+    for params_file in args.inputs:
+        new_params_pick = json.load(params_file)
+        new_params = dict([(k,unpick(v)) for (k,v) in new_params_pick])
 
-        print 'Setting parameters from %s:' % params_path
+        print 'Setting parameters from %s:' % params_file
         for k in new_params:
             print k
             print 'old:', params[k]
