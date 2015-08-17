@@ -186,7 +186,7 @@ class Results:
     #                               'm' (models),
     #                               'nm' (network and models)
     def new(self, name, f_type, f):
-        assert(f_type in ['a', 'n', 'm', 'nm'])
+        assert(f_type in ['a', 'n', 'm', 'nm', 'dof'])
         self.results[name] = { 'f': f, 'f_type': f_type,
                                'data': np.empty((self.num_conditions,
                                                  self.num_reps)) }
@@ -206,6 +206,8 @@ class Results:
                 val = f(data_model, fit_model)
             elif f_type == 'nm':
                 val = f(network, data_model, fit_model)
+            elif f_type == 'dof':
+                val = f(network.M, network.N, len(fit_model.beta))
 
             data = self.results[result]['data']
             data[self.size_to_ind[size], rep] = val

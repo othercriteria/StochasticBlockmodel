@@ -53,7 +53,7 @@ params = { 'N': 130,
            'verbose': True,
            'plot_xaxis': 'c',
            'plot_mse': True,
-           'plot_nll': False,
+           'plot_nll': True,
            'plot_network': True,
            'plot_fit_info': True,
            'random_seed': 137,
@@ -153,10 +153,12 @@ def do_experiment(params):
     add_array_stats(results)
     if params['plot_nll']:
         from scipy.stats import chi2
+        crit = lambda dof: -0.5 * chi2.ppf(0.95, dof)
+
         results.new('UMLE diff.', 'nm',
                     lambda n, d, f: f.nll(n) - NonstationaryLogistic().nll(n))
-        results.new('UMLE sig.', 'n',
-                    lambda n: -0.5 * chi2.ppf(0.95, n.M + n.N - 1))
+        results.new('UMLE sig.', 'dof',
+                    lambda M, N, B: crit((M - 1) + (N - 1) + 1 + B))
         results.new('CMLE-A diff.', 'nm',
                     lambda n, d, f: (acnll(n.as_dense(),
                                            np.exp(f.edge_probabilities(n))) - \
@@ -165,9 +167,11 @@ def do_experiment(params):
         results.new('CMLE-IS diff.', 'nm',
                     lambda n, d, f: (f.fit_conditional(n, evaluate = True, T = 100) -\
                                      NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 100)))
+        results.new('CMLE sig.', 'dof', lambda M, N, B: crit(B))
         results.new('C-CMLE diff.', 'nm',
                     lambda n, d, f: (f.fit_c_conditional(n, evaluate = True) - \
                                      NonstationaryLogistic().fit_c_conditional(n, evaluate = True)))
+        results.new('C-CMLE sig.', 'dof', lambda M, N, B: crit((M - 1) + B))
     if params['sampling'] == 'new':
         results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
     def true_est_theta_c(c):
@@ -422,15 +426,15 @@ def do_plots(results, covariate_naming, params):
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['CMLE-A diff.'],
+        results.plot(['CMLE-A diff.', 'CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['CMLE-IS diff.'],
+        results.plot(['CMLE-IS diff.', 'CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['C-CMLE diff.'],
+        results.plot(['C-CMLE diff.', 'C-CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
