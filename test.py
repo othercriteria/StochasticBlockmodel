@@ -233,7 +233,7 @@ def do_experiment(params):
                 sub.generate(data_model)
 
             if params['load_fits']:
-                fit = loaded_fits.pop()
+                fit, loaded_fits = loaded_fits[0], loaded_fits[1:]
                 fit_model.beta = unpick(fit['theta'])
                 if 'alpha' in fit:
                     sub.row_covariates['alpha_out'] = unpick(fit['alpha'])
