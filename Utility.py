@@ -6,6 +6,8 @@
 import numpy as np
 from scipy.stats import norm
 
+import pickle
+
 def logit(x):
     return np.log(x / (1.0 - x))
 
@@ -24,6 +26,10 @@ def logabsdiffexp(x, y):
 # Get the "mean" log-odds from a collection of log-odds
 def logit_mean(x):
     return logit(np.mean(inv_logit(x)))
+
+# Convenience functions for (un)pickling
+pick = lambda x: pickle.dumps(x, protocol = 0)
+unpick = lambda x: pickle.loads(x)
 
 # Convenience functions for plotting ellipses, e.g., 2-d confidence regions
 #

@@ -5,7 +5,6 @@
 
 import sys
 import json
-import pickle
 
 # Putting this in front of expensive imports
 import argparse
@@ -23,7 +22,7 @@ from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
 from Experiment import RandomSubnetworks, Seed, \
      Results, add_array_stats, rel_mse
 from BinaryMatrix import approximate_conditional_nll as acnll
-from Utility import logit
+from Utility import logit, pick, unpick
 
 # Parameters
 params = { 'N': 130,
@@ -42,7 +41,7 @@ params = { 'N': 130,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'irls',
            'is_T': 100,
            'num_reps': 3,
            'sampling': 'new',
@@ -53,17 +52,13 @@ params = { 'N': 130,
            'verbose': True,
            'plot_xaxis': 'c',
            'plot_mse': True,
-           'plot_nll': True,
+           'plot_sig': True,
            'plot_network': True,
            'plot_fit_info': True,
            'random_seed': 137,
            'dump_fits': None,
            'load_fits': None,
            'interactive': False }
-
-# Convenience functions for (un)pickling
-pick = lambda x: pickle.dumps(x, protocol = 0)
-unpick = lambda x: pickle.loads(x)
 
 def do_experiment(params):
     if params['dump_fits'] and params['load_fits']:
@@ -151,27 +146,47 @@ def do_experiment(params):
     results = Results(params['sub_sizes_r'], params['sub_sizes_c'],
                       params['num_reps'], interactive = params['interactive'])
     add_array_stats(results)
-    if params['plot_nll']:
+    if params['plot_sig']:
         from scipy.stats import chi2
         crit = lambda dof: -0.5 * chi2.ppf(0.95, dof)
 
-        results.new('UMLE diff.', 'nm',
-                    lambda n, d, f: f.nll(n) - NonstationaryLogistic().nll(n))
+        umle_f = lambda n, f: f.nll(n)
+        umle_d = lambda n, d: d.nll(n)
+        umle_n = lambda n: NonstationaryLogistic().nll(n)
+        results.new('UMLE F-N', 'nm',
+                    lambda n, d, f: umle_f(n, f) - umle_n(n))
+        results.new('UMLE F-D', 'nm',
+                    lambda n, d, f: umle_f(n, f) - umle_d(n, d))
+
+        cmle_a_f = lambda n, f: acnll(n.as_dense(), np.exp(f.edge_probabilities(n)))
+        cmle_a_d = lambda n, d: acnll(n.as_dense(), np.exp(d.edge_probabilities(n)))
+        cmle_a_n = lambda n: acnll(n.as_dense(), np.ones_like(n.as_dense()))
+        results.new('CMLE-A F-N', 'nm',
+                    lambda n, d, f: cmle_a_f(n, f) - cmle_a_n(n))
+        results.new('CMLE-A F-D', 'nm',
+                    lambda n, d, f: cmle_a_f(n, f) - cmle_a_d(n, d))
+
+        cmle_is_f = lambda n, f: f.fit_conditional(n, evaluate = True, T = 50)
+        cmle_is_d = lambda n, d: d.fit_conditional(n, evaluate = True, T = 50)
+        cmle_is_n = lambda n: NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 50)
+        results.new('CMLE-IS F-N', 'nm',
+                    lambda n, d, f: cmle_is_f(n, f) - cmle_is_n(n))
+        results.new('CMLE-IS F-D', 'nm',
+                    lambda n, d, f: cmle_is_f(n, f) - cmle_is_d(n, d))
+
+        c_cmle_f = lambda n, f: f.fit_c_conditional(n, evaluate = True)
+        c_cmle_d = lambda n, d: d.fit_c_conditional(n, evaluate = True)
+        c_cmle_n = lambda n: NonstationaryLogistic().fit_c_conditional(n, evaluate = True)
+        results.new('C-CMLE F-N', 'nm',
+                    lambda n, d, f: c_cmle_f(n, f) - c_cmle_n(n))
+        results.new('C-CMLE F-D', 'nm',
+                    lambda n, d, f: c_cmle_f(n, f) - c_cmle_d(n, d))
+
         results.new('UMLE sig.', 'dof',
                     lambda M, N, B: crit((M - 1) + (N - 1) + 1 + B))
-        results.new('CMLE-A diff.', 'nm',
-                    lambda n, d, f: (acnll(n.as_dense(),
-                                           np.exp(f.edge_probabilities(n))) - \
-                                     acnll(n.as_dense(),
-                                           np.ones_like(n.as_dense()))))
-        results.new('CMLE-IS diff.', 'nm',
-                    lambda n, d, f: (f.fit_conditional(n, evaluate = True, T = 100) -\
-                                     NonstationaryLogistic().fit_conditional(n, evaluate = True, T = 100)))
         results.new('CMLE sig.', 'dof', lambda M, N, B: crit(B))
-        results.new('C-CMLE diff.', 'nm',
-                    lambda n, d, f: (f.fit_c_conditional(n, evaluate = True) - \
-                                     NonstationaryLogistic().fit_c_conditional(n, evaluate = True)))
         results.new('C-CMLE sig.', 'dof', lambda M, N, B: crit((M - 1) + B))
+
     if params['sampling'] == 'new':
         results.new('Subnetwork kappa', 'm', lambda d, f: d.kappa)
     def true_est_theta_c(c):
@@ -421,24 +436,24 @@ def do_plots(results, covariate_naming, params):
             pdf.savefig()
 
     # Plot change in NLLs from initialization
-    if params['plot_nll']:
-        results.plot(['UMLE diff.', 'UMLE sig.'],
+    if params['plot_sig']:
+        results.plot(['UMLE F-N', 'UMLE F-D', 'UMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['CMLE-A diff.', 'CMLE sig.'],
+        results.plot(['CMLE-A F-N', 'CMLE-A F-D', 'CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['CMLE-IS diff.', 'CMLE sig.'],
+        results.plot(['CMLE-IS F-N', 'CMLE-IS F-D', 'CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        results.plot(['C-CMLE diff.', 'C-CMLE sig.'],
+        results.plot(['C-CMLE F-N', 'C-CMLE F-D', 'C-CMLE sig.'],
                      {'xaxis': params['plot_xaxis']})
         if not params['interactive']:
             pdf.savefig()
-        
+
     # Plot network statistics
     if params['plot_network']:
         to_plot = [('Density', {'ymin': 0, 'plot_mean': True}),
