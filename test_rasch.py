@@ -98,7 +98,7 @@ def do_experiment(params):
         for l in range(L):
             logit_P_l = theta_grid[l] * v
             log_Q_X[l] = -acnll(X, np.exp(logit_P_l))
-            for K in range(K):
+            for k in range(K):
                 log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
         Q_sum_X = np.exp(np.logaddexp.reduce(log_Q_X))
         Q_sum_Y = np.empty(K)
