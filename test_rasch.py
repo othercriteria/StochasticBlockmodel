@@ -5,6 +5,8 @@ import numpy as np
 from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import approximate_from_margins_weights as sample
 
+from Experiment import Seed
+
 # Parameters
 params = { 'M': 4,
            'N': 50,
@@ -18,9 +20,12 @@ params = { 'M': 4,
            'L': 61,
            'theta_l_min': 0.0,
            'theta_l_max': 4.0,
-           'do_prune': True }
+           'do_prune': True,
+           'random_seed': 137 }
 
 def do_experiment(params):
+    seed = Seed(params['random_seed'])
+
     M, N = params['M'], params['N']
     L = params['L']
     K = params['n_MC']
@@ -33,6 +38,9 @@ def do_experiment(params):
     in_interval = np.empty(R)
     length = np.empty(R)
     for trial in range(R):
+        # Advance random seed for data generation
+        seed.next()
+
         # Generate covariate
         v = np.random.normal(0, 1.0, (M,N))
 
@@ -142,6 +150,11 @@ def do_experiment(params):
 
         in_interval[trial] = C_alpha_l <= params['theta'] <= C_alpha_u
         length[trial] = C_alpha_u - C_alpha_l
+
+    # For verifying that same data was generated even if different
+    # algorithms consumed a different amount of randomness
+    seed.next()
+    print 'URN from Seed:', np.random.random()
 
     return in_interval, length
 
