@@ -94,7 +94,7 @@ class EdgeCovariate:
 
     def subset(self, rinds, cinds):
         # TODO: Check if this is actually necessary.
-        self.tocsr()
+        #self.tocsr()
         
         sub = EdgeCovariate(self.rnames[rinds], self.cnames[cinds])
         sub.data[:,:] = self.data[rinds][:,cinds]
