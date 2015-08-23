@@ -5,23 +5,23 @@
 
 import numpy as np
 
-from Network import Network
+from Network import network_from_file_gml
 from Models import StationaryLogistic, NonstationaryLogistic, Blockmodel
-from Experiment import RandomSubnetworks, Results, add_network_stats
+from Experiment import RandomSubnetworks, Results, add_array_stats
 from Experiment import minimum_disagreement
 
 # Parameters
 params = { 'fit_nonstationary': True,
-           'fit_conditional': False,
+           'fit_conditional': True,
            'fit_conditional_is': False,
            'blockmodel_fit_method': 'sem',
            'fit_K': 2,
-           'num_reps': 1,
-           'sub_sizes': [1490], # range(5, 31, 5),
+           'num_reps': 10,
+           'sub_sizes': range(5, 61, 5),
            'sampling': 'node',
            'initialize_true_z': True,
-           'cycles': 1,
-           'sweeps': 0,
+           'cycles': 10,
+           'sweeps': 2,
            'plot_network': True }
 
 
@@ -36,8 +36,7 @@ for field in params:
 # Initialize political blogs network from file. The "value" covariate
 # is the ground truth membership to the left-leaning (0) or
 # right-leaning (1) class.
-net = Network()
-net.network_from_file_gml('data/polblogs/polblogs.gml', ['value'])
+net = network_from_file_gml('data/polblogs/polblogs.gml', ['value'])
 
 # Initialize fitting model
 fit_base_model = StationaryLogistic()
@@ -52,7 +51,7 @@ if params['blockmodel_fit_method'] == 'kl':
 
 # Set up recording of results from experiment
 s_results = Results(params['sub_sizes'], params['num_reps'], 'Stationary fit')
-add_network_stats(s_results)
+add_array_stats(s_results)
 def class_mismatch(n):
     truth = n.node_covariates['value'][:]
     estimated = n.node_covariates['z'][:]
