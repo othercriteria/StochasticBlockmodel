@@ -8,18 +8,18 @@ from BinaryMatrix import approximate_from_margins_weights as sample
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 4,
-           'N': 50,
+params = { 'M': 20,
+           'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
-           'alpha_level': 0.2,
-           'n_MC': 100,
-           'n_rep': 200,
-           'L': 61,
-           'theta_l_min': 0.0,
-           'theta_l_max': 4.0,
+           'alpha_level': 0.05,
+           'n_MC': 1000,
+           'n_rep': 10,
+           'L': 601,
+           'theta_l_min': -6.0,
+           'theta_l_max': 6.0,
            'do_prune': True,
            'random_seed': 137 }
 
@@ -108,10 +108,10 @@ def do_experiment(params):
             log_Q_X[l] = -acnll(X, np.exp(logit_P_l))
             for k in range(K):
                 log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
-        Q_sum_X = np.exp(np.logaddexp.reduce(log_Q_X))
-        Q_sum_Y = np.empty(K)
+        log_Q_sum_X = np.logaddexp.reduce(log_Q_X)
+        log_Q_sum_Y = np.empty(K)
         for k in range(K):
-            Q_sum_Y[k] = np.exp(np.logaddexp.reduce(log_Q_Y[:,k]))
+            log_Q_sum_Y[k] = np.logaddexp.reduce(log_Q_Y[:,k])
 
         # Step over the grid, calculating approximate p-values
         p_plus = np.empty(L)
@@ -122,17 +122,26 @@ def do_experiment(params):
             p_num_plus, p_num_minus, p_denom = 0.0, 0.0, 0.0
 
             # X contribution
-            w_X = np.exp(theta_l * t_X) / Q_sum_X
-            p_num_plus += w_X
-            p_num_minus += w_X
-            p_denom += w_X
+            log_w_X = (theta_l * t_X) - log_Q_sum_X
+            w_X_l = np.exp(log_w_X)
+
+            p_num_plus += w_X_l
+            p_num_minus += w_X_l
+            p_denom += w_X_l
 
             # Y contribution
+            w_Y_l = np.empty(K)
             for k in range(K):
-                w_Y = np.exp(theta_l * t_Y[k]) / Q_sum_Y[k]
+                log_w_Y = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
+                w_Y = np.exp(log_w_Y)
+
+                w_Y_l[k] = w_Y
                 if I_t_Y_plus[k]: p_num_plus += w_Y
                 if I_t_Y_minus[k]: p_num_minus += w_Y
                 p_denom += w_Y
+
+            print '%.2f: %.2g (%.2g, %.2g)' % \
+              (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
 
             p_plus[l] = p_num_plus / p_denom
             p_minus[l] = p_num_minus / p_denom
