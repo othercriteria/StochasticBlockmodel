@@ -184,6 +184,7 @@ def network_from_file_gexf(path, cov_names = []):
 
 def network_from_file_gml(path, cov_names = []):
     in_network = nx.read_gml(path)
+    in_network = nx.DiGraph(in_network)
     return network_from_networkx(in_network, cov_names)
 
 def network_from_edges(edges):
