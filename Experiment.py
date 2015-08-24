@@ -274,8 +274,7 @@ class Results:
                         ax.scatter(sizes, data[:,rep])
 
             if 'baseline' in options:
-                ax.plot(sizes,
-                        np.repeat(options['baseline'], len(sizes)),
+                ax.plot(sizes, np.repeat(options['baseline'], len(sizes)),
                         'k:')
 
             ax.set_ylabel(plot_name)
@@ -289,10 +288,13 @@ class Results:
             if 'loglog' in options:
                 ax.set_xscale('log')
                 ax.set_yscale('log')
+            elif 'semilogx' in options:
+                ax.set_xscale('log')
+            elif 'semilogy' in options:
+                ax.set_yscale('log')
 
         axarr[-1].set_xlabel(sizes_label)
         f.subplots_adjust(hspace = 0)
-        plt.setp([a.get_xticklabels() for a in axarr[:-1]], visible = False)
 
         if self.interactive:
             plt.show()
