@@ -389,8 +389,7 @@ def do_experiment(params):
 
     # Should not vary between runs with the same seed and same number
     # of arrays tested
-    seed.next()
-    print 'URN from Seed:', np.random.random()
+    seed.final()
 
     results.summary()
 

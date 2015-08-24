@@ -18,6 +18,10 @@ class Seed:
         self.seed += 1
         np.random.seed(self.seed)
 
+    def final(self):
+        self.next()
+        print 'URN from Seed:', np.random.random()
+
 class RandomSubnetworks:
     # The sampling probabilities reported when report_prob is enabled
     # are not necessarily for the subset of nodes sampled; they may

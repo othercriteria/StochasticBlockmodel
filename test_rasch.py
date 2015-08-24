@@ -153,8 +153,7 @@ def do_experiment(params):
 
     # For verifying that same data was generated even if different
     # algorithms consumed a different amount of randomness
-    seed.next()
-    print 'URN from Seed:', np.random.random()
+    seed.final()
 
     return in_interval, length
 
