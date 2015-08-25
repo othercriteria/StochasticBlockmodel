@@ -81,8 +81,10 @@ def do_experiment(params):
         # Generate samples from the mixture proposal distribution
         Y = []
         for k in range(K):
-            l = np.random.randint(L)
-            logit_P_l = theta_grid[l] * v
+            l_k = np.random.randint(L)
+            theta_k = theta_grid[l_k]
+            print '%.2f' % theta_k
+            logit_P_l = theta_k * v
 
             Y_sparse = sample(r, c, np.exp(logit_P_l))
             Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
@@ -104,10 +106,13 @@ def do_experiment(params):
         log_Q_X = np.empty(L)
         log_Q_Y = np.empty((L,K))
         for l in range(L):
-            logit_P_l = theta_grid[l] * v
+            theta_l = theta_grid[l]
+
+            logit_P_l = theta_l * v
             log_Q_X[l] = -acnll(X, np.exp(logit_P_l))
             for k in range(K):
                 log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
+            print '%.2f: %.2g' % (theta_l, np.exp(log_Q_Y[l].max()))
         log_Q_sum_X = np.logaddexp.reduce(log_Q_X)
         log_Q_sum_Y = np.empty(K)
         for k in range(K):
@@ -134,8 +139,8 @@ def do_experiment(params):
             for k in range(K):
                 log_w_Y = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
                 w_Y = np.exp(log_w_Y)
-
                 w_Y_l[k] = w_Y
+
                 if I_t_Y_plus[k]: p_num_plus += w_Y
                 if I_t_Y_minus[k]: p_num_minus += w_Y
                 p_denom += w_Y
