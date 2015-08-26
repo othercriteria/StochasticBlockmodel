@@ -8,21 +8,21 @@ from BinaryMatrix import approximate_from_margins_weights as sample
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 20,
-           'N': 10,
+params = { 'M': 10,
+           'N': 5,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100, 500],
-           'n_rep': 50,
-           'L': 601,
-           'theta_l_min': -6.0,
-           'theta_l_max': 6.0,
+           'n_MC_levels': [10, 50],
+           'n_rep': 5,
+           'L': 61,
+           'theta_l': -6.0,
+           'theta_u': 6.0,
            'do_prune': True,
            'random_seed': 137 }
-
+    
 def generate_data(params, seed):
     M, N = params['M'], params['N']
     
@@ -59,7 +59,13 @@ def generate_data(params, seed):
 
     return X, v
 
-def confidence_interval(X, v, K, theta_grid, alpha_level):
+def ci_cmle_a(X, v, theta_grid, alpha_level):
+    return -3, 3
+
+def ci_cmle_is(X, v, theta_grid, alpha_level):
+    return -3, 3
+
+def ci_conservative(X, v, K, theta_grid, alpha_level):
     M_p, N_p = X.shape
     L = len(theta_grid)
     theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
@@ -161,22 +167,29 @@ def do_experiment(params):
     S = len(params['n_MC_levels'])
     alpha = params['alpha_level']
 
-    # Generate theta grid for inference
-    theta_grid = np.linspace(params['theta_l_min'], params['theta_l_max'], L)
-
     # Do experiment
-    in_interval = np.empty((S,R))
-    length = np.empty((S,R))
+    in_interval = np.empty((2+S,R))
+    length = np.empty((2+S,R))
+    def record(name, m, t, ci_l, ci_u):
+        print '%s: [%.2f, %.2f]' % (name, ci_l, ci_u)
+
+        in_interval[m,t] = ci_l <= params['theta'] <= ci_u
+        length[m,t] = ci_u - ci_l
+
     for trial in range(R):
         X, v = generate_data(params, seed)
 
-        for s, n_MC in enumerate(params['n_MC_levels']):
-            ci_l, ci_u = confidence_interval(X, v, n_MC, theta_grid, alpha)
+        theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
         
-            print '%d: [%.2f, %.2f]' % (n_MC, ci_l, ci_u)
+        for s, n_MC in enumerate(params['n_MC_levels']):
+            ci_l, ci_u = ci_cmle_a(X, v, theta_grid, alpha)
+            record('CMLE-A', 0, trial, ci_l, ci_u)
 
-            in_interval[s,trial] = ci_l <= params['theta'] <= ci_u
-            length[s,trial] = ci_u - ci_l
+            ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha)
+            record('CMLE-IS', 1, trial, ci_l, ci_u)
+
+            ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha)
+            record('Conservative (n = %d)' % n_MC, (2 + s), trial, ci_l, ci_u)
 
     # For verifying that same data was generated even if different
     # algorithms consumed a different amount of randomness
@@ -186,7 +199,14 @@ def do_experiment(params):
 
 in_interval, length = do_experiment(params)
 
+def report(name, m):
+    print '%s:' % name
+    print 'Coverage probability: %.2f' % np.mean(in_interval[m])
+    print 'Median length: %.2f' % np.median(length[m])
+    print
+
+print '\n\n'
+report('CMLE-A', 0)
+report('CMLE-IS', 1)
 for s, n_MC in enumerate(params['n_MC_levels']):
-    print 'n_MC = %d' % n_MC
-    print 'Coverage probability: %.2f' % np.mean(in_interval[s])
-    print 'Median length: %.2f' % np.median(length[s])
+    report('Conservative (n = %d)' % n_MC, (2 + s))
