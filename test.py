@@ -30,12 +30,12 @@ params = { 'N': 130,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 0.0,
+           'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 0.0,
+           'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
-           'kappa_target': ('density', 0.1),
+           'kappa_target': ('density', 0.5),
            'pre_offset': False,
            'post_fit': False,
            'fisher_information': False,
@@ -43,10 +43,10 @@ params = { 'N': 130,
            'fit_nonstationary': True,
            'fit_method': 'irls',
            'is_T': 100,
-           'num_reps': 3,
+           'num_reps': 5,
            'sampling': 'new',
-           'sub_sizes_r': np.floor(0.2 * (np.floor(np.logspace(1.0, 2.1, 30)))),
-           'sub_sizes_c': np.floor(np.logspace(1.0, 2.1, 30)),
+           'sub_sizes_r': np.floor(0.2 * (np.floor(np.logspace(1.0, 1.5, 30)))),
+           'sub_sizes_c': np.floor(np.logspace(1.0, 1.5, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
            'verbose': True,
@@ -58,7 +58,7 @@ params = { 'N': 130,
            'random_seed': 137,
            'dump_fits': None,
            'load_fits': None,
-           'interactive': False }
+           'interactive': True }
 
 def do_experiment(params):
     if params['dump_fits'] and params['load_fits']:
@@ -150,9 +150,9 @@ def do_experiment(params):
         from scipy.stats import chi2
         crit = lambda dof: -0.5 * chi2.ppf(0.95, dof)
 
-        umle_f = lambda n, f: f.nll(n)
-        umle_d = lambda n, d: d.nll(n)
-        umle_n = lambda n: NonstationaryLogistic().nll(n)
+        umle_f = lambda n, f: f.nll(n, ignore_offset = True)
+        umle_d = lambda n, d: d.nll(n, ignore_offset = True)
+        umle_n = lambda n: NonstationaryLogistic().nll(n, ignore_offset = True)
         results.new('UMLE F-N', 'nm',
                     lambda n, d, f: umle_f(n, f) - umle_n(n))
         results.new('UMLE F-D', 'nm',
