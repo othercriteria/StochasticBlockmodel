@@ -57,8 +57,8 @@ class IndependentBernoulli:
         else:
             return np.tile(0.5, (m, n))
 
-    def nll(self, network, submatrix = None):
-        P = self.edge_probabilities(network, submatrix)
+    def nll(self, network, submatrix = None, ignore_offset = False):
+        P = self.edge_probabilities(network, submatrix, ignore_offset)
         A = np.asarray(network.as_dense())
         if submatrix:
             i_sub, j_sub = submatrix
@@ -1282,7 +1282,8 @@ class NonstationaryLogistic(StationaryLogistic):
         StationaryLogistic.__init__(self)
         self.fit = self.fit_convex_opt
         
-    def edge_probabilities(self, network, submatrix = None):
+    def edge_probabilities(self, network, submatrix = None,
+                           ignore_offset = False):
         M = network.M
         N = network.N
         if submatrix:
@@ -1297,7 +1298,7 @@ class NonstationaryLogistic(StationaryLogistic):
             alpha_out = alpha_out[i_sub]
             alpha_in = alpha_in[j_sub]
         
-        if network.offset:
+        if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
