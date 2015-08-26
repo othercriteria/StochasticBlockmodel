@@ -16,7 +16,7 @@ params = { 'M': 20,
            'beta_min': -0.86,
            'alpha_level': 0.05,
            'n_MC_levels': [10, 50, 100, 500],
-           'n_rep': 10,
+           'n_rep': 50,
            'L': 601,
            'theta_l_min': -6.0,
            'theta_l_max': 6.0,
@@ -75,7 +75,6 @@ def confidence_interval(X, v, K, theta_grid, alpha_level):
     for k in range(K):
         l_k = np.random.randint(L)
         theta_k = theta_grid[l_k]
-        print '%.2f' % theta_k
         logit_P_l = theta_k * v
 
         Y_sparse = sample(r, c, np.exp(logit_P_l))
@@ -158,25 +157,26 @@ def do_experiment(params):
     seed = Seed(params['random_seed'])
 
     L = params['L']
-    K = params['n_MC_levels'][0]
     R = params['n_rep']
+    S = len(params['n_MC_levels'])
+    alpha = params['alpha_level']
 
     # Generate theta grid for inference
     theta_grid = np.linspace(params['theta_l_min'], params['theta_l_max'], L)
 
     # Do experiment
-    in_interval = np.empty(R)
-    length = np.empty(R)
+    in_interval = np.empty((S,R))
+    length = np.empty((S,R))
     for trial in range(R):
         X, v = generate_data(params, seed)
 
-        ci_l, ci_u = confidence_interval(X, v, K, theta_grid,
-                                         params['alpha_level'])
+        for s, n_MC in enumerate(params['n_MC_levels']):
+            ci_l, ci_u = confidence_interval(X, v, n_MC, theta_grid, alpha)
         
-        print '[%.2f, %.2f]' % (ci_l, ci_u)
+            print '%d: [%.2f, %.2f]' % (n_MC, ci_l, ci_u)
 
-        in_interval[trial] = ci_l <= params['theta'] <= ci_u
-        length[trial] = ci_u - ci_l
+            in_interval[s,trial] = ci_l <= params['theta'] <= ci_u
+            length[s,trial] = ci_u - ci_l
 
     # For verifying that same data was generated even if different
     # algorithms consumed a different amount of randomness
@@ -185,5 +185,8 @@ def do_experiment(params):
     return in_interval, length
 
 in_interval, length = do_experiment(params)
-print 'Coverage probability: %.2f' % np.mean(in_interval)
-print 'Median length: %.2f' % np.median(length)
+
+for s, n_MC in enumerate(params['n_MC_levels']):
+    print 'n_MC = %d' % n_MC
+    print 'Coverage probability: %.2f' % np.mean(in_interval[s])
+    print 'Median length: %.2f' % np.median(length[s])
