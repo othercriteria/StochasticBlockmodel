@@ -30,12 +30,12 @@ params = { 'N': 130,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 1.0,
+           'alpha_norm_sd': 0.0,
            'alpha_gamma_sd': 0.0,
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 1.0,
+           'cov_norm_sd': 0.0,
            'cov_disc_sd': 0.0,
-           'kappa_target': ('density', 0.5),
+           'kappa_target': ('density', 0.1),
            'pre_offset': False,
            'post_fit': False,
            'fisher_information': False,
@@ -341,7 +341,7 @@ def do_experiment(params):
 
                     f = file('goodmat.mat', 'wb')
                     import scipy.io
-                    Y = np.array(sub.adjacency_matrix(), dtype=np.float)
+                    Y = np.array(sub.as_dense(), dtype=np.float)
                     X = sub.edge_covariates['x_0'].matrix()
                     scipy.io.savemat(f, { 'Y': Y, 'X': X })
                     sys.exit()
@@ -359,7 +359,7 @@ def do_experiment(params):
 
                     f = file('badmat.mat', 'wb')
                     import scipy.io
-                    Y = np.array(sub.adjacency_matrix(), dtype=np.float)
+                    Y = np.array(sub.as_dense(), dtype=np.float)
                     X = sub.edge_covariates['x_0'].matrix()
                     scipy.io.savemat(f, { 'Y': Y, 'X': X })
                     sys.exit()
