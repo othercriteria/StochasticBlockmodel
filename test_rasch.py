@@ -3,8 +3,8 @@
 import numpy as np
 from scipy.stats import chi2
 
-from BinaryMatrix import approximate_conditional_nll as acnll
-from BinaryMatrix import approximate_from_margins_weights as sample
+from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
+from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from Utility import logsumexp, logabsdiffexp
 
 from Experiment import Seed
@@ -17,16 +17,23 @@ params = { 'M': 50,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50],
+           'n_MC_levels': [10, 50, 100],
+           'wopt_sort': True,
            'is_T': 100,
-           'n_rep': 100,
-           'L': 61,
+           'n_rep': 5,
+           'L': 121,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
            'random_seed': 137,
            'verbose': True }
-    
+
+def cond_a_nll(X, w):
+    return cond_a_nll_b(X, w, sort_by_wopt_var = params['wopt_sort'])
+
+def cond_a_sample(r, c, w, T = 0):
+    return cond_a_sample_b(r, c, w, T, sort_by_wopt_var = params['wopt_sort'])
+
 def generate_data(params, seed):
     M, N = params['M'], params['N']
     
@@ -88,7 +95,7 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
     cmle_a = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
         logit_P_l = theta_l * v
-        cmle_a[l] = -acnll(X, np.exp(logit_P_l))
+        cmle_a[l] = -cond_a_nll(X, np.exp(logit_P_l))
 
     return invert_test(theta_grid, cmle_a - cmle_a.max(),
                        -0.5 * chi2.ppf(1 - alpha_level, 1))
@@ -101,7 +108,7 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
         r = X.sum(1)
         c = X.sum(0)
 
-        z = sample(r, c, w_l, T)
+        z = cond_a_sample(r, c, w_l, T)
         logf = np.empty(T)
         for t in range(T):
             logQ, logP = z[t][1], z[t][2]
@@ -135,7 +142,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
         theta_k = theta_grid[l_k]
         logit_P_l = theta_k * v
 
-        Y_sparse = sample(r, c, np.exp(logit_P_l))
+        Y_sparse = cond_a_sample(r, c, np.exp(logit_P_l))
         Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
         for i, j in Y_sparse:
             if i == -1: break
@@ -144,11 +151,13 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 
     # Statistics for the samples from the proposal distribution only
     # need to be calculated once...
-    t_Y = np.empty(K)
+    t_Y = np.empty(K + 1)
     for k in range(K):
         t_Y[k] = np.sum(Y[k] * v)
     I_t_Y_plus = t_Y >= t_X
+    I_t_Y_plus[K] = True
     I_t_Y_minus = -t_Y >= -t_X
+    I_t_Y_minus[K] = True
 
     # Probabilities under each component of the proposal distribution
     # only need to be calculated once...
@@ -158,9 +167,9 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
         theta_l = theta_grid[l]
 
         logit_P_l = theta_l * v
-        log_Q_X[l] = -acnll(X, np.exp(logit_P_l))
+        log_Q_X[l] = -cond_a_nll(X, np.exp(logit_P_l))
         for k in range(K):
-            log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
+            log_Q_Y[l,k] = -cond_a_nll(Y[k], np.exp(logit_P_l))
         if verbose:
             print '%.2f: %.2g, %.2g' % \
               (theta_l, np.exp(log_Q_X[l]), np.exp(log_Q_Y[l].max()))
@@ -183,10 +192,8 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
         for k in range(K):
             log_w_l[k] = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
 
-        log_p_num_plus = \
-          logsumexp(log_w_l[I_t_Y_plus]) if np.any(I_t_Y_plus) else -np.inf
-        log_p_num_minus = \
-          logsumexp(log_w_l[I_t_Y_minus]) if np.any(I_t_Y_minus) else -np.inf
+        log_p_num_plus = logsumexp(log_w_l[I_t_Y_plus])
+        log_p_num_minus = logsumexp(log_w_l[I_t_Y_minus])
         log_p_denom = logsumexp(log_w_l)
 
         if verbose:
