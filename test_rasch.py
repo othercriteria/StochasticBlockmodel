@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+from scipy.stats import chi2
 
 from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import approximate_from_margins_weights as sample
@@ -60,9 +61,13 @@ def generate_data(params, seed):
     return X, v
 
 def ci_cmle_a(X, v, theta_grid, alpha_level):
+    crit = chi2.ppf(1 - alpha_level, 1)
+    
     return -3, 3
 
 def ci_cmle_is(X, v, theta_grid, alpha_level):
+    crit = chi2.ppf(1 - alpha_level, 1)
+    
     return -3, 3
 
 def ci_conservative(X, v, K, theta_grid, alpha_level):
