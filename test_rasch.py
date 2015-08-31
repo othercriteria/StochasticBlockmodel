@@ -10,16 +10,16 @@ from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 20,
+params = { 'M': 50,
            'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100],
+           'n_MC_levels': [10, 50],
            'is_T': 100,
-           'n_rep': 25,
+           'n_rep': 100,
            'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
@@ -73,6 +73,9 @@ def invert_test(theta_grid, test_val, crit):
     theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
 
     C_alpha = theta_grid[test_val > crit]
+    if len(C_alpha) == 0:
+        return 0, 0
+
     C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
     if C_alpha_l == theta_l_min:
         C_alpha_l = -np.inf
@@ -159,48 +162,43 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
         for k in range(K):
             log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
         if verbose:
-            print '%.2f: %.2g' % (theta_l, np.exp(log_Q_Y[l].max()))
-    log_Q_sum_X = np.logaddexp.reduce(log_Q_X)
+            print '%.2f: %.2g, %.2g' % \
+              (theta_l, np.exp(log_Q_X[l]), np.exp(log_Q_Y[l].max()))
+    log_Q_sum_X = logsumexp(log_Q_X)
     log_Q_sum_Y = np.empty(K)
     for k in range(K):
-        log_Q_sum_Y[k] = np.logaddexp.reduce(log_Q_Y[:,k])
+        log_Q_sum_Y[k] = logsumexp(log_Q_Y[:,k])
 
     # Step over the grid, calculating approximate p-values
-    p_plus = np.empty(L)
-    p_minus = np.empty(L)
+    log_p_plus = np.empty(L)
+    log_p_minus = np.empty(L)
     for l in range(L):
         theta_l = theta_grid[l]
-
-        p_num_plus, p_num_minus, p_denom = 0.0, 0.0, 0.0
+        log_w_l = np.empty(K + 1)
 
         # X contribution
-        log_w_X = (theta_l * t_X) - log_Q_sum_X
-        w_X_l = np.exp(log_w_X)
-
-        p_num_plus += w_X_l
-        p_num_minus += w_X_l
-        p_denom += w_X_l
+        log_w_l[K] = (theta_l * t_X) - log_Q_sum_X
 
         # Y contribution
-        w_Y_l = np.empty(K)
         for k in range(K):
-            log_w_Y = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
-            w_Y = np.exp(log_w_Y)
-            w_Y_l[k] = w_Y
+            log_w_l[k] = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
 
-            if I_t_Y_plus[k]: p_num_plus += w_Y
-            if I_t_Y_minus[k]: p_num_minus += w_Y
-            p_denom += w_Y
+        log_p_num_plus = \
+          logsumexp(log_w_l[I_t_Y_plus]) if np.any(I_t_Y_plus) else -np.inf
+        log_p_num_minus = \
+          logsumexp(log_w_l[I_t_Y_minus]) if np.any(I_t_Y_minus) else -np.inf
+        log_p_denom = logsumexp(log_w_l)
 
         if verbose:
             print '%.2f: %.2g (%.2g, %.2g)' % \
-              (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
+              (theta_l, log_w_l[K], log_w_l[0:K].min(), log_w_l[0:K].max())
 
-        p_plus[l] = p_num_plus / p_denom
-        p_minus[l] = p_num_minus / p_denom
+        log_p_plus[l] = log_p_num_plus - log_p_denom
+        log_p_minus[l] = log_p_num_minus - log_p_denom
 
-    p_plus_minus = np.fmin(1, 2 * np.fmin(p_plus, p_minus))
-    return invert_test(theta_grid, p_plus_minus, alpha_level)
+    # p_pm = min(1, 2 * min(p_plus, p_minus))
+    log_p_pm = np.fmin(0, np.log(2) + np.fmin(log_p_plus, log_p_minus))
+    return invert_test(theta_grid, log_p_pm, np.log(alpha_level))
 
 def do_experiment(params):
     seed = Seed(params['random_seed'])
@@ -227,14 +225,13 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
         
+        ci_l, ci_u = ci_cmle_a(X, v, theta_grid, alpha)
+        record('CMLE-A', 0, trial, ci_l, ci_u)
+
+        ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha, T, verbose = verbose)
+        record('CMLE-IS (T = %d)' % T, 1, trial, ci_l, ci_u)
+
         for s, n_MC in enumerate(params['n_MC_levels']):
-            ci_l, ci_u = ci_cmle_a(X, v, theta_grid, alpha)
-            record('CMLE-A', 0, trial, ci_l, ci_u)
-
-            ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha, T,
-                                    verbose = verbose)
-            record('CMLE-IS (T = %d)' % T, 1, trial, ci_l, ci_u)
-
             ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha,
                                          verbose = verbose)
             record('Conservative (n = %d)' % n_MC, (2 + s), trial, ci_l, ci_u)
