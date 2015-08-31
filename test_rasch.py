@@ -9,20 +9,21 @@ from BinaryMatrix import approximate_from_margins_weights as sample
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 10,
-           'N': 5,
+params = { 'M': 20,
+           'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50],
+           'n_MC_levels': [10],
            'n_rep': 5,
            'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
-           'random_seed': 137 }
+           'random_seed': 137,
+           'verbose': False }
     
 def generate_data(params, seed):
     M, N = params['M'], params['N']
@@ -52,25 +53,45 @@ def generate_data(params, seed):
     # the quality of the approximation for certain versions of the
     # sampler
     if params['do_prune']:
-        r, c = X.sum(1), X.sum(0)
-        r_p = (r == 0) + (r == N)
-        c_p = (c == 0) + (c == M)
-        X = X[-r_p][:,-c_p].copy()
-        v = v[-r_p][:,-c_p].copy()
+        while True:
+            r, c = X.sum(1), X.sum(0)
+            r_p = (r == 0) + (r == N)
+            c_p = (c == 0) + (c == M)
+            pruning = np.any(r_p) or np.any(c_p)
+            
+            X = X[-r_p][:,-c_p].copy()
+            v = v[-r_p][:,-c_p].copy()
+
+            if not pruning:
+                break
 
     return X, v
 
 def ci_cmle_a(X, v, theta_grid, alpha_level):
-    crit = chi2.ppf(1 - alpha_level, 1)
-    
-    return -3, 3
+    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
+
+    cmle_a = np.empty_like(theta_grid)
+    for l, theta_l in enumerate(theta_grid):
+        logit_P_l = theta_l * v
+        cmle_a[l] = -acnll(X, np.exp(logit_P_l))
+
+    cmle_a -= cmle_a.max()
+    C_alpha = theta_grid[cmle_a > crit]
+    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
+    if C_alpha_l == theta_l_min:
+        C_alpha_l = -np.inf
+    if C_alpha_u == theta_l_max:
+        C_alpha_u = np.inf
+
+    return C_alpha_l, C_alpha_u
 
 def ci_cmle_is(X, v, theta_grid, alpha_level):
-    crit = chi2.ppf(1 - alpha_level, 1)
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
     
     return -3, 3
 
-def ci_conservative(X, v, K, theta_grid, alpha_level):
+def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
     theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
@@ -114,7 +135,8 @@ def ci_conservative(X, v, K, theta_grid, alpha_level):
         log_Q_X[l] = -acnll(X, np.exp(logit_P_l))
         for k in range(K):
             log_Q_Y[l,k] = -acnll(Y[k], np.exp(logit_P_l))
-        print '%.2f: %.2g' % (theta_l, np.exp(log_Q_Y[l].max()))
+        if verbose:
+            print '%.2f: %.2g' % (theta_l, np.exp(log_Q_Y[l].max()))
     log_Q_sum_X = np.logaddexp.reduce(log_Q_X)
     log_Q_sum_Y = np.empty(K)
     for k in range(K):
@@ -147,8 +169,9 @@ def ci_conservative(X, v, K, theta_grid, alpha_level):
             if I_t_Y_minus[k]: p_num_minus += w_Y
             p_denom += w_Y
 
-        print '%.2f: %.2g (%.2g, %.2g)' % \
-          (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
+        if verbose:
+            print '%.2f: %.2g (%.2g, %.2g)' % \
+                (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
 
         p_plus[l] = p_num_plus / p_denom
         p_minus[l] = p_num_minus / p_denom
@@ -193,7 +216,8 @@ def do_experiment(params):
             ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha)
             record('CMLE-IS', 1, trial, ci_l, ci_u)
 
-            ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha)
+            ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha,
+                                         verbose = params['verbose'])
             record('Conservative (n = %d)' % n_MC, (2 + s), trial, ci_l, ci_u)
 
     # For verifying that same data was generated even if different
