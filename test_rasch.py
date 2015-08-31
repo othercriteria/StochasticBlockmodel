@@ -5,6 +5,7 @@ from scipy.stats import chi2
 
 from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import approximate_from_margins_weights as sample
+from Utility import logsumexp, logabsdiffexp
 
 from Experiment import Seed
 
@@ -16,14 +17,15 @@ params = { 'M': 20,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10],
+           'n_MC_levels': [10, 50],
+           'is_T': 100,
            'n_rep': 5,
-           'L': 61,
+           'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
            'random_seed': 137,
-           'verbose': False }
+           'verbose': True }
     
 def generate_data(params, seed):
     M, N = params['M'], params['N']
@@ -86,10 +88,40 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
 
     return C_alpha_l, C_alpha_u
 
-def ci_cmle_is(X, v, theta_grid, alpha_level):
+def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
+    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
     crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
-    
-    return -3, 3
+
+    cmle_is = np.empty_like(theta_grid)
+    for l, theta_l in enumerate(theta_grid):
+        logit_P_l = theta_l * v
+        w_l = np.exp(logit_P_l)
+        r = X.sum(1)
+        c = X.sum(0)
+
+        z = sample(r, c, w_l, T)
+        logf = np.empty(T)
+        for t in range(T):
+            logQ, logP = z[t][1], z[t][2]
+            logf[t] = logP - logQ
+        logkappa = -np.log(T) + logsumexp(logf)
+
+        if verbose:
+            logcvsq = -np.log(T - 1) - 2 * logkappa + \
+              logsumexp(2 * logabsdiffexp(logf, logkappa))
+            print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
+
+        cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
+
+    cmle_is -= cmle_is.max()
+    C_alpha = theta_grid[cmle_is > crit]
+    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
+    if C_alpha_l == theta_l_min:
+        C_alpha_l = -np.inf
+    if C_alpha_u == theta_l_max:
+        C_alpha_u = np.inf
+
+    return C_alpha_l, C_alpha_u
 
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
@@ -171,7 +203,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 
         if verbose:
             print '%.2f: %.2g (%.2g, %.2g)' % \
-                (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
+              (theta_l, w_X_l, w_Y_l.min(), w_Y_l.max())
 
         p_plus[l] = p_num_plus / p_denom
         p_minus[l] = p_num_minus / p_denom
@@ -190,11 +222,14 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 def do_experiment(params):
     seed = Seed(params['random_seed'])
 
-    L = params['L']
     R = params['n_rep']
-    S = len(params['n_MC_levels'])
     alpha = params['alpha_level']
+    verbose = params['verbose']
 
+    L = params['L']
+    S = len(params['n_MC_levels'])
+    T = params['is_T']
+    
     # Do experiment
     in_interval = np.empty((2+S,R))
     length = np.empty((2+S,R))
@@ -213,11 +248,12 @@ def do_experiment(params):
             ci_l, ci_u = ci_cmle_a(X, v, theta_grid, alpha)
             record('CMLE-A', 0, trial, ci_l, ci_u)
 
-            ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha)
-            record('CMLE-IS', 1, trial, ci_l, ci_u)
+            ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha, T,
+                                    verbose = verbose)
+            record('CMLE-IS (T = %d)' % T, 1, trial, ci_l, ci_u)
 
             ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha,
-                                         verbose = params['verbose'])
+                                         verbose = verbose)
             record('Conservative (n = %d)' % n_MC, (2 + s), trial, ci_l, ci_u)
 
     # For verifying that same data was generated even if different
@@ -236,6 +272,6 @@ def report(name, m):
 
 print '\n\n'
 report('CMLE-A', 0)
-report('CMLE-IS', 1)
+report('CMLE-IS (T = %d)' % params['is_T'], 1)
 for s, n_MC in enumerate(params['n_MC_levels']):
     report('Conservative (n = %d)' % n_MC, (2 + s))
