@@ -363,6 +363,49 @@ def conjugate(c, n):
 
     return cc
 
+# Eliminate extreme rows and columns recursively until all remaining
+# rows and columns are non-extreme. Perform the matching pruning on
+# supplied arrays
+def prune(r, c, *arrays):
+    arrays = list(arrays)
+    A = len(arrays)
+
+    while True:
+        m, n = len(r), len(c)
+
+        r_0 = (r == 0)
+        if np.any(r_0):
+            r = r[-r_0]
+            for a in range(A):
+                arrays[a] = arrays[a][-r_0]
+            continue
+
+        r_n = (r == n)
+        if np.any(r_n):
+            r = r[-r_n]
+            c -= np.sum(r_n)
+            for a in range(A):
+                arrays[a] = arrays[a][-r_n]
+            continue
+
+        c_0 = (c == 0)
+        if np.any(c_0):
+            c = c[-c_0]
+            for a in range(A):
+                arrays[a] = arrays[a][:,-c_0]
+            continue
+
+        c_m = (c == m)
+        if np.any(c_m):
+            c = c[-c_m]
+            r -= np.sum(c_m)
+            for a in range(A):
+                arrays[a] = arrays[a][:,-c_m]
+
+        break
+
+    return r, c, [a.copy() for a in arrays]
+
 # Return a binary matrix (or a list of binary matrices) sampled
 # approximately according to the specified Bernoulli weights,
 # conditioned on having the specified margins.
@@ -471,6 +514,9 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     # FIXME: this will probably break if A is a matrix (as opposed to an array)
     r = A.sum(1, dtype=np.int)
     c = A.sum(0, dtype=np.int)
+
+    r, c, arrays = prune(r, c, A, w)
+    A, w = arrays
 
     # Sizing
     m, n = len(r), len(c)
