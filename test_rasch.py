@@ -17,10 +17,10 @@ params = { 'M': 20,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50],
+           'n_MC_levels': [10, 50, 100],
            'is_T': 100,
-           'n_rep': 5,
-           'L': 601,
+           'n_rep': 25,
+           'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
@@ -69,17 +69,10 @@ def generate_data(params, seed):
 
     return X, v
 
-def ci_cmle_a(X, v, theta_grid, alpha_level):
+def invert_test(theta_grid, test_val, crit):
     theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
-    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
 
-    cmle_a = np.empty_like(theta_grid)
-    for l, theta_l in enumerate(theta_grid):
-        logit_P_l = theta_l * v
-        cmle_a[l] = -acnll(X, np.exp(logit_P_l))
-
-    cmle_a -= cmle_a.max()
-    C_alpha = theta_grid[cmle_a > crit]
+    C_alpha = theta_grid[test_val > crit]
     C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
     if C_alpha_l == theta_l_min:
         C_alpha_l = -np.inf
@@ -88,10 +81,16 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
 
     return C_alpha_l, C_alpha_u
 
-def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
-    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
-    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
+def ci_cmle_a(X, v, theta_grid, alpha_level):
+    cmle_a = np.empty_like(theta_grid)
+    for l, theta_l in enumerate(theta_grid):
+        logit_P_l = theta_l * v
+        cmle_a[l] = -acnll(X, np.exp(logit_P_l))
 
+    return invert_test(theta_grid, cmle_a - cmle_a.max(),
+                       -0.5 * chi2.ppf(1 - alpha_level, 1))
+
+def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     cmle_is = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
         logit_P_l = theta_l * v
@@ -113,20 +112,12 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
         cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
 
-    cmle_is -= cmle_is.max()
-    C_alpha = theta_grid[cmle_is > crit]
-    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
-    if C_alpha_l == theta_l_min:
-        C_alpha_l = -np.inf
-    if C_alpha_u == theta_l_max:
-        C_alpha_u = np.inf
-
-    return C_alpha_l, C_alpha_u
+    return invert_test(theta_grid, cmle_is - cmle_is.max(),
+                       -0.5 * chi2.ppf(1 - alpha_level, 1))
 
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
-    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
     
     # Observed statistic
     t_X = np.sum(X * v)
@@ -209,15 +200,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
         p_minus[l] = p_num_minus / p_denom
 
     p_plus_minus = np.fmin(1, 2 * np.fmin(p_plus, p_minus))
-
-    C_alpha = theta_grid[p_plus_minus > alpha_level]
-    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
-    if C_alpha_l == theta_l_min:
-        C_alpha_l = -np.inf
-    if C_alpha_u == theta_l_max:
-        C_alpha_u = np.inf
-
-    return C_alpha_l, C_alpha_u
+    return invert_test(theta_grid, p_plus_minus, alpha_level)
 
 def do_experiment(params):
     seed = Seed(params['random_seed'])
