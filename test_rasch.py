@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 
+from time import time
+
 import numpy as np
 from scipy.stats import chi2
 
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from Utility import logsumexp, logabsdiffexp
-
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 50,
+params = { 'M': 20,
            'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
@@ -20,13 +21,13 @@ params = { 'M': 50,
            'n_MC_levels': [10, 50, 100],
            'wopt_sort': True,
            'is_T': 100,
-           'n_rep': 5,
+           'n_rep': 20,
            'L': 121,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
            'random_seed': 137,
-           'verbose': True }
+           'verbose': False }
 
 def cond_a_nll(X, w):
     return cond_a_nll_b(X, w, sort_by_wopt_var = params['wopt_sort'])
@@ -91,6 +92,16 @@ def invert_test(theta_grid, test_val, crit):
 
     return C_alpha_l, C_alpha_u
 
+def timing(func):
+    def inner(*args, **kwargs):
+        start_time = time()
+        val = func(*args, **kwargs)
+        elapsed = time() - start_time
+        return val, elapsed
+
+    return inner
+
+@timing
 def ci_cmle_a(X, v, theta_grid, alpha_level):
     cmle_a = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
@@ -100,6 +111,7 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
     return invert_test(theta_grid, cmle_a - cmle_a.max(),
                        -0.5 * chi2.ppf(1 - alpha_level, 1))
 
+@timing
 def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     cmle_is = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
@@ -125,6 +137,7 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     return invert_test(theta_grid, cmle_is - cmle_is.max(),
                        -0.5 * chi2.ppf(1 - alpha_level, 1))
 
+@timing
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
@@ -219,46 +232,59 @@ def do_experiment(params):
     T = params['is_T']
     
     # Do experiment
-    in_interval = np.empty((2+S,R))
-    length = np.empty((2+S,R))
-    def record(name, m, t, ci_l, ci_u):
-        print '%s: [%.2f, %.2f]' % (name, ci_l, ci_u)
+    results = {}
+    for method, display in [('cmle_a', 'CMLE-A'),
+                            ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
+                           [('cons_%d' % s, 'Conservative (n = %d)' % n_MC)
+                            for s, n_MC in enumerate(params['n_MC_levels'])]:
+        results[method] = { 'display': display,
+                            'in_interval': np.empty(R),
+                            'length': np.empty(R),
+                            'total_time': 0.0 }
 
-        in_interval[m,t] = ci_l <= params['theta'] <= ci_u
-        length[m,t] = ci_u - ci_l
+    def do_and_record(out, name, trial):
+        ci, elapsed = out
+        ci_l, ci_u = ci
+
+        result = results[name]
+
+        print '%s (%.2f sec): [%.2f, %.2f]' % \
+          (result['display'], elapsed, ci_l, ci_u)
+
+        result['in_interval'][trial] = ci_l <= params['theta'] <= ci_u
+        result['length'] = ci_u - ci_l
+        result['total_time'] += elapsed
 
     for trial in range(R):
         X, v = generate_data(params, seed)
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
-        
-        ci_l, ci_u = ci_cmle_a(X, v, theta_grid, alpha)
-        record('CMLE-A', 0, trial, ci_l, ci_u)
 
-        ci_l, ci_u = ci_cmle_is(X, v, theta_grid, alpha, T, verbose = verbose)
-        record('CMLE-IS (T = %d)' % T, 1, trial, ci_l, ci_u)
+        do_and_record(ci_cmle_a(X, v, theta_grid, alpha),
+                      'cmle_a', trial)
+
+        do_and_record(ci_cmle_is(X, v, theta_grid, alpha, T, verbose),
+                      'cmle_is', trial)
 
         for s, n_MC in enumerate(params['n_MC_levels']):
-            ci_l, ci_u = ci_conservative(X, v, n_MC, theta_grid, alpha,
-                                         verbose = verbose)
-            record('Conservative (n = %d)' % n_MC, (2 + s), trial, ci_l, ci_u)
+            do_and_record(ci_conservative(X, v, n_MC, theta_grid, alpha,
+                                          verbose),
+                          'cons_%d' % s, trial)
 
     # For verifying that same data was generated even if different
     # algorithms consumed a different amount of randomness
     seed.final()
 
-    return in_interval, length
+    return results
 
-in_interval, length = do_experiment(params)
-
-def report(name, m):
-    print '%s:' % name
-    print 'Coverage probability: %.2f' % np.mean(in_interval[m])
-    print 'Median length: %.2f' % np.median(length[m])
-    print
+results = do_experiment(params)
 
 print '\n\n'
-report('CMLE-A', 0)
-report('CMLE-IS (T = %d)' % params['is_T'], 1)
-for s, n_MC in enumerate(params['n_MC_levels']):
-    report('Conservative (n = %d)' % n_MC, (2 + s))
+for method in results:
+    result = results[method]
+
+    print '%s:' % result['display']
+    print 'Coverage probability: %.2f' % np.mean(result['in_interval'])
+    print 'Median length: %.2f' % np.median(result['length'])
+    print 'Total time: %.2f sec' % result['total_time']
+    print
