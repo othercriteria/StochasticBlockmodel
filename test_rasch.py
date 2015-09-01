@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import signal
 from time import time
 
 import numpy as np
@@ -17,17 +18,25 @@ params = { 'M': 20,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
+           'v_min': -0.5,
            'alpha_level': 0.05,
            'n_MC_levels': [10, 50, 100],
            'wopt_sort': True,
            'is_T': 100,
-           'n_rep': 20,
-           'L': 121,
+           'n_rep': 100,
+           'L': 13,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
            'random_seed': 137,
-           'verbose': False }
+           'verbose': True }
+
+terminated = False
+def sigint_handler(signum, frame):
+    print 'Terminating after current trial completes.'
+    global terminated
+    terminated = True
+signal.signal(signal.SIGINT, sigint_handler)
 
 def cond_a_nll(X, w):
     return cond_a_nll_b(X, w, sort_by_wopt_var = params['wopt_sort'])
@@ -37,45 +46,50 @@ def cond_a_sample(r, c, w, T = 0):
 
 def generate_data(params, seed):
     M, N = params['M'], params['N']
-    
-    # Advance random seed for data generation
-    seed.next()
 
-    # Generate covariate
-    v = np.random.normal(0, 1.0, (M,N))
+    # Generate shared covariate
+    v = np.random.uniform(params['v_min'], params['v_min'] + 1, (M,N))
 
-    # Generate Bernoulli probabilities from logistic regression model
-    logit_P = np.zeros((M,N))
-    for i in range(1,M):
-        logit_P[i,:] += np.random.uniform(params['alpha_min'],
-                                          params['alpha_min'] + 1)
-    for j in range(1,N):
-        logit_P[:,j] += np.random.uniform(params['beta_min'],
-                                          params['beta_min'] + 1)
-    logit_P += params['kappa']
-    logit_P += params['theta'] * v
-    P = 1.0 / (1.0 + np.exp(-logit_P))
+    while True:
+        # Advance random seed for data generation
+        seed.next()
 
-    # Generate data for this trial
-    X = np.random.random((M,N)) < P
+        # Generate Bernoulli probabilities from logistic regression model
+        logit_P = np.zeros((M,N))
+        for i in range(1,M):
+            logit_P[i,:] += np.random.uniform(params['alpha_min'],
+                                              params['alpha_min'] + 1)
+        for j in range(1,N):
+            logit_P[:,j] += np.random.uniform(params['beta_min'],
+                                              params['beta_min'] + 1)
+        logit_P += params['kappa']
+        logit_P += params['theta'] * v
+        P = 1.0 / (1.0 + np.exp(-logit_P))
 
-    # Pruning rows and columns of 0's and 1's; this may improve
-    # the quality of the approximation for certain versions of the
-    # sampler
-    if params['do_prune']:
-        while True:
-            r, c = X.sum(1), X.sum(0)
-            r_p = (r == 0) + (r == N)
-            c_p = (c == 0) + (c == M)
-            pruning = np.any(r_p) or np.any(c_p)
-            
-            X = X[-r_p][:,-c_p].copy()
-            v = v[-r_p][:,-c_p].copy()
+        # Generate data for this trial
+        X = np.random.random((M,N)) < P
 
-            if not pruning:
-                break
+        # Pruning rows and columns of 0's and 1's; this may improve
+        # the quality of the approximation for certain versions of the
+        # sampler
+        if params['do_prune']:
+            X_p = X.copy()
+            v_p = v.copy()
+            while True:
+                r, c = X_p.sum(1), X_p.sum(0)
+                r_p = (r == 0) + (r == N)
+                c_p = (c == 0) + (c == M)
+                pruning = np.any(r_p) or np.any(c_p)
 
-    return X, v
+                X_p = X_p[-r_p][:,-c_p]
+                v_p = v_p[-r_p][:,-c_p]
+
+                if not pruning:
+                    break
+
+            yield X_p.copy(), v_p.copy()
+
+        yield X, v
 
 def invert_test(theta_grid, test_val, crit):
     theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
@@ -164,7 +178,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 
     # Statistics for the samples from the proposal distribution only
     # need to be calculated once...
-    t_Y = np.empty(K + 1)
+    t_Y = np.zeros(K + 1)
     for k in range(K):
         t_Y[k] = np.sum(Y[k] * v)
     I_t_Y_plus = t_Y >= t_X
@@ -223,7 +237,6 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 def do_experiment(params):
     seed = Seed(params['random_seed'])
 
-    R = params['n_rep']
     alpha = params['alpha_level']
     verbose = params['verbose']
 
@@ -232,17 +245,17 @@ def do_experiment(params):
     T = params['is_T']
     
     # Do experiment
-    results = {}
+    results = { 'completed_trials': 0 }
     for method, display in [('cmle_a', 'CMLE-A'),
                             ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
                            [('cons_%d' % s, 'Conservative (n = %d)' % n_MC)
                             for s, n_MC in enumerate(params['n_MC_levels'])]:
         results[method] = { 'display': display,
-                            'in_interval': np.empty(R),
-                            'length': np.empty(R),
+                            'in_interval': [],
+                            'length': [],
                             'total_time': 0.0 }
 
-    def do_and_record(out, name, trial):
+    def do_and_record(out, name):
         ci, elapsed = out
         ci_l, ci_u = ci
 
@@ -251,25 +264,28 @@ def do_experiment(params):
         print '%s (%.2f sec): [%.2f, %.2f]' % \
           (result['display'], elapsed, ci_l, ci_u)
 
-        result['in_interval'][trial] = ci_l <= params['theta'] <= ci_u
-        result['length'] = ci_u - ci_l
+        result['in_interval'].append(ci_l <= params['theta'] <= ci_u)
+        result['length'].append(ci_u - ci_l)
         result['total_time'] += elapsed
 
-    for trial in range(R):
-        X, v = generate_data(params, seed)
+    for X, v in generate_data(params, seed):
+        if (results['completed_trials'] == params['n_rep']) or terminated:
+            break
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
         do_and_record(ci_cmle_a(X, v, theta_grid, alpha),
-                      'cmle_a', trial)
+                      'cmle_a')
 
         do_and_record(ci_cmle_is(X, v, theta_grid, alpha, T, verbose),
-                      'cmle_is', trial)
+                      'cmle_is')
 
         for s, n_MC in enumerate(params['n_MC_levels']):
             do_and_record(ci_conservative(X, v, n_MC, theta_grid, alpha,
                                           verbose),
-                          'cons_%d' % s, trial)
+                          'cons_%d' % s)
+
+        results['completed_trials'] += 1
 
     # For verifying that same data was generated even if different
     # algorithms consumed a different amount of randomness
@@ -278,13 +294,14 @@ def do_experiment(params):
     return results
 
 results = do_experiment(params)
+R = results.pop('completed_trials')
+print '\nCompleted trials: %d\n\n' % R
 
-print '\n\n'
 for method in results:
     result = results[method]
 
     print '%s:' % result['display']
-    print 'Coverage probability: %.2f' % np.mean(result['in_interval'])
-    print 'Median length: %.2f' % np.median(result['length'])
+    print 'Coverage probability: %.2f' % np.mean(result['in_interval'][0:R])
+    print 'Median length: %.2f' % np.median(result['length'][0:R])
     print 'Total time: %.2f sec' % result['total_time']
     print
