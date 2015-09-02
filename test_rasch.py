@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import signal
 from time import time
 
@@ -12,19 +13,20 @@ from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
 # Parameters
-params = { 'M': 20,
+params = { 'fixed_example': 'data/rasch_covariates.json',
+           'M': 200,
            'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
-           'v_min': -0.5,
+           'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100],
+           'n_MC_levels': [10, 50, 100, 500],
            'wopt_sort': True,
            'is_T': 100,
            'n_rep': 100,
-           'L': 13,
+           'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': True,
@@ -45,26 +47,38 @@ def cond_a_sample(r, c, w, T = 0):
     return cond_a_sample_b(r, c, w, T, sort_by_wopt_var = params['wopt_sort'])
 
 def generate_data(params, seed):
-    M, N = params['M'], params['N']
+    # Advance random seed for parameter and covariate construction
+    seed.next()
 
-    # Generate shared covariate
-    v = np.random.uniform(params['v_min'], params['v_min'] + 1, (M,N))
+    if not params['fixed_example']:
+        # Generate parameters and covariates
+        M, N = params['M'], params['N']
+        alpha = np.random.uniform(size = (M,1)) + params['alpha_min']
+        beta = np.random.uniform(size = (1,N)) + params['beta_min']
+        kappa = params['kappa']
+        v = np.random.uniform(size = (M,N)) + params['v_min']
+    else:
+        # Load parameters and covariates
+        with open(params['fixed_example'], 'r') as example_file:
+            example = json.load(example_file)
+
+            v = np.array(example['nu'])
+            M, N = v.shape
+
+            alpha = np.array(example['alpha']).reshape((M,1))
+            beta = np.array(example['beta']).reshape((1,N))
+            kappa = example['kappa']
+
+    # Generate Bernoulli probabilities from logistic regression model
+    logit_P = np.zeros((M,N)) + kappa
+    logit_P += alpha
+    logit_P += beta
+    logit_P += params['theta'] * v
+    P = 1.0 / (1.0 + np.exp(-logit_P))
 
     while True:
         # Advance random seed for data generation
         seed.next()
-
-        # Generate Bernoulli probabilities from logistic regression model
-        logit_P = np.zeros((M,N))
-        for i in range(1,M):
-            logit_P[i,:] += np.random.uniform(params['alpha_min'],
-                                              params['alpha_min'] + 1)
-        for j in range(1,N):
-            logit_P[:,j] += np.random.uniform(params['beta_min'],
-                                              params['beta_min'] + 1)
-        logit_P += params['kappa']
-        logit_P += params['theta'] * v
-        P = 1.0 / (1.0 + np.exp(-logit_P))
 
         # Generate data for this trial
         X = np.random.random((M,N)) < P
@@ -244,7 +258,7 @@ def do_experiment(params):
     S = len(params['n_MC_levels'])
     T = params['is_T']
     
-    # Do experiment
+    # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
     for method, display in [('cmle_a', 'CMLE-A'),
                             ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
@@ -254,7 +268,6 @@ def do_experiment(params):
                             'in_interval': [],
                             'length': [],
                             'total_time': 0.0 }
-
     def do_and_record(out, name):
         ci, elapsed = out
         ci_l, ci_u = ci
@@ -268,6 +281,7 @@ def do_experiment(params):
         result['length'].append(ci_u - ci_l)
         result['total_time'] += elapsed
 
+    # Do experiment
     for X, v in generate_data(params, seed):
         if (results['completed_trials'] == params['n_rep']) or terminated:
             break
