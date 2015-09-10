@@ -9,12 +9,16 @@ from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from Utility import logsumexp, logabsdiffexp
 
-M = 800
-N = 160
+M = 100
+N = 20
 theta = 2.0
+kappa_target = ('density', 0.1)
 T_fit = 20
-T = 20
+T = 200
 min_error = 0.2
+theta_grid_min = 0.0
+theta_grid_max = 3.0
+theta_grid_G = 121
 
 
 def cond_a_nll(X, w):
@@ -29,9 +33,9 @@ while True:
     a.new_edge_covariate('x')[:,:] = np.random.normal(0, 1, (M, N))
 
     d = NonstationaryLogistic()
-    d.beta['x'] = 2.0
+    d.beta['x'] = theta
 
-    d.match_kappa(a, ('density', 0.1))
+    d.match_kappa(a, kappa_target)
     a.generate(d)
 
     f = NonstationaryLogistic()
@@ -43,7 +47,7 @@ while True:
         print f.beta['x']
         break
 
-theta_vec = np.linspace(0.0, 6.0, 121)
+theta_vec = np.linspace(theta_grid_min, theta_grid_max, theta_grid_G)
 cmle_a_vec = np.empty_like(theta_vec)
 cmle_is_vec = np.empty_like(theta_vec)
 logkappa_cvsq = np.empty_like(theta_vec)
