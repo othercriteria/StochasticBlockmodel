@@ -725,6 +725,8 @@ class StationaryLogistic(Stationary):
                             grad[b] = (y_p - y_m) / c_n
                         theta -= a_n * grad
                     theta_opt = theta
+                    for b, b_n in enumerate(self.beta):
+                        self.beta[b_n] = theta_opt[b]
                 else:
                     if B == 1:
                         obj_scalar = lambda x: obj(np.array([x]))
