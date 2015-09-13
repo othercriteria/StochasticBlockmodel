@@ -9,13 +9,13 @@ from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from Utility import logsumexp, logabsdiffexp
 
-M = 100
-N = 20
+M = 200
+N = 1000
 theta = 2.0
-kappa_target = ('density', 0.1)
+kappa_target = ('row_sum', 2)
 T_fit = 20
-T = 200
-min_error = 0.2
+T_grid = 20
+min_error = 0.25
 theta_grid_min = 0.0
 theta_grid_max = 3.0
 theta_grid_G = 121
@@ -66,17 +66,17 @@ for l, theta_l in enumerate(theta_vec):
 
     cmle_a_vec[l] = -cond_a_nll(A, w_l)
     
-    z = cond_a_sample(r, c, w_l, T)
-    logf = np.empty(T)
-    for t in range(T):
+    z = cond_a_sample(r, c, w_l, T_grid)
+    logf = np.empty(T_grid)
+    for t in range(T_grid):
         logQ, logP = z[t][1], z[t][2]
         logf[t] = logP - logQ
-    logkappa = -np.log(T) + logsumexp(logf)
-    logcvsq = -np.log(T - 1) - 2 * logkappa + \
+    logkappa = -np.log(T_grid) + logsumexp(logf)
+    logcvsq = -np.log(T_grid - 1) - 2 * logkappa + \
       logsumexp(2 * logabsdiffexp(logf, logkappa))
     cvsq = np.exp(logcvsq)
     logkappa_cvsq[l] = cvsq
-    print 'est. cv^2 = %.2f (T = %d)' % (cvsq, T)
+    print 'est. cv^2 = %.2f (T_grid = %d)' % (cvsq, T_grid)
     cmle_is_vec[l] = np.sum(np.log(w_l[A])) - logkappa
 
 print 'CMLE-A: %.2f' % theta_vec[np.argmax(cmle_a_vec)]
