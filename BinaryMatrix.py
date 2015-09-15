@@ -520,6 +520,8 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
 
     # Sizing
     m, n = len(r), len(c)
+    if (m == 0) or (n == 0):
+        return 0.0
 
     # Sort the row margins (descending)
     rndx = np.argsort(-r)
