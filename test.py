@@ -25,7 +25,7 @@ from BinaryMatrix import approximate_conditional_nll as acnll
 from Utility import logit, pick, unpick
 
 # Parameters
-params = { 'N': 130,
+params = { 'N': 530,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
@@ -41,24 +41,25 @@ params = { 'N': 130,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'irls',
+           'fit_method': 'conditional_is',
            'is_T': 100,
-           'num_reps': 5,
+           'num_reps': 100,
            'sampling': 'new',
-           'sub_sizes_r': np.floor(0.2 * (np.floor(np.logspace(1.0, 1.5, 30)))),
-           'sub_sizes_c': np.floor(np.logspace(1.0, 1.5, 30)),
+           'sub_sizes_r': np.array([5]), #np.floor(0.2 * (np.floor(np.logspace(1.0, 1.5, 30)))),
+           'sub_sizes_c': np.array([100]), #np.floor(np.logspace(1.0, 1.5, 30)),
            'find_good': 0.0,
            'find_bad': 0.0,
            'verbose': True,
            'plot_xaxis': 'c',
            'plot_mse': True,
-           'plot_sig': True,
+           'plot_sig': False,
            'plot_network': True,
            'plot_fit_info': True,
            'random_seed': 137,
            'dump_fits': None,
            'load_fits': None,
-           'interactive': True }
+           'fix_broken_cmle_is': False,
+           'interactive': False }
 
 def do_experiment(params):
     if params['dump_fits'] and params['load_fits']:
@@ -261,6 +262,9 @@ def do_experiment(params):
             if params['load_fits']:
                 fit, loaded_fits = loaded_fits[0], loaded_fits[1:]
                 fit_model.beta = unpick(fit['theta'])
+                if params['fix_broken_cmle_is']:
+                    for b_n in fit_model.beta:
+                        fit_model.beta[b_n] += 0.1474
                 if 'alpha' in fit:
                     sub.row_covariates['alpha_out'] = unpick(fit['alpha'])
                 if 'beta' in fit:
