@@ -27,6 +27,9 @@ class Array:
         self.col_covariates = {}
         self.edge_covariates = {}
 
+    def __setitem__(self, index, x):
+        self.array.__setitem__(index, x)
+
     def tocsr(self):
         if self.is_sparse():
             self.array = self.array.tocsr()

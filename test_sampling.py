@@ -6,14 +6,14 @@
 
 import numpy as np
 
-from Network import Network
-from Experiment import RandomSubnetworks, Results, add_network_stats
+from Network import network_from_edges
+from Experiment import RandomSubnetworks, Results, add_array_stats
 
 # Parameters
 params = { 'N': 400,
            'D': 5,
            'num_reps': 1,
-           'sub_sizes': range(10, 110, 10),
+           'sub_sizes': np.arange(10, 110, 10, dtype = np.int),
            'sampling_methods': ['random_node', 'random_edge',
                                 'link_trace', 'link_trace_f'],
            'plot_network': True }
@@ -23,7 +23,6 @@ params = { 'N': 400,
 np.random.seed(137)
 
 # Initialize full network
-net = Network(params['N'])
 blocks = params['N'] / params['D']
 edges = []
 for block in range(blocks):
@@ -32,21 +31,22 @@ for block in range(blocks):
         for j in range(params['D']):
             v_2 = 'n_%d' % (((block + 1) * params['D'] + j) % params['N'])
             edges.append((v_1, v_2))
-net.network_from_edges(edges)
+net = network_from_edges(edges)
 
 # Set up recording of results from experiment
 results_by_method = { }
 for method_name in params['sampling_methods']:
-    results = Results(params['sub_sizes'], params['num_reps'])
-    add_network_stats(results)
+    results = Results(params['sub_sizes'], params['sub_sizes'],
+                      params['num_reps'])
+    add_array_stats(results, network = True)
     results.new('# Active', 'n', lambda n: np.isfinite(n.offset.matrix()).sum())
     results_by_method[method_name] = results
 
 for sub_size in params['sub_sizes']:
     print 'subnetwork size = %d' % sub_size
 
-    generators = { 'random_node': RandomSubnetworks(net, sub_size),
-                   'random_edge': RandomSubnetworks(net, sub_size,
+    generators = { 'random_node': RandomSubnetworks(net, (sub_size, sub_size)),
+                   'random_edge': RandomSubnetworks(net, (sub_size, sub_size),
                                                     method = 'edge'),
                    'link_trace': RandomSubnetworks(net, sub_size,
                                                    method = 'link'),
@@ -60,7 +60,8 @@ for sub_size in params['sub_sizes']:
 
             subnet.offset_extremes()
 
-            results_by_method[generator].record(sub_size, rep, subnet)
+            results_by_method[generator].record((sub_size, sub_size), rep,
+                                                subnet)
 
 # Output results
 print
@@ -70,10 +71,10 @@ for method_name in params['sampling_methods']:
     results = results_by_method[method_name]
     results.summary()
     if params['plot_network']:
-        results.plot([('Average degree', {'ymin': 0, 'plot_mean': True}),
-                      (['Out-degree', 'Max out-degree', 'Min out-degree'],
+        results.plot([('Density', {'ymin': 0, 'plot_mean': True}),
+                      (['Out-degree', 'Max row-sum', 'Min row-sum'],
                        {'ymin': 0, 'plot_mean': True}),
-                      (['In-degree', 'Max out-degree', 'Min in-degree'],
+                      (['In-degree', 'Max col-sum', 'Min col-sum'],
                        {'ymin': 0, 'plot_mean': True}),
                       ('Self-loop density', {'ymin': 0, 'plot_mean': True}),
                       ('# Active', {'ymin': 0 })])

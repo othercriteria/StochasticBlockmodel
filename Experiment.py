@@ -38,13 +38,13 @@ class RandomSubnetworks:
             self.rinds = np.arange(self.network.M)
             self.cinds = np.arange(self.network.N)
         elif self.method == 'edge':
-            edges = self.network.network.nonzero()
+            edges = self.network.array.nonzero()
             edges_i, edges_j = edges[0], edges[1]
             self.edges_i = edges_i
             self.edges_j = edges_j
             self.num_edges = len(edges_i)
         elif self.method in ('link', 'link_f') :
-            edges = self.network.network.nonzero()
+            edges = self.network.array.nonzero()
             neighbors = { n: set() for n in range(self.network.N) }
             for i, j in zip(edges[0], edges[1]):
                 neighbors[i].add(j)
@@ -56,6 +56,36 @@ class RandomSubnetworks:
         M = self.network.M
         N = self.network.N
         s = self.train_size
+
+        if self.method == 'node':
+            s_r, s_c = s
+            np.random.shuffle(self.rinds)
+            np.random.shuffle(self.cinds)
+            return self.network.subarray(self.rinds[0:s_r], self.cinds[0:s_c])
+        elif self.method == 'edge':
+            s_r, s_c = s
+            added_r = set()
+            added_c = set()
+
+            while (len(added_r) < s_r) and (len(added_c) < s_c):
+                e = np.random.randint(self.num_edges)
+                edge_i = self.edges_i[e]
+                edge_j = self.edges_j[e]
+                added_r.add(edge_i)
+                added_c.add(edge_j)
+
+            remain_r = list(set(range(M)).difference(added_r))
+            np.random.shuffle(remain_r)
+            added_r.update(set(remain_r[0:(s_r - len(added_r))]))
+            added_r = np.array(list(added_r))
+
+            remain_c = list(set(range(N)).difference(added_c))
+            np.random.shuffle(remain_c)
+            added_c.update(set(remain_c[0:(s_c - len(added_c))]))
+            added_c = np.array(list(added_c))
+
+            return self.network.subarray(added_r, added_c)
+
         if self.method == 'node':
             if type(s) == tuple:
                 s_r, s_c = s
