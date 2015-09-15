@@ -5,7 +5,6 @@
 
 from __future__ import division
 import numpy as np
-from scipy.special import gamma
 import matplotlib.pyplot as plt
 
 # Convenience object for consistent generation of test data
@@ -23,13 +22,7 @@ class Seed:
         print 'URN from Seed:', np.random.random()
 
 class RandomSubnetworks:
-    # The sampling probabilities reported when report_prob is enabled
-    # are not necessarily for the subset of nodes sampled; they may
-    # just be for the particular realization (enumerating and summing
-    # over all of the link tracings that hit the same set of nodes
-    # seems like a hard problem).
-    def __init__(self, network, train_size, test_size = 0, method = 'node',
-                 report_prob = False):
+    def __init__(self, network, train_size, test_size = 0, method = 'node'):
         self.network = network
         self.train_size = train_size
         self.test_size = test_size
@@ -73,8 +66,6 @@ class RandomSubnetworks:
             else:
                 np.random.shuffle(self.inds)
                 sub_train = self.inds[0:s]
-                # XXX: this computation is currently broken
-                # p = (gamma((N - s) + 1) * gamma(s + 1)) / gamma(N + 1)
         elif self.method == 'row':
             np.random.shuffle(self.rinds)
             sub_train = self.rinds[0:s]
@@ -82,7 +73,6 @@ class RandomSubnetworks:
             np.random.shuffle(self.cinds)
             sub_train = self.cinds[0:s]
         elif self.method == 'edge':
-            p = 1.0
             added = set()
             while len(added) < self.train_size:
                 e = np.random.randint(self.num_edges)
