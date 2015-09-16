@@ -34,100 +34,94 @@ class RandomSubnetworks:
                 self.cinds = np.arange(self.network.N)
             else:
                 self.inds = np.arange(self.network.N)
-        elif self.method in ('row', 'col'):
+        else:
             self.rinds = np.arange(self.network.M)
             self.cinds = np.arange(self.network.N)
-        elif self.method == 'edge':
-            edges = self.network.array.nonzero()
-            edges_i, edges_j = edges[0], edges[1]
-            self.edges_i = edges_i
-            self.edges_j = edges_j
-            self.num_edges = len(edges_i)
-        elif self.method in ('link', 'link_f') :
-            edges = self.network.array.nonzero()
-            neighbors = { n: set() for n in range(self.network.N) }
-            for i, j in zip(edges[0], edges[1]):
-                neighbors[i].add(j)
-                if self.method == 'link':
-                    neighbors[j].add(i)
-            self.neighbors = { n: list(neighbors[n]) for n in neighbors }
+            if self.method == 'edge':
+                edges = self.network.array.nonzero()
+                edges_i, edges_j = edges[0], edges[1]
+                self.edges_i = edges_i
+                self.edges_j = edges_j
+                self.num_edges = len(edges_i)
+            elif self.method in ('link', 'link_f') :
+                edges = self.network.array.nonzero()
+                self.num_edges = len(edges[0])
+                neighbors = { n: set() for n in range(self.network.N) }
+                for i, j in zip(edges[0], edges[1]):
+                    neighbors[i].add(j)
+                    if self.method == 'link':
+                        neighbors[j].add(i)
+                self.neighbors = { n: list(neighbors[n]) for n in neighbors }
+                self.num_nodes = len(self.neighbors)
 
-    def sample(self):
+    def sample(self, as_network = False):
         M = self.network.M
         N = self.network.N
         s = self.train_size
 
-        if self.method == 'node':
+        def produce(r, c):
+            if as_network:
+                inds = np.unique(np.array(list(r) + list(c)))
+                return self.network.subnetwork(inds)
+            else:
+                r_a = np.array(list(r))
+                r_c = np.array(list(c))
+                return self.network.subarray(r_a, r_c)
+
+        def fallback():
             s_r, s_c = s
             np.random.shuffle(self.rinds)
             np.random.shuffle(self.cinds)
-            return self.network.subarray(self.rinds[0:s_r], self.cinds[0:s_c])
-        elif self.method == 'edge':
+            return produce(self.rinds[0:s_r], self.cinds[0:s_c])
+
+        if self.method == 'node':
+            return fallback()
+        elif self.method == 'row':
+            np.random.shuffle(self.rinds)
+            return produce(self.rinds[0:s], self.cinds)
+        elif self.method == 'col':
+            np.random.shuffle(self.cinds)
+            return produce(self.rinds, self.cinds[0:s])
+        elif self.method in ('edge', 'link', 'link_f'):
             s_r, s_c = s
+
+            if (self.num_edges < s_r) or (self.num_edges < s_c):
+                return fallback()
+
             added_r = set()
             added_c = set()
 
-            while (len(added_r) < s_r) and (len(added_c) < s_c):
-                e = np.random.randint(self.num_edges)
-                edge_i = self.edges_i[e]
-                edge_j = self.edges_j[e]
-                added_r.add(edge_i)
-                added_c.add(edge_j)
+            if self.method == 'edge':
+                while (len(added_r) < s_r) and (len(added_c) < s_c):
+                    e = np.random.randint(self.num_edges)
+                    edge_i = self.edges_i[e]
+                    edge_j = self.edges_j[e]
+                    added_r.add(edge_i)
+                    added_c.add(edge_j)
+            elif self.method in ('link', 'link_f'):
+                # The difference between 'link' and 'link_f' is in the
+                # construction of neighbors, not the algorithm used to
+                # follow links
+                loc = np.random.randint(self.num_nodes)
+                while (len(added_r) < s_r) and (len(added_c) < s_c):
+                    added_r.add(loc)
+                    if added_r.issuperset(self.neighbors[loc]):
+                        loc = np.random.randint(self.num_nodes)
+                        continue
+                    pick_j = np.random.randint(len(self.neighbors[loc]))
+                    loc_j = self.neighbors[loc][pick_j]
+                    added_c.add(loc_j)
+                    loc = loc_j
 
             remain_r = list(set(range(M)).difference(added_r))
             np.random.shuffle(remain_r)
             added_r.update(set(remain_r[0:(s_r - len(added_r))]))
-            added_r = np.array(list(added_r))
 
             remain_c = list(set(range(N)).difference(added_c))
             np.random.shuffle(remain_c)
             added_c.update(set(remain_c[0:(s_c - len(added_c))]))
-            added_c = np.array(list(added_c))
 
-            return self.network.subarray(added_r, added_c)
-
-        if self.method == 'node':
-            if type(s) == tuple:
-                s_r, s_c = s
-                np.random.shuffle(self.rinds)
-                np.random.shuffle(self.cinds)
-                return self.network.subarray(self.rinds[0:s_r],
-                                             self.cinds[0:s_c])
-            else:
-                np.random.shuffle(self.inds)
-                sub_train = self.inds[0:s]
-        elif self.method == 'row':
-            np.random.shuffle(self.rinds)
-            sub_train = self.rinds[0:s]
-        elif self.method == 'col':
-            np.random.shuffle(self.cinds)
-            sub_train = self.cinds[0:s]
-        elif self.method == 'edge':
-            added = set()
-            while len(added) < self.train_size:
-                e = np.random.randint(self.num_edges)
-                edge_i = self.edges_i[e]
-                edge_j = self.edges_j[e]
-                if len(added) == self.train_size - 1:
-                    # Edge case, since otherwise would bias to tail node
-                    if np.random.random() < 0.5:
-                        added.add(edge_i)
-                    else:
-                        added.add(edge_j)
-                added.add(edge_i)
-                added.add(edge_j)
-            sub_train = np.array(list(added))
-        elif self.method in ['link', 'link_f']:
-            added = set()
-            loc = np.random.randint(self.network.N)
-            while len(added) < self.train_size:
-                added.add(loc)
-                if added.issuperset(self.neighbors[loc]):
-                    loc = np.random.randint(self.network.N)
-                    continue
-                new_i = np.random.randint(len(self.neighbors[loc]))
-                loc = self.neighbors[loc][new_i]
-            sub_train = np.array(list(added))
+            return produce(added_r, added_c)
 
         if self.test_size == 0:
             if self.method in ('row', 'col'):

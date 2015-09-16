@@ -40,6 +40,7 @@ class Network(Array):
         sub_array = self.subarray(inds, inds)
 
         sub = Network(len(inds), self.names[inds])
+        sub.array = sub_array.array
         sub.row_covariates = sub_array.row_covariates
         sub.col_covariates = sub_array.col_covariates
         if sub_array.offset:
