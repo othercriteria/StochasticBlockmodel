@@ -11,17 +11,17 @@ from Experiment import RandomSubnetworks, Results, add_array_stats
 from Experiment import minimum_disagreement
 
 # Parameters
-params = { 'fit_nonstationary': False,
+params = { 'fit_nonstationary': True,
            'fit_conditional': True,
            'fit_conditional_is': False,
            'blockmodel_fit_method': 'sem',
            'fit_K': 2,
-           'num_reps': 2,
-           'sub_sizes': np.arange(5, 81, 5, dtype=np.int),
-           'sampling': 'link',
-           'initialize_true_z': True,
-           'cycles': 10,
-           'sweeps': 2,
+           'num_reps': 5,
+           'sub_sizes': np.arange(25, 56, 5, dtype=np.int),
+           'sampling': 'link_f',
+           'initialize_true_z': False,
+           'cycles': 20,
+           'sweeps': 1,
            'plot_network': True }
 
 
@@ -37,6 +37,7 @@ for field in params:
 # is the ground truth membership to the left-leaning (0) or
 # right-leaning (1) class.
 net = network_from_file_gml('data/polblogs/polblogs.gml', ['value'])
+net.new_node_covariate_int('truth')[:] = net.node_covariates['value'][:]
 
 # Initialize fitting model
 fit_base_model = StationaryLogistic()
@@ -54,9 +55,9 @@ s_results = Results(params['sub_sizes'], params['sub_sizes'],
                     params['num_reps'], 'Stationary fit')
 add_array_stats(s_results)
 def class_mismatch(n):
-    truth = n.node_covariates['value'][:]
+    truth = n.node_covariates['truth'][:]
     estimated = n.node_covariates['z'][:]
-    return minimum_disagreement(truth, estimated)
+    return minimum_disagreement(truth, estimated, normalized = False)
 s_results.new('Class mismatch', 'n', class_mismatch)
 
 all_results = { 's': s_results }
@@ -86,7 +87,6 @@ for sub_size in params['sub_sizes']:
     gen = RandomSubnetworks(net, size, method = params['sampling'])
     for rep in range(params['num_reps']):
         subnet = gen.sample(as_network = True)
-        subnet.show()
         
         initialize(subnet, fit_model)
         fit_base_model.fit = fit_base_model.fit_convex_opt
@@ -129,11 +129,9 @@ for model in all_results:
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
-    s_results.title = None
+    s_results.title = 'Network statistics'
     s_results.plot([('Density', {'ymin': 0, 'plot_mean': True}),
                     (['Out-degree', 'Max row-sum', 'Min row-sum'],
                      {'ymin': 0, 'plot_mean': True}),
                     (['In-degree', 'Max col-sum', 'Min col-sum'],
-                     {'ymin': 0, 'plot_mean': True}),
-                    ('Self-loop density', {'ymin': 0, 'plot_mean': True}),
-                    ('# Active', {'ymin': 0 })])
+                     {'ymin': 0, 'plot_mean': True})])
