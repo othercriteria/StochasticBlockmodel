@@ -1882,7 +1882,9 @@ class Blockmodel(IndependentBernoulli):
     # O(K*N^2) times as many model fits as the `cycles` in the SEM
     # algorithm! It's doubtful that this can be improved in the most
     # general case...
-    def fit_kl(self, network, cycles = 5, **base_fit_options):
+    def fit_kl(self, network, cycles = 5, sweeps = None, **base_fit_options):
+        ## FIXME: "sweeps" argument is ignored!
+
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
