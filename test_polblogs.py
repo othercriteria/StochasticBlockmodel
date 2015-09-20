@@ -11,14 +11,14 @@ from Experiment import RandomSubnetworks, Results, add_array_stats
 from Experiment import minimum_disagreement
 
 # Parameters
-params = { 'fit_nonstationary': True,
+params = { 'fit_nonstationary': False,
            'fit_conditional': True,
            'fit_conditional_is': False,
            'blockmodel_fit_method': 'sem',
            'fit_K': 2,
-           'num_reps': 10,
-           'sub_sizes': range(5, 61, 5),
-           'sampling': 'node',
+           'num_reps': 2,
+           'sub_sizes': np.arange(5, 81, 5, dtype=np.int),
+           'sampling': 'link',
            'initialize_true_z': True,
            'cycles': 10,
            'sweeps': 2,
@@ -50,7 +50,8 @@ if params['blockmodel_fit_method'] == 'kl':
     n_fit_model.fit = n_fit_model.fit_kl
 
 # Set up recording of results from experiment
-s_results = Results(params['sub_sizes'], params['num_reps'], 'Stationary fit')
+s_results = Results(params['sub_sizes'], params['sub_sizes'],
+                    params['num_reps'], 'Stationary fit')
 add_array_stats(s_results)
 def class_mismatch(n):
     truth = n.node_covariates['value'][:]
@@ -79,16 +80,18 @@ def initialize(s, f):
         s.node_covariates['z'][:] = np.random.randint(0, params['fit_K'], s.N)
         
 for sub_size in params['sub_sizes']:
-    print 'subnetwork size = %d' % sub_size
+    size = (sub_size, sub_size)
+    print 'subnetwork size = %s' % str(size)
     
-    gen = RandomSubnetworks(net, sub_size, method = params['sampling'])
+    gen = RandomSubnetworks(net, size, method = params['sampling'])
     for rep in range(params['num_reps']):
-        subnet = gen.sample()
+        subnet = gen.sample(as_network = True)
+        subnet.show()
         
         initialize(subnet, fit_model)
         fit_base_model.fit = fit_base_model.fit_convex_opt
         fit_model.fit(subnet, params['cycles'], params['sweeps'])
-        s_results.record(sub_size, rep, subnet, fit_model = fit_model)
+        s_results.record(size, rep, subnet, fit_model = fit_model)
         print 'S: ', fit_model.Theta
         print
 
@@ -96,21 +99,23 @@ for sub_size in params['sub_sizes']:
             initialize(subnet, fit_model)
             fit_base_model.fit = fit_base_model.fit_conditional
             fit_model.fit(subnet, params['cycles'], params['sweeps'])
-            c_results.record(sub_size, rep, subnet, fit_model = fit_model)
+            c_results.record(size, rep, subnet, fit_model = fit_model)
+            print 'C: ', fit_model.Theta
             print
 
         if params['fit_conditional_is']:
             initialize(subnet, fit_model)
             fit_base_model.fit = fit_base_model.fit_conditional
             fit_model.fit(subnet, params['cycles'], params['sweeps'], T = 10)
-            i_results.record(sub_size, rep, subnet, fit_model = fit_model)
+            i_results.record(size, rep, subnet, fit_model = fit_model)
+            print 'I: ', fit_model.Theta
             print
         
         if params['fit_nonstationary']:
             subnet.offset_extremes()
             initialize(subnet, n_fit_model)
             n_fit_model.fit(subnet, params['cycles'], params['sweeps'])
-            n_results.record(sub_size, rep, subnet, fit_model = n_fit_model)
+            n_results.record(size, rep, subnet, fit_model = n_fit_model)
             print 'NS: ', n_fit_model.Theta
             print
 
@@ -125,10 +130,10 @@ for model in all_results:
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
     s_results.title = None
-    s_results.plot([('Average out-degree', {'ymin': 0, 'plot_mean': True}),
-                    ('Average in-degree', {'ymin': 0, 'plot_mean': True}),
-                    (['Out-degree', 'Max out-degree', 'Min out-degree'],
+    s_results.plot([('Density', {'ymin': 0, 'plot_mean': True}),
+                    (['Out-degree', 'Max row-sum', 'Min row-sum'],
                      {'ymin': 0, 'plot_mean': True}),
-                    (['In-degree', 'Max in-degree', 'Min in-degree'],
+                    (['In-degree', 'Max col-sum', 'Min col-sum'],
                      {'ymin': 0, 'plot_mean': True}),
-                    ('Self-loop density', {'ymin': 0, 'plot_mean': True})])
+                    ('Self-loop density', {'ymin': 0, 'plot_mean': True}),
+                    ('# Active', {'ymin': 0 })])
