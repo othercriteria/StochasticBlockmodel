@@ -41,7 +41,8 @@ except:
 
 # P_{ij} = Logit^{-1}(o_{ij})
 class IndependentBernoulli:
-    def edge_probabilities(self, network, submatrix = None):
+    def edge_probabilities(self, network, submatrix = None,
+                           ignore_offset = False):
         N = network.N
         if submatrix:
             i_sub, j_sub = submatrix
@@ -49,7 +50,7 @@ class IndependentBernoulli:
         else:
             m, n = N, N
 
-        if network.offset:
+        if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix()
             if submatrix:
                 logit_P = logit[i_sub][:,j_sub]
@@ -412,7 +413,8 @@ class StationaryLogistic(Stationary):
         self.beta = {}
         self.fit = self.fit_convex_opt
 
-    def edge_probabilities(self, network, submatrix = None):
+    def edge_probabilities(self, network, submatrix = None,
+                           ignore_offset = False):
         M = network.M
         N = network.N
         if submatrix:
@@ -421,7 +423,7 @@ class StationaryLogistic(Stationary):
         else:
             m, n = M, N
         
-        if network.offset:
+        if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
@@ -1756,7 +1758,10 @@ class Blockmodel(IndependentBernoulli):
             for j in range(N):
                 network.offset[i,j] += self.Theta[z[i], z[j]]
 
-    def edge_probabilities(self, network, submatrix = None):
+    def edge_probabilities(self, network, submatrix = None,
+                           ignore_offset = False):
+        # FIXME: ignore_offset argument currently ignored!
+        
         if network.offset:
             old_offset = network.offset.copy()
         else:

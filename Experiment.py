@@ -72,7 +72,10 @@ class RandomSubnetworks:
             s_r, s_c = s
             np.random.shuffle(self.rinds)
             np.random.shuffle(self.cinds)
-            return produce(self.rinds[0:s_r], self.cinds[0:s_c])
+            if as_network:
+                return produce(self.rinds[0:s_r], self.rinds[0:s_r])
+            else:
+                return produce(self.rinds[0:s_r], self.cinds[0:s_c])
 
         if self.method == 'node':
             return fallback()
