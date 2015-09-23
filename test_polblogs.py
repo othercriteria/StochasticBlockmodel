@@ -16,12 +16,12 @@ params = { 'fit_nonstationary': True,
            'fit_conditional_is': False,
            'blockmodel_fit_method': 'sem',
            'fit_K': 2,
-           'num_reps': 5,
-           'sub_sizes': np.arange(25, 56, 5, dtype=np.int),
-           'sampling': 'link_f',
+           'num_reps': 2,
+           'sub_sizes': np.arange(20, 86, 5, dtype=np.int),
+           'sampling': 'edge',
            'initialize_true_z': False,
            'cycles': 20,
-           'sweeps': 1,
+           'sweeps': 2,
            'plot_network': True }
 
 
@@ -75,6 +75,7 @@ if params['fit_conditional_is']:
     all_results['i'] = i_results
 
 def initialize(s, f):
+    f.ignore_offset = False
     if params['initialize_true_z']:
         s.node_covariates['z'][:] = s.node_covariates['value'][:]
     else:
@@ -87,6 +88,7 @@ for sub_size in params['sub_sizes']:
     gen = RandomSubnetworks(net, size, method = params['sampling'])
     for rep in range(params['num_reps']):
         subnet = gen.sample(as_network = True)
+        subnet.offset_extremes()
         
         initialize(subnet, fit_model)
         fit_base_model.fit = fit_base_model.fit_convex_opt
@@ -97,6 +99,7 @@ for sub_size in params['sub_sizes']:
 
         if params['fit_conditional']:
             initialize(subnet, fit_model)
+            fit_model.ignore_offset = True
             fit_base_model.fit = fit_base_model.fit_conditional
             fit_model.fit(subnet, params['cycles'], params['sweeps'])
             c_results.record(size, rep, subnet, fit_model = fit_model)
@@ -105,6 +108,7 @@ for sub_size in params['sub_sizes']:
 
         if params['fit_conditional_is']:
             initialize(subnet, fit_model)
+            fit_model.ignore_offset = True
             fit_base_model.fit = fit_base_model.fit_conditional
             fit_model.fit(subnet, params['cycles'], params['sweeps'], T = 10)
             i_results.record(size, rep, subnet, fit_model = fit_model)

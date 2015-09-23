@@ -269,13 +269,14 @@ class Stationary(IndependentBernoulli):
         self.fit_info = None
         self.conf = None
 
-    def edge_probabilities(self, network, submatrix = None):
+    def edge_probabilities(self, network, submatrix = None,
+                           ignore_offset = False):
         N = network.N
         if submatrix:
             sub_i, sub_j = submatrix
             m, n = len(i_sub), len(j_sub)
 
-        if network.offset:
+        if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[sub_i][:,sub_j]
@@ -1744,12 +1745,14 @@ class NonstationaryLogistic(StationaryLogistic):
 # P_{ij} = Logit^{-1}(base_model(i,j) + Theta_{z_i,z_j})
 # Constraints: \sum_{i,j} z_{i,j} = 0
 class Blockmodel(IndependentBernoulli):
-    def __init__(self, base_model, K, block_name = 'z'):
+    def __init__(self, base_model, K, block_name = 'z',
+                 ignore_offset = False):
         self.base_model = base_model
         self.K = K
         self.Theta = np.zeros((K,K))
         self.block_name = block_name
         self.fit = self.fit_sem
+        self.ignore_offset = ignore_offset
         
     def apply_to_offset(self, network):
         N = network.N
@@ -1759,22 +1762,22 @@ class Blockmodel(IndependentBernoulli):
                 network.offset[i,j] += self.Theta[z[i], z[j]]
 
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = False):
-        # FIXME: ignore_offset argument currently ignored!
-        
-        if network.offset:
-            old_offset = network.offset.copy()
-        else:
+                           ignore_offset = None):
+        if ignore_offset is None:
+           ignore_offset = self.ignore_offset
+
+        old_offset = network.offset.copy()
+        if ignore_offset:
             network.initialize_offset()
-            old_offset = None
         self.apply_to_offset(network)
 
-        P = self.base_model.edge_probabilities(network, submatrix)
+        # If outer ignore_offset, then the inner offset is just block
+        # effects, and so should be used. If not outer ignore_offset,
+        # then the offset should be used anyways.
+        P = self.base_model.edge_probabilities(network, submatrix,
+                                               ignore_offset = False)
 
-        if old_offset:
-            network.offset = old_offset
-        else:
-            network.offset = None
+        network.offset = old_offset
 
         return P
 
@@ -1847,15 +1850,15 @@ class Blockmodel(IndependentBernoulli):
                 l = np.random.randint(N)
                 logprobs = np.empty(K)
                 for k in range(K):
-                    logprobs[k] = (np.dot(Theta[k,z[:]], A[:,l]) +
-                                   np.dot(Theta[z[:],k], A[l,:]) -
+                    logprobs[k] = (np.dot(Theta[k,z[:]], A[l,:]) +
+                                   np.dot(Theta[z[:],k], A[:,l]) -
                                    (Theta[k,k] * A[l,l]))
                 logprobs -= np.max(logprobs)
                 probs = np.exp(logprobs)
                 probs /= np.sum(probs)
                 z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
 
-            nll = self.nll(network)
+            nll = self.nll(network, ignore_offset = self.ignore_offset)
             self.sem_trace.append((nll, z.copy(), Theta.copy()))
 
         if use_best:
@@ -1910,7 +1913,7 @@ class Blockmodel(IndependentBernoulli):
                     
             self.base_model.fit(network, **base_fit_options)
 
-            nll = self.nll(network)
+            nll = self.nll(network, ignore_offset = self.ignore_offset)
             z_to_nll_cache[z_hash] = nll
             return nll
             
