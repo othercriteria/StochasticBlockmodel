@@ -1746,13 +1746,13 @@ class NonstationaryLogistic(StationaryLogistic):
 # Constraints: \sum_{i,j} z_{i,j} = 0
 class Blockmodel(IndependentBernoulli):
     def __init__(self, base_model, K, block_name = 'z',
-                 ignore_offset = False):
+                 ignore_inner_offset = False):
         self.base_model = base_model
         self.K = K
         self.Theta = np.zeros((K,K))
         self.block_name = block_name
         self.fit = self.fit_sem
-        self.ignore_offset = ignore_offset
+        self.ignore_inner_offset = ignore_inner_offset
         
     def apply_to_offset(self, network):
         N = network.N
@@ -1764,18 +1764,20 @@ class Blockmodel(IndependentBernoulli):
     def edge_probabilities(self, network, submatrix = None,
                            ignore_offset = None):
         if ignore_offset is None:
-           ignore_offset = self.ignore_offset
+           ignore_inner_offset = self.ignore_inner_offset
+        else:
+            ignore_inner_offset = ignore_offset
 
         old_offset = network.offset.copy()
-        if ignore_offset:
+        if network.offset is None:
             network.initialize_offset()
         self.apply_to_offset(network)
 
         # If outer ignore_offset, then the inner offset is just block
         # effects, and so should be used. If not outer ignore_offset,
         # then the offset should be used anyways.
-        P = self.base_model.edge_probabilities(network, submatrix,
-                                               ignore_offset = False)
+        P = self.base_model.edge_probabilities(network, submatrix, \
+              ignore_offset = ignore_inner_offset)
 
         network.offset = old_offset
 
@@ -1818,7 +1820,7 @@ class Blockmodel(IndependentBernoulli):
         self.sem_trace = []
 
         cov_name_to_inds = {}
-        def fit_at_z(z):
+        def fit_at_z(z, Theta):
             for s in range(K):
                 for t in range(K):
                     if s == 0 and t == 0: continue
@@ -1832,9 +1834,6 @@ class Blockmodel(IndependentBernoulli):
                     
             self.base_model.fit(network, **base_fit_options)
 
-        for cycle in range(cycles):
-            # M-step
-            fit_at_z(z)
             Theta[0,0] = 0.0
             for cov_name in cov_name_to_inds:
                 s, t = cov_name_to_inds[cov_name]
@@ -1844,6 +1843,10 @@ class Blockmodel(IndependentBernoulli):
             Theta_mean = np.mean(Theta)
             Theta -= Theta_mean
             self.base_model.kappa += Theta_mean
+
+        for cycle in range(cycles):
+            # M-step
+            fit_at_z(z, Theta)
             
             # Stochastic E-step
             for gibbs_step in range(sweeps * N):
@@ -1858,24 +1861,16 @@ class Blockmodel(IndependentBernoulli):
                 probs /= np.sum(probs)
                 z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
 
-            nll = self.nll(network, ignore_offset = self.ignore_offset)
-            self.sem_trace.append((nll, z.copy(), Theta.copy()))
+            nll = self.nll(network, ignore_offset = self.ignore_inner_offset)
+            if use_best:
+                self.sem_trace.append((nll, z.copy()))
 
         if use_best:
             best_nll, best_c = np.inf, 0
             for c in range(cycles):
                 if self.sem_trace[c][0] < best_nll:
                     best_nll, best_c = self.sem_trace[c][0], c
-            fit_at_z(self.sem_trace[best_c][1])
-            Theta[0,0] = 0.0
-            for cov_name in cov_name_to_inds:
-                s, t = cov_name_to_inds[cov_name]
-                Theta[s,t] = self.base_model.beta[cov_name]
-                network.edge_covariates.pop(cov_name)
-                self.base_model.beta.pop(cov_name)
-            Theta_mean = np.mean(Theta)
-            Theta -= Theta_mean
-            self.base_model.kappa += Theta_mean
+            fit_at_z(self.sem_trace[best_c][1], Theta)
 
     # Blockmodel fitting using the algorithm given in Karrer and
     # Newman (2011) that the authors claim is inspired by the

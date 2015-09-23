@@ -18,10 +18,10 @@ params = { 'fit_nonstationary': True,
            'fit_K': 2,
            'num_reps': 2,
            'sub_sizes': np.arange(20, 86, 5, dtype=np.int),
-           'sampling': 'edge',
+           'sampling': 'link',
            'initialize_true_z': False,
            'cycles': 20,
-           'sweeps': 2,
+           'sweeps': 10,
            'plot_network': True }
 
 
@@ -74,12 +74,19 @@ if params['fit_conditional_is']:
     i_results.title = 'Conditional (importance sampled) fit'
     all_results['i'] = i_results
 
-def initialize(s, f):
-    f.ignore_offset = False
+def initialize(s, f, offset_extremes):
     if params['initialize_true_z']:
         s.node_covariates['z'][:] = s.node_covariates['value'][:]
     else:
         s.node_covariates['z'][:] = np.random.randint(0, params['fit_K'], s.N)
+        
+    if offset_extremes:
+        s.offset_extremes()
+    else:
+        s.initialize_offset()
+        
+    for i in range(subnet.N):
+        subnet.offset[i,i] = -np.inf
         
 for sub_size in params['sub_sizes']:
     size = (sub_size, sub_size)
@@ -88,36 +95,36 @@ for sub_size in params['sub_sizes']:
     gen = RandomSubnetworks(net, size, method = params['sampling'])
     for rep in range(params['num_reps']):
         subnet = gen.sample(as_network = True)
-        subnet.offset_extremes()
         
-        initialize(subnet, fit_model)
+        initialize(subnet, fit_model, offset_extremes = False)
         fit_base_model.fit = fit_base_model.fit_convex_opt
+        fit_model.ignore_inner_offset = False
         fit_model.fit(subnet, params['cycles'], params['sweeps'])
         s_results.record(size, rep, subnet, fit_model = fit_model)
         print 'S: ', fit_model.Theta
         print
 
         if params['fit_conditional']:
-            initialize(subnet, fit_model)
-            fit_model.ignore_offset = True
+            initialize(subnet, fit_model, offset_extremes = False)
             fit_base_model.fit = fit_base_model.fit_conditional
+            fit_model.ignore_inner_offset = True
             fit_model.fit(subnet, params['cycles'], params['sweeps'])
             c_results.record(size, rep, subnet, fit_model = fit_model)
             print 'C: ', fit_model.Theta
             print
 
         if params['fit_conditional_is']:
-            initialize(subnet, fit_model)
-            fit_model.ignore_offset = True
+            initialize(subnet, fit_model, offset_extremes = False)
             fit_base_model.fit = fit_base_model.fit_conditional
+            fit_model.ignore_inner_offset = True
             fit_model.fit(subnet, params['cycles'], params['sweeps'], T = 10)
             i_results.record(size, rep, subnet, fit_model = fit_model)
             print 'I: ', fit_model.Theta
             print
         
         if params['fit_nonstationary']:
-            subnet.offset_extremes()
-            initialize(subnet, n_fit_model)
+            initialize(subnet, n_fit_model, offset_extremes = True)
+            fit_model.ignore_inner_offset = False
             n_fit_model.fit(subnet, params['cycles'], params['sweeps'])
             n_results.record(size, rep, subnet, fit_model = n_fit_model)
             print 'NS: ', n_fit_model.Theta
