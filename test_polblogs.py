@@ -16,12 +16,12 @@ params = { 'fit_nonstationary': True,
            'fit_conditional_is': False,
            'blockmodel_fit_method': 'sem',
            'fit_K': 2,
-           'num_reps': 2,
-           'sub_sizes': np.arange(20, 86, 5, dtype=np.int),
+           'num_reps': 3,
+           'sub_sizes': np.arange(20, 106, 20, dtype=np.int),
            'sampling': 'link',
            'initialize_true_z': False,
-           'cycles': 20,
-           'sweeps': 10,
+           'cycles': 2,
+           'sweeps': 5,
            'plot_network': True }
 
 
@@ -86,7 +86,8 @@ def initialize(s, f, offset_extremes):
         s.initialize_offset()
         
     for i in range(subnet.N):
-        subnet.offset[i,i] = -np.inf
+        # TODO: Track down why -np.inf causes problems with CMLE...
+        subnet.offset[i,i] = -20.0
         
 for sub_size in params['sub_sizes']:
     size = (sub_size, sub_size)
@@ -136,7 +137,7 @@ for model in all_results:
     print results.title
     results.summary()
     print
-    results.plot([('Class mismatch', {'ymin': 0.0, 'ymax': params['fit_K']})])
+    results.plot([('Class mismatch', {'ymin': 0.0, 'ymax': 1.0})])
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
