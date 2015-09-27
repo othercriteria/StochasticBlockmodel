@@ -370,6 +370,10 @@ def prune(r, c, *arrays):
     arrays = list(arrays)
     A = len(arrays)
 
+    unprune_ones = []
+
+    r_unprune = np.arange(len(r))
+    c_unprune = np.arange(len(c))
     while True:
         m, n = len(r), len(c)
 
@@ -378,14 +382,19 @@ def prune(r, c, *arrays):
             r = r[-r_0]
             for a in range(A):
                 arrays[a] = arrays[a][-r_0]
+            r_unprune = r_unprune[-r_0]
             continue
 
         r_n = (r == n)
         if np.any(r_n):
             r = r[-r_n]
+            unprune_ones.extend([[r_u,c_u]
+                                 for r_u in r_unprune[r_n]
+                                 for c_u in c_unprune])
             c -= np.sum(r_n)
             for a in range(A):
                 arrays[a] = arrays[a][-r_n]
+            r_unprune = r_unprune[-r_n]
             continue
 
         c_0 = (c == 0)
@@ -393,18 +402,31 @@ def prune(r, c, *arrays):
             c = c[-c_0]
             for a in range(A):
                 arrays[a] = arrays[a][:,-c_0]
+            c_unprune = c_unprune[-c_0]
             continue
 
         c_m = (c == m)
         if np.any(c_m):
             c = c[-c_m]
+            unprune_ones.extend([[r_u,c_u]
+                                 for r_u in r_unprune
+                                 for c_u in c_unprune[c_n]])
             r -= np.sum(c_m)
             for a in range(A):
                 arrays[a] = arrays[a][:,-c_m]
+            c_unprune = c_unprune[-c_n]
+            continue
 
         break
 
-    return r, c, [a.copy() for a in arrays]
+    unprune_ones = np.array(unprune_ones)
+    def unprune(x):
+        if unprune_ones.shape[0] == 0:
+            return x
+        else:
+            return (np.vstack([a, unprune_ones]), b, c)
+
+    return r, c, [a.copy() for a in arrays], unprune
 
 # Return a binary matrix (or a list of binary matrices) sampled
 # approximately according to the specified Bernoulli weights,
@@ -445,37 +467,40 @@ def prune(r, c, *arrays):
 #         B_sample[i,j] = 1
 def approximate_from_margins_weights(r, c, w, T = None,
                                      sort_by_wopt_var = True):
-    check_margins(r, c)
+    r_prune, c_prune, arrays_prune, unprune = prune(r, c, w)
+    w_prune = arrays_prune[0]
+
+    check_margins(r_prune, c_prune)
 
     ### Preprocessing
 
     # Sizing (making copies of m and n, as they are mutated during sampling)
-    r_init = r.copy()
-    m, n = len(r), len(c)
+    r_init = r_prune.copy()
+    m, n = len(r_prune), len(c_prune)
     m_init, n_init = m, n
-    assert((m,n) == w.shape)
+    assert((m,n) == w_prune.shape)
 
     # Sort the row margins (descending)
-    rndx_init = np.argsort(-r)
-    rsort = r[rndx_init]
+    rndx_init = np.argsort(-r_prune)
+    rsort = r_prune[rndx_init]
 
     # Balance the weights
-    a_scale, b_scale = canonical_scalings(w, r, c)
-    wopt = a_scale * w * b_scale
+    a_scale, b_scale = canonical_scalings(w_prune, r_prune, c_prune)
+    wopt = a_scale * w_prune * b_scale
 
     # Reorder the columns
     if sort_by_wopt_var:
-        cndx = np.lexsort((-wopt.var(0), c))
+        cndx = np.lexsort((-wopt.var(0), c_prune))
     else:
-        cndx = np.argsort(c)
-    csort = c[cndx];
+        cndx = np.argsort(c_prune)
+    csort = c_prune[cndx];
     wopt = wopt[:,cndx]
 
     # Precompute log weights
-    logw = np.log(w)
+    logw = np.log(w_prune)
 
     # Compute G
-    G = compute_G(r, m, n, wopt)
+    G = compute_G(r_prune, m, n, wopt)
 
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
@@ -488,11 +513,12 @@ def approximate_from_margins_weights(r, c, w, T = None,
     count_init = np.sum(rsort)
 
     def do_sample():
-        return compute_sample(logw,
-                              count_init, m_init, n_init,
-                              r_init, rndx_init, irndx_init,
-                              csort, cndx, cconj_init,
-                              G)
+        sample_prune = compute_sample(logw,
+                                      count_init, m_init, n_init,
+                                      r_init, rndx_init, irndx_init,
+                                      csort, cndx, cconj_init,
+                                      G)
+        return unprune(sample_prune)
     
     if T:
         return [do_sample() for t in xrange(T)]
@@ -515,7 +541,7 @@ def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     r = A.sum(1, dtype=np.int)
     c = A.sum(0, dtype=np.int)
 
-    r, c, arrays = prune(r, c, A, w)
+    r, c, arrays, _ = prune(r, c, A, w)
     A, w = arrays
 
     # Sizing
