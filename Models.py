@@ -1870,6 +1870,7 @@ class Blockmodel(IndependentBernoulli):
             for c in range(cycles):
                 if self.sem_trace[c][0] < best_nll:
                     best_nll, best_c = self.sem_trace[c][0], c
+            z[:] = self.sem_trace[best_c][1][:]
             fit_at_z(self.sem_trace[best_c][1], Theta)
 
     # Blockmodel fitting using the algorithm given in Karrer and
