@@ -367,11 +367,12 @@ def conjugate(c, n):
 # rows and columns are non-extreme. Perform the matching pruning on
 # supplied arrays
 def prune(r, c, *arrays):
-    arrays = list(arrays)
+    r = r.copy()
+    c = c.copy()
+    arrays = list([a.copy() for a in arrays])
     A = len(arrays)
 
     unprune_ones = []
-
     r_unprune = np.arange(len(r))
     c_unprune = np.arange(len(c))
     while True:
@@ -424,9 +425,10 @@ def prune(r, c, *arrays):
         if unprune_ones.shape[0] == 0:
             return x
         else:
-            return (np.vstack([a, unprune_ones]), b, c)
+            x_a, x_b, x_c = x
+            return (np.vstack([x_a, unprune_ones]), x_b, x_c)
 
-    return r, c, [a.copy() for a in arrays], unprune
+    return r, c, arrays, unprune
 
 # Return a binary matrix (or a list of binary matrices) sampled
 # approximately according to the specified Bernoulli weights,
