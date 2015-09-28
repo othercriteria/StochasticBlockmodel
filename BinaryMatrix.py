@@ -428,7 +428,8 @@ def prune(r, c, *arrays):
             x_a, x_b, x_c = x
             return (np.vstack([x_a, unprune_ones]), x_b, x_c)
 
-    return r, c, arrays, unprune
+    # Copy (views of) arrays to put them in C-contiguous form
+    return r, c, [a.copy() for a in arrays], unprune
 
 # Return a binary matrix (or a list of binary matrices) sampled
 # approximately according to the specified Bernoulli weights,
