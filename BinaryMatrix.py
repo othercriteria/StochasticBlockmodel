@@ -8,6 +8,8 @@ import numpy as np
 from scipy import optimize as opt
 import hashlib
 
+from Utility import logsumexp, logabsdiffexp
+
 # Get machine precision; used to prevent divide by zero
 eps0 = np.spacing(0)
 
@@ -1028,6 +1030,20 @@ def compute_sample(logw,
 # End of adapted code
 ##############################################################################
 
+def log_partition_is(z, cvsq = False):
+    """From importance-weighted sampled, estimate log-partition function."""
+    T = len(z)
+
+    logf = np.empty(T)
+    for t in range(T):
+        logf[t] = z[t][2] - z[t][1]
+    logkappa = -np.log(T) + logsumexp(logf)
+    if not cvsq:
+        return logkappa
+    else:
+        logcvsq = -np.log(T - 1) - 2 * logkappa + \
+          logsumexp(2 * logabsdiffexp(logf, logkappa))
+        return logkappa, logcvsq
 
 if __name__ == '__main__':
     # Test of binary matrix generation code
