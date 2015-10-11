@@ -18,7 +18,7 @@ from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_norm
 from BinaryMatrix import approximate_conditional_nll
 from BinaryMatrix import approximate_from_margins_weights
-from Utility import logsumexp, logabsdiffexp
+from BinaryMatrix import log_partition_is
 
 # Parameters
 N = 25
@@ -125,12 +125,7 @@ for i, T in enumerate([1, 3, 10, 30]):
 
         z = approximate_from_margins_weights(r, c, w, T,
                                              sort_by_wopt_var = False)
-        logf = np.empty(T)
-        for t in range(T):
-            logf[t] = z[t][2] - z[t][1]
-        logkappa = -np.log(T) + logsumexp(logf)
-        logcvsq = -np.log(T - 1) - 2 * logkappa + \
-            logsumexp(2 * logabsdiffexp(logf, logkappa))
+        logkappa, logcvsq = log_partition_is(z, cvsq = True)
         print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
         return (logkappa - np.sum(np.log(w[A])))
     grid_fit(StationaryLogistic(), f_nll)
