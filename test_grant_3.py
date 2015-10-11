@@ -22,7 +22,7 @@ from Utility import logsumexp, logabsdiffexp
 
 # Parameters
 N = 25
-G = 5
+G = 20
 alpha_sd = 2.0
 theta_true = { 'x_1': 2.0, 'x_2': -1.0 }
 target_degree = 2
@@ -44,7 +44,7 @@ for name in theta_true:
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Instantiate network according to data model
-data_model.match_kappa(net, ('degree', target_degree))
+data_model.match_kappa(net, ('row_sum', target_degree))
 net.generate(data_model)
 #net.show_heatmap('alpha_out')
 #net.show_heatmap('alpha_in')
@@ -113,7 +113,7 @@ def f_nll(net, fit_model):
 grid_fit(StationaryLogistic(), f_nll)
 
 # Grid search for importance-sampled conditional fit
-for i, T in enumerate([1, 10, 100, 1000]):
+for i, T in enumerate([1, 3, 10, 30]):
     plt.subplot(2, 4, (5+i))
     plt.title('IS Conditional (T = %d)' % T)
 
