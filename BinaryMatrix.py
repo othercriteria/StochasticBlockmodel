@@ -352,16 +352,18 @@ def canonical_scalings(w, r, c):
 def conjugate(c, n):
     cc = np.zeros(n, dtype = np.int);
 
-    for j, k in enumerate(c):
-        if k >= n:
-            cc[n-1] += 1
-        elif k >= 1:
-            cc[k-1] += 1
+    ## TODO: Check that this does the right thing for n = 0...
+    if n > 0:
+        for j, k in enumerate(c):
+            if k >= n:
+                cc[n-1] += 1
+            elif k >= 1:
+                cc[k-1] += 1
 
-    s = cc[n-1]
-    for j in xrange(n-2,-1,-1):
-        s += cc[j]
-        cc[j] = s
+        s = cc[n-1]
+        for j in xrange(n-2,-1,-1):
+            s += cc[j]
+            cc[j] = s
 
     return cc
 
@@ -482,6 +484,11 @@ def approximate_from_margins_weights(r, c, w, T = None,
     # Sizing (making copies of m and n, as they are mutated during sampling)
     r_init = r_prune.copy()
     m, n = len(r_prune), len(c_prune)
+    if (m == 0) or (n == 0):
+        if T:
+            return [unprune([np.empty((0,2)), 0, 0]) for t in xrange(T)]
+        else:
+            return np.empty((0,0))
     m_init, n_init = m, n
     assert((m,n) == w_prune.shape)
 
