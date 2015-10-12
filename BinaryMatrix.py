@@ -415,11 +415,11 @@ def prune(r, c, *arrays):
             c = c[-c_m]
             unprune_ones.extend([[r_u,c_u]
                                  for r_u in r_unprune
-                                 for c_u in c_unprune[c_n]])
+                                 for c_u in c_unprune[c_m]])
             r -= np.sum(c_m)
             for a in range(A):
                 arrays[a] = arrays[a][:,-c_m]
-            c_unprune = c_unprune[-c_n]
+            c_unprune = c_unprune[-c_m]
             continue
 
         break
