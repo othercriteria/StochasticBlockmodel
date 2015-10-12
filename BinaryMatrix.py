@@ -1066,7 +1066,7 @@ if __name__ == '__main__':
     print conjugate([1,1,1,1,2,8], 10)
 
     # Test of approximate margins-conditional sampling
-    N = 5;
+    N = 50;
     a_out = np.random.normal(0, 1, N)
     a_in = np.random.normal(0, 1, N)
     x = np.random.normal(0, 1, (N,N))
@@ -1095,16 +1095,11 @@ if __name__ == '__main__':
     # Test repeated sampling
     T = 10
     B_samples_sparse = approximate_from_margins_weights(r, c, w, T)
-    from Utility import logsumexp, logabsdiffexp
-    logf = np.empty(T)
+    logkappa, logcvsq = log_partition_is(B_samples_sparse, cvsq = True)
     for t in range(T):
         B_sample = np.zeros((N,N), dtype = np.bool)
         for i, j in B_samples_sparse[t][0]:
             if i == -1: break
             B_sample[i,j] = 1
         print B_sample[x < -1.0].sum(), B_sample[x > 1.0].sum()
-        logf[t] = B_samples_sparse[t][2] - B_samples_sparse[t][1]
-    logkappa = -np.log(T) + logsumexp(logf)
-    logcvsq = -np.log(T - 1) - 2 * logkappa + \
-        logsumexp(2 * logabsdiffexp(logf, logkappa))
     print np.exp(logcvsq)

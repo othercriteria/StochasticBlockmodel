@@ -12,11 +12,12 @@ from time import time
 from itertools import permutations
 import hashlib
 
-from Utility import logit, inv_logit, logit_mean, logsumexp, logabsdiffexp
+from Utility import logit, inv_logit, logit_mean
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights
 from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import p_margins_saddlepoint
+from BinaryMatrix import log_partition_is
 
 # See if embedded R process can be started; this should be done once,
 # globally, to reduce overhead.
@@ -658,16 +659,11 @@ class StationaryLogistic(Stationary):
             else:
                 z = approximate_from_margins_weights(r, c, w, T,
                                                      sort_by_wopt_var = True)
-                logf = np.empty(T)
-                for t in range(T):
-                    logQ, logP = z[t][1], z[t][2]
-                    logf[t] = logP - logQ
-                logkappa = -np.log(T) + logsumexp(logf)
-                logcvsq = -np.log(T - 1) - 2 * logkappa + \
-                    logsumexp(2 * logabsdiffexp(logf, logkappa))
-                if verbose:
+                if not verbose:
+                    logkappa = log_partition_is(z)
+                else:
+                    logkappa, logcvsq = log_partition_is(z, cvsq = True)
                     print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
-
                 cnll = logkappa - np.sum(np.log(w[A]))
 
             self.fit_info['cnll_evals'] += 1
