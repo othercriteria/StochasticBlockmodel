@@ -435,45 +435,48 @@ def prune(r, c, *arrays):
     # Copy (views of) arrays to put them in C-contiguous form
     return r, c, [a.copy() for a in arrays], unprune
 
-# Return a binary matrix (or a list of binary matrices) sampled
-# approximately according to the specified Bernoulli weights,
-# conditioned on having the specified margins.
-# Inputs:
-#   r: row margins, length m
-#   c: column margins, length n
-#   w: weight matrix, (m x n) matrix with values in (0, +infty)
-#   T: number of matrices to sample
-#   sort_by_wopt_var: when enabled, column ordering depends on w
-# Output:
-#   B_sample_sparse: (T default) sparse representation of (m x n) binary matrix
-#                    (T >= 1) list of (sparse binary matrices, logQ, logP)
-#
-# More explicitly, consider independent Bernoulli random variables
-# B(i,j) arranged as an m x n matrix B given the m-vector of row sums
-# r and the n-vector of column sums c of the sample, i.e., given that
-# sum(B_sample, 1) = r and sum(B_sample, 0) = c.
-#
-# An error is generated if no binary matrix agrees with r and c.
-#
-# B(i,j) is Bernoulli(p(i,j)) where p(i,j) = w(i,j)/(1+w(i,j)), i.e.,
-# w(i,j) = p(i,j)/(1-p(i,j)).  [The case p(i,j) = 1 must be handled by
-# the user in a preprocessing step, by converting to p(i,j) = 0 and
-# decrementing the row and column sums appropriately.]
-#
-# The sparse representation used for output is a matrix giving the
-# locations of the ones in the sample. If d = sum(r) = sum(c), then
-# B_sample_sparse has dimensions (d x 2). If something goes wrong (due
-# to undetected improper input), some of the rows of B_sample_sparse
-# may [-1,-1], indicating no entry of B_sample.
-# 
-# B_sample can be recovered from B_sample_sparse via:
-#
-#     B_sample = np.zeros((m,n), dtype=np.bool)
-#     for i, j in B_sample_sparse:
-#         if i == -1: break 
-#         B_sample[i,j] = 1
 def approximate_from_margins_weights(r, c, w, T = None,
                                      sort_by_wopt_var = True):
+    """Return approximate samples from row/column-conditional binary matrices.
+                                     
+Return a binary matrix (or a list of binary matrices) sampled
+approximately according to the specified Bernoulli weights,
+conditioned on having the specified margins.
+Inputs:
+  r: row margins, length m
+  c: column margins, length n
+  w: weight matrix, (m x n) matrix with values in (0, +infty)
+  T: number of matrices to sample
+  sort_by_wopt_var: when enabled, column ordering depends on w
+Output:
+  B_sample_sparse: (T default) sparse representation of (m x n) binary matrix
+                   (T >= 1) list of (sparse binary matrices, logQ, logP)
+
+More explicitly, consider independent Bernoulli random variables
+B(i,j) arranged as an m x n matrix B given the m-vector of row sums
+r and the n-vector of column sums c of the sample, i.e., given that
+sum(B_sample, 1) = r and sum(B_sample, 0) = c.
+
+An error is generated if no binary matrix agrees with r and c.
+
+B(i,j) is Bernoulli(p(i,j)) where p(i,j) = w(i,j)/(1+w(i,j)), i.e.,
+w(i,j) = p(i,j)/(1-p(i,j)).  [The case p(i,j) = 1 must be handled by
+the user in a preprocessing step, by converting to p(i,j) = 0 and
+decrementing the row and column sums appropriately.]
+
+The sparse representation used for output is a matrix giving the
+locations of the ones in the sample. If d = sum(r) = sum(c), then
+B_sample_sparse has dimensions (d x 2). If something goes wrong (due
+to undetected improper input), some of the rows of B_sample_sparse
+may [-1,-1], indicating no entry of B_sample.
+
+B_sample can be recovered from B_sample_sparse via:
+
+    B_sample = np.zeros((m,n), dtype=np.bool)
+    for i, j in B_sample_sparse:
+        if i == -1: break 
+        B_sample[i,j] = 1
+"""
     r_prune, c_prune, arrays_prune, unprune = prune(r, c, w)
     w_prune = arrays_prune[0]
 
@@ -537,16 +540,19 @@ def approximate_from_margins_weights(r, c, w, T = None,
     else:
         return do_sample()[0]
     
-# Return the approximate nll of an observed binary matrix given
-# specified Bernoulli weights, conditioned on having the observed
-# margins.
-#
-# Inputs:
-#   A: observed data, (m x n) binary matrix
-#   w: weight matrix, (m x n) matrix with values in (0, +infty)
-# Output:
-#   ncll: negative conditional log-likelihood
 def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
+    """Return approximate row/column-conditional NLL of binary matrix.
+    
+Return the approximate nll of an observed binary matrix given
+specified Bernoulli weights, conditioned on having the observed
+margins.
+
+Inputs:
+  A: observed data, (m x n) binary matrix
+  w: weight matrix, (m x n) matrix with values in (0, +infty)
+Output:
+  ncll: negative conditional log-likelihood
+"""
     assert(A.shape == w.shape)
 
     # FIXME: this will probably break if A is a matrix (as opposed to an array)
