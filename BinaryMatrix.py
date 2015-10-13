@@ -119,16 +119,19 @@ except:
     print 'C support code can\'t load. Falling back to Python.'
     c_support_loaded = False
 
-# Saddlepoint approximation to P(R = r, C = c) for a matrix with
-# independent Bernoulli(p_{ij}) entries. Because of linear dependence
-# in the distribution of the margins (which leads to a singular
-# K''(s_hat, t_hat), I introduce the additional random variable of the
-# sum of all the cells and then only consider the distribution of the
-# first (m-1) row and first (n-1) column margins.
-#
-# Behavior not well-defined if any margins are extreme or if the
-# margins don't satisfy the Gale-Ryser conditions.
 def p_margins_saddlepoint(r, c, p):
+    """Return saddlepoint row/column-conditional NLL of binary matrix.
+
+Saddlepoint approximation to P(R = r, C = c) for a matrix with
+independent Bernoulli(p_{ij}) entries. Because of linear dependence
+in the distribution of the margins (which leads to a singular
+K''(s_hat, t_hat), I introduce the additional random variable of the
+sum of all the cells and then only consider the distribution of the
+first (m-1) row and first (n-1) column margins.
+
+Behavior not well-defined if any margins are extreme or if the
+margins don't satisfy the Gale-Ryser conditions.
+"""
     m, n = len(r), len(c)
     
     a = np.sum(r)
@@ -302,9 +305,12 @@ then undoing the sorting after the target matrix is generated."""
 # Adapting Matlab code provided by Matt Harrison (matt_harrison@brown.edu).
 ##############################################################################
 
-# Find row and column scalings to balance a matrix, using new "rc" method.
 _dict_canonical_scalings = {}
 def canonical_scalings(w, r, c):
+    """Find row and column scalings to balance a matrix.
+
+TODO: describe "rc" method.
+"""
     w_hash = hashlib.sha1(w.view(np.uint8)).hexdigest()
     r_hash = hashlib.sha1(r.flatten().view(np.uint8)).hexdigest()
     c_hash = hashlib.sha1(c.flatten().view(np.uint8)).hexdigest()
@@ -348,9 +354,12 @@ def canonical_scalings(w, r, c):
     _dict_canonical_scalings[hash] = (a, b)
     return a, b
 
-# Suppose c is a sequence of nonnegative integers. Returns c_conj where:
-#   c_conj(k) := sum(c > k),    k = 0, ..., (n-1)
 def conjugate(c, n):
+    """Return the conjugate of degree sequence *c* of size *n*.
+      
+Suppose c is a sequence of nonnegative integers. Returns c_conj where:
+  c_conj(k) := sum(c > k),    k = 0, ..., (n-1)
+"""
     cc = np.zeros(n, dtype = np.int);
 
     ## TODO: Check that this does the right thing for n = 0...
@@ -519,7 +528,7 @@ B_sample can be recovered from B_sample_sparse via:
     logw = np.log(w_prune)
 
     # Compute G
-    G = compute_G(r_prune, m, n, wopt)
+    G = _compute_G(r_prune, m, n, wopt)
 
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
@@ -532,11 +541,11 @@ B_sample can be recovered from B_sample_sparse via:
     count_init = np.sum(rsort)
 
     def do_sample():
-        sample_prune = compute_sample(logw,
-                                      count_init, m_init, n_init,
-                                      r_init, rndx_init, irndx_init,
-                                      csort, cndx, cconj_init,
-                                      G)
+        sample_prune = _compute_sample(logw,
+                                       count_init, m_init, n_init,
+                                       r_init, rndx_init, irndx_init,
+                                       csort, cndx, cconj_init,
+                                       G)
         return unprune(sample_prune)
     
     if T:
@@ -590,12 +599,12 @@ Output:
     wopt = wopt[:,cndx]
 
     # Compute G
-    G = compute_G(r, m, n, wopt)
+    G = _compute_G(r, m, n, wopt)
 
-    return compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
+    return _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
     
 
-def compute_G(r, m, n, wopt):
+def _compute_G(r, m, n, wopt):
     logwopt = np.log(wopt)
     r_max = max(1, np.max(r))
 
@@ -629,7 +638,7 @@ def compute_G(r, m, n, wopt):
                     G[r_max,i,j] = -1.0
     return G
 
-def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G):
+def _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G):
     # Generate the inverse index for the row orders to facilitate fast
     # sorting during the updating
     irndx = np.argsort(rndx)
@@ -828,11 +837,11 @@ def compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G):
 
         return cnll
 
-def compute_sample(logw,
-                   count_init, m_init, n_init,
-                   r_init, rndx_init, irndx_init,
-                   csort, cndx, cconj_init,
-                   G):
+def _compute_sample(logw,
+                    count_init, m_init, n_init,
+                    r_init, rndx_init, irndx_init,
+                    csort, cndx, cconj_init,
+                    G):
     ### Initialization
 
     # Make local copy of variables to be mutated
