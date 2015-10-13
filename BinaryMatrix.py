@@ -234,7 +234,7 @@ def p_margins_saddlepoint(r, c, p):
 #
 # Failure here throws an exception that should stop the calling
 # function before anything weird happens.
-def check_margins(r, c):
+def _check_margins(r, c):
     # Check for conforming input
     assert(np.all(r >= 0))
     assert(np.all(c >= 0))
@@ -249,18 +249,19 @@ def check_margins(r, c):
     l = min(len(cc), len(cd))
     assert(np.all(np.cumsum(cd)[0:l] <= np.cumsum(cc)[0:l]))
 
-# Eliminating the column margin nonincreasing condition by sorting and
-# then undoing the sorting after the target matrix is generated.
-#
-# Return an arbitrary binary matrix with specified margins.
-# Inputs:
-#   r: row margins, length m
-#   c: column margins, length n
-# Output:
-#   (m x n) binary matrix
 def arbitrary_from_margins(r, c):
-    check_margins(r, c)
+    """Return an arbitrary binary matrix with specified margins.
 
+Inputs:
+  r: row margins, length m
+  c: column margins, length n
+Output:
+  (m x n) binary matrix
+
+Eliminating the column margin nonincreasing condition by sorting and
+then undoing the sorting after the target matrix is generated."""
+    _check_margins(r, c)
+    
     m = len(r)
     n = len(c)
 
@@ -370,7 +371,7 @@ def conjugate(c, n):
 # Eliminate extreme rows and columns recursively until all remaining
 # rows and columns are non-extreme. Perform the matching pruning on
 # supplied arrays
-def prune(r, c, *arrays):
+def _prune(r, c, *arrays):
     r = r.copy()
     c = c.copy()
     arrays = list([a.copy() for a in arrays])
@@ -477,10 +478,10 @@ B_sample can be recovered from B_sample_sparse via:
         if i == -1: break 
         B_sample[i,j] = 1
 """
-    r_prune, c_prune, arrays_prune, unprune = prune(r, c, w)
+    r_prune, c_prune, arrays_prune, unprune = _prune(r, c, w)
     w_prune = arrays_prune[0]
 
-    check_margins(r_prune, c_prune)
+    _check_margins(r_prune, c_prune)
 
     ### Preprocessing
 
@@ -559,7 +560,7 @@ Output:
     r = A.sum(1, dtype=np.int)
     c = A.sum(0, dtype=np.int)
 
-    r, c, arrays, _ = prune(r, c, A, w)
+    r, c, arrays, _ = _prune(r, c, A, w)
     A, w = arrays
 
     # Sizing
