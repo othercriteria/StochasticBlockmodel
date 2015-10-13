@@ -372,6 +372,9 @@ def conjugate(c, n):
 # rows and columns are non-extreme. Perform the matching pruning on
 # supplied arrays
 def _prune(r, c, *arrays):
+    # FIXME: this will probably break if any of arrays is a matrix (as
+    # opposed to an array)
+
     r = r.copy()
     c = c.copy()
     arrays = list([a.copy() for a in arrays])
@@ -555,10 +558,10 @@ Output:
   ncll: negative conditional log-likelihood
 """
     assert(A.shape == w.shape)
+    M, N = A.shape
 
-    # FIXME: this will probably break if A is a matrix (as opposed to an array)
-    r = A.sum(1, dtype=np.int)
-    c = A.sum(0, dtype=np.int)
+    r = A.sum(1, dtype=np.int).reshape((M,1))
+    c = A.sum(0, dtype=np.int).reshape((1,N))
 
     r, c, arrays, _ = _prune(r, c, A, w)
     A, w = arrays
