@@ -569,8 +569,8 @@ Output:
     assert(A.shape == w.shape)
     M, N = A.shape
 
-    r = A.sum(1, dtype=np.int).reshape((M,1))
-    c = A.sum(0, dtype=np.int).reshape((1,N))
+    r = A.sum(1, dtype=np.int)
+    c = A.sum(0, dtype=np.int)
 
     r, c, arrays, _ = _prune(r, c, A, w)
     A, w = arrays
