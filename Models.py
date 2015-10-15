@@ -590,7 +590,7 @@ class StationaryLogistic(Stationary):
 
         self.fit_info['wall_time'] = time() - start_time
 
-    def fit_brazzale(self, network):
+    def fit_brazzale(self, network, verbose = False):
         B = len(self.beta)
         if not (B == 1):
             print 'Method only applicable to scalar parameter of interest.'
@@ -602,33 +602,39 @@ class StationaryLogistic(Stationary):
         o = network.offset.matrix()
         x = network.edge_covariates[self.beta.keys()[0]].matrix()
 
+        # Construct (flattened) R data frame with data
         y_vec = robjects.FloatVector(A.flatten())
         x_vec = robjects.FloatVector(x.flatten())
         o_vec = robjects.FloatVector(o.flatten())
         row_vec = robjects.IntVector(np.repeat(range(M), N))
         col_vec = robjects.IntVector(range(N) * M)
-
         dat = robjects.DataFrame({'y': y_vec, 'x': x_vec, 'o': o_vec,
                                   'row': row_vec, 'col': col_vec})
         robjects.globalenv['dat'] = dat
         robjects.r('dat$row <- factor(dat$row)')
         robjects.r('dat$col <- factor(dat$col)')
+
+        # Use extreme offset values to prune down to non-extreme substructure
+        # FIXME: this pruning is overly aggressive for conditional inference!
         robjects.r('dat <- dat[is.finite(dat$o),]')
+        robjects.r('write.csv(dat, file = "debug.csv")')
         robjects.r('nr <- length(unique(dat$row))')
         robjects.r('nc <- length(unique(dat$col))')
+
+        # Do inference, defaulting to theta_hat = 0.0 if anything goew wrong
         if robjects.r('dim(dat)')[0] == 0:
             self.beta[self.beta.keys()[0]] = 0.0
         else:
-            spec = 'glm(y ~ x + ' + \
+            robjects.r('dat.glm <- glm(y ~ x + ' + \
               'C(row, how.many=(nr-1)) + C(col, how.many=(nc-1)), ' + \
-              'data=dat, family=binomial("logit"))'
-            dat_glm = robjects.r(spec)
-            robjects.globalenv['dat.glm'] = dat_glm
-            robjects.r('write.csv(dat, file = "debug.csv")')
+              'data=dat, family=binomial("logit"))')
             try:
-                dat_cond = robjects.r('cond(dat.glm, x, from=-5.0, to=5.0, n=50)')
-                robjects.globalenv['dat.cond'] = dat_cond
-                theta_opt = robjects.r('summary(dat.cond)$coefficients[2,1]')[0]
+                robjects.r('dat.cond <- cond(dat.glm, x, ' + \
+                           'from=-6.0, to=6.0, n=100)')
+                robjects.r('dat.cond.summ <- summary(dat.cond)')
+                if verbose:
+                    print robjects.r('dat.cond.summ')
+                theta_opt = robjects.r('dat.cond.summ$coefficients[2,1]')[0]
                 self.beta[self.beta.keys()[0]] = theta_opt
             except:
                 self.beta[self.beta.keys()[0]] = 0.0
