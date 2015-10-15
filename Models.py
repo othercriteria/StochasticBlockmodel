@@ -596,6 +596,7 @@ class StationaryLogistic(Stationary):
             print 'Method only applicable to scalar parameter of interest.'
             return
 
+        M = network.M
         N = network.N
         A = np.array(network.as_dense())
         o = network.offset.matrix()
@@ -604,23 +605,33 @@ class StationaryLogistic(Stationary):
         y_vec = robjects.FloatVector(A.flatten())
         x_vec = robjects.FloatVector(x.flatten())
         o_vec = robjects.FloatVector(o.flatten())
-        row_vec = robjects.IntVector(np.repeat(range(N), N))
-        col_vec = robjects.IntVector(range(N) * N)
+        row_vec = robjects.IntVector(np.repeat(range(M), N))
+        col_vec = robjects.IntVector(range(N) * M)
 
         dat = robjects.DataFrame({'y': y_vec, 'x': x_vec, 'o': o_vec,
                                   'row': row_vec, 'col': col_vec})
         robjects.globalenv['dat'] = dat
+        robjects.r('dat$row <- factor(dat$row)')
+        robjects.r('dat$col <- factor(dat$col)')
         robjects.r('dat <- dat[is.finite(dat$o),]')
-        spec = 'glm(y ~ x + factor(row) + factor(col), ' + \
-            'data=dat, family=binomial)'
-        dat_glm = robjects.r(spec)
-        robjects.globalenv['dat.glm'] = dat_glm
-        robjects.r('write.csv(dat, file = "debug.csv")')
-        dat_cond = robjects.r('cond(dat.glm, x, from=-2.5, to=2.5, n=250)')
-        robjects.globalenv['dat.cond'] = dat_cond
-        theta_opt = robjects.r('summary(dat.cond)$coefficients[2,1]')[0]
-
-        self.beta[self.beta.keys()[0]] = theta_opt
+        robjects.r('nr <- length(unique(dat$row))')
+        robjects.r('nc <- length(unique(dat$col))')
+        if robjects.r('dim(dat)')[0] == 0:
+            self.beta[self.beta.keys()[0]] = 0.0
+        else:
+            spec = 'glm(y ~ x + ' + \
+              'C(row, how.many=(nr-1)) + C(col, how.many=(nc-1)), ' + \
+              'data=dat, family=binomial("logit"))'
+            dat_glm = robjects.r(spec)
+            robjects.globalenv['dat.glm'] = dat_glm
+            robjects.r('write.csv(dat, file = "debug.csv")')
+            try:
+                dat_cond = robjects.r('cond(dat.glm, x, from=-5.0, to=5.0, n=50)')
+                robjects.globalenv['dat.cond'] = dat_cond
+                theta_opt = robjects.r('summary(dat.cond)$coefficients[2,1]')[0]
+                self.beta[self.beta.keys()[0]] = theta_opt
+            except:
+                self.beta[self.beta.keys()[0]] = 0.0
 
         self.fit_convex_opt(network, fix_beta = True)
 
