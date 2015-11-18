@@ -630,7 +630,7 @@ class StationaryLogistic(Stationary):
               'data=dat, family=binomial("logit"))')
             try:
                 robjects.r('dat.cond <- cond(dat.glm, x, ' + \
-                           'from=-6.0, to=6.0, n=100)')
+                           'from=-6.0, to=6.0, pts=20)')
                 robjects.r('dat.cond.summ <- summary(dat.cond)')
                 if verbose:
                     print robjects.r('dat.cond.summ')
@@ -1889,17 +1889,17 @@ class FixedMargins(IndependentBernoulli):
         self.coverage = coverage
 
     def generate(self, network, **opts):
-        if not self.r_name in network.node_covariates:
-            print 'Covariate "%s" not found.' % self.r_name
+        if not self.r_name in network.row_covariates:
+            print 'Row covariate "%s" not found.' % self.r_name
             r = np.asarray(network.as_dense()).sum(1)
         else:
-            r = network.node_covariates[self.r_name][:]
+            r = network.row_covariates[self.r_name][:]
 
-        if not self.c_name in network.node_covariates:
-            print 'Covariate "%s" not found.' % self.c_name
+        if not self.c_name in network.col_covariates:
+            print 'Column covariate "%s" not found.' % self.c_name
             c = np.asarray(network.as_dense()).sum(0)
         else:
-            c = network.node_covariates[self.c_name][:]
+            c = network.col_covariates[self.c_name][:]
 
         return self.base_model.generate_margins(network, r, c, self.coverage,
                                                 **opts)

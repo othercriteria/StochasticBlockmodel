@@ -22,8 +22,8 @@ params = { 'N': 300,
            'arbitrary_init': False,
            'gibbs_covers': [1.0],
            'fit_nonstationary': False,
-           'num_reps': 10,
-           'sub_sizes': range(10, 110, 10),
+           'num_reps': 2,
+           'sub_sizes': np.arange(10, 30, 10, dtype=np.int),
            'plot_mse_beta': True }
 
 # Set random seed for reproducible output
@@ -64,7 +64,8 @@ for c in covariates:
 # Set up recording of results from experiment
 gibbs_results = {}
 for gibbs_cover in params['gibbs_covers']:
-    results = Results(params['sub_sizes'], params['num_reps'],
+    results = Results(params['sub_sizes'], params['sub_sizes'],
+                      params['num_reps'],
                       'Gibbs cover: %.2f' % gibbs_cover)
     def f_c(c):
         return (lambda d, f: d.base_model.beta[c]), (lambda d, f: f.beta[c])
@@ -76,9 +77,10 @@ for gibbs_cover in params['gibbs_covers']:
     gibbs_results[gibbs_cover] = results
 
 for sub_size in params['sub_sizes']:
-    print 'Subnetwork size = %d' % sub_size
+    size = (sub_size, sub_size)
+    print 'Subnetwork size = %s' % str(size)
 
-    gen = RandomSubnetworks(net, sub_size)
+    gen = RandomSubnetworks(net, size)
     for rep in range(params['num_reps']):
         subnet = gen.sample()
 
@@ -89,8 +91,8 @@ for sub_size in params['sub_sizes']:
         elif scaling == 'density':
             m = int(value * sub_size)
             r, c = np.repeat(m, sub_size), np.repeat(m, sub_size)
-        subnet.node_covariates['r'][:] = r
-        subnet.node_covariates['c'][:] = c
+        subnet.row_covariates['r'][:] = r
+        subnet.col_covariates['c'][:] = c
         
         for gibbs_cover in params['gibbs_covers']:
             data_model.coverage = gibbs_cover
@@ -98,7 +100,7 @@ for sub_size in params['sub_sizes']:
                             arbitrary_init = params['arbitrary_init'])
             subnet.offset_extremes()
             fit_model.fit_conditional(subnet)
-            gibbs_results[gibbs_cover].record(sub_size, rep,
+            gibbs_results[gibbs_cover].record(size, rep,
                                               subnet, data_model, fit_model)
 
 # Compute beta MSEs and plot performance in terms of MSE(beta)
