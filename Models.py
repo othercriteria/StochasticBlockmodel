@@ -1072,7 +1072,7 @@ class StationaryLogistic(Stationary):
 
         return Sampler(network, self, update, record)
 
-    def confidence(self, network, num_bootstrap = 50, alpha = 0.05,
+    def confidence(self, network, n_bootstrap = 50, alpha = 0.05,
                    **fit_options):
         # Point estimate
         self.fit(network, **fit_options)
@@ -1080,15 +1080,15 @@ class StationaryLogistic(Stationary):
 
         # Parametric bootstrap to characterize uncertainty in point estimate
         network_samples = []
-        for n in range(num_bootstrap):
+        for k in range(n_bootstrap):
             network_samples.append(self.generate(network))
-        network_original = network.network.copy()
-        theta_hat_bootstraps = { b: np.empty(num_bootstrap) for b in self.beta }
-        for n in range(num_bootstrap):
-            network.network = network_samples[n]
+        network_original = network.array.copy()
+        theta_hat_bootstraps = { b: np.empty(n_bootstrap) for b in self.beta }
+        for k in range(n_bootstrap):
+            network.network = network_samples[k]
             self.fit(network, **fit_options)
             for b in theta_hat_bootstraps:
-                theta_hat_bootstraps[b][n] = self.beta[b]
+                theta_hat_bootstraps[b][k] = self.beta[b]
         network.network = network_original
 
         # Initialize data structure to hold confidence intervals
@@ -1099,8 +1099,8 @@ class StationaryLogistic(Stationary):
                 self.conf[b] = {}
 
         # Construct (asymptotically valid) confidence interval
+        p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
         for b in self.conf:
-            p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
             theta_hat = theta_hats[b]
             theta_hat_bootstrap = theta_hat_bootstraps[b]
             self.conf[b]['percentile'] = \

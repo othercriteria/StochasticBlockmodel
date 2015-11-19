@@ -10,13 +10,10 @@ import numpy as np
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic, FixedMargins
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
-from Experiment import RandomSubnetworks, Results, add_network_stats, rel_mse
-from BinaryMatrix import approximate_from_margins_weights
-from Utility import logit
 
 # Parameters
 params = { 'N': 20,
-           'B': 1,
+           'B': 2,
            'beta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
            'beta_sd': 1.0,
            'alpha_unif_sd': 0.0,
