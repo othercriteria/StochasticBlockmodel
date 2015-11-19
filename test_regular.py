@@ -14,16 +14,15 @@ from Models import StationaryLogistic, NonstationaryLogistic, FixedMargins
 from Experiment import RandomSubnetworks, Results
 
 # Parameters
-params = { 'N': 300,
-           'B': 5,
+params = { 'N': 200,
+           'B': 2,
            'beta_sd': 1.0,
            'x_diff_cutoff': 0.3,
            'margin_scaling': ('degree', 2),
            'arbitrary_init': False,
-           'gibbs_covers': [1.0],
-           'fit_nonstationary': False,
-           'num_reps': 2,
-           'sub_sizes': np.arange(10, 30, 10, dtype=np.int),
+           'gibbs_covers': [0.0, 1.0],
+           'num_reps': 10,
+           'sub_sizes': np.arange(10, 70, 10, dtype=np.int),
            'plot_mse_beta': True }
 
 # Set random seed for reproducible output
@@ -54,10 +53,7 @@ data_model = FixedMargins(data_base_model)
 net.new_node_covariate_int('r')
 net.new_node_covariate_int('c')
 
-if params['fit_nonstationary']:
-    fit_model = NonstationaryLogistic()
-else:
-    fit_model = StationaryLogistic()
+fit_model = StationaryLogistic()
 for c in covariates:
     fit_model.beta[c] = None
 
