@@ -1072,7 +1072,7 @@ class StationaryLogistic(Stationary):
 
         return Sampler(network, self, update, record)
 
-    def confidence(self, network, n_bootstrap = 50, alpha = 0.05,
+    def confidence(self, network, n_bootstrap = 100, alpha = 0.05,
                    **fit_options):
         # Point estimate
         self.fit(network, **fit_options)
@@ -1085,11 +1085,11 @@ class StationaryLogistic(Stationary):
         network_original = network.array.copy()
         theta_hat_bootstraps = { b: np.empty(n_bootstrap) for b in self.beta }
         for k in range(n_bootstrap):
-            network.network = network_samples[k]
+            network.array = network_samples[k]
             self.fit(network, **fit_options)
             for b in theta_hat_bootstraps:
                 theta_hat_bootstraps[b][k] = self.beta[b]
-        network.network = network_original
+        network.array = network_original
 
         # Initialize data structure to hold confidence intervals
         if not self.conf:
