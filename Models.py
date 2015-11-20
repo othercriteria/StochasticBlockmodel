@@ -104,11 +104,12 @@ class IndependentBernoulli:
     # fewer steps to reach the stationary distribution, so it is
     # enabled by default.
     def generate_margins(self, network, r = None, c = None,
-                         coverage = 0, arbitrary_init = False,
+                         coverage = 2, arbitrary_init = False,
                          optimize_perm = True):
         network.gen_info = { 'wall_time': 0.0,
                              'coverage': 0.0, }
         
+        M = network.M
         N = network.N
         if r is None:
             r = np.asarray(network.as_dense()).sum(1)
@@ -125,7 +126,7 @@ class IndependentBernoulli:
             P = self.edge_probabilities(network)
             w = P / (1.0 - P)
             gen_sparse = approximate_from_margins_weights(r, c, w)
-            gen = np.zeros((N,N), dtype=np.bool)
+            gen = np.zeros((M,N), dtype=np.bool)
             for i, j in gen_sparse:
                 if i == -1: break 
                 gen[i,j] = 1
@@ -137,9 +138,11 @@ class IndependentBernoulli:
             return self.gibbs_improve(network, gen, coverage)                
 
     def gibbs_improve(self, network, gen, coverage):
+        M = network.M
         N = network.N
-        windows = N // 2
-        coverage_target = coverage * N**2 / 4
+        r_windows = M // 2
+        c_windows = N // 2
+        coverage_target = coverage * (M * N) / 4
 
         start_time = time()
         
@@ -155,14 +158,15 @@ class IndependentBernoulli:
         # simplify picking distinct random indices.
         P_full = self.edge_probabilities(network)
         coverage_attained = 0
-        inds = np.arange(N)
+        r_inds = np.arange(M)
+        c_inds = np.arange(N)
         while coverage_attained < coverage_target:
             # Pick i-ranges and j-ranges of the randomly chosen 2x2
             # subnetworks in which to propose moves
-            np.random.shuffle(inds)
-            i_props = [inds[2*window:2*(window+1)] for window in range(windows)]
-            np.random.shuffle(inds)
-            j_props = [inds[2*window:2*(window+1)] for window in range(windows)]
+            np.random.shuffle(r_inds)
+            np.random.shuffle(c_inds)
+            i_props = [r_inds[2*w:2*(w+1)] for w in range(r_windows)]
+            j_props = [c_inds[2*w:2*(w+1)] for w in range(c_windows)]
 
             active = []
             for i_prop in i_props:

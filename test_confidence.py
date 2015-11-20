@@ -7,21 +7,22 @@ from __future__ import division
 
 import numpy as np
 
-from Network import Network
+from Network import Array
 from Models import StationaryLogistic, NonstationaryLogistic, FixedMargins
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
 
 # Parameters
-params = { 'N': 50,
+params = { 'M': 20,
+           'N': 10,
            'B': 1,
            'beta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
            'beta_sd': 1.0,
            'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('row_sum', 2),
+           'kappa_target': ('row_sum', 5),
            'fit_nonstationary': True,
-           'fit_method': 'irls',
+           'fit_method': 'conditional',
            'covariates_of_interest': ['x_0'],
            'do_large_sample': True,
            'do_biometrika': False,
@@ -30,19 +31,19 @@ params = { 'N': 50,
 # Set random seed for reproducible output
 np.random.seed(137)
 
-# Initialize full network
-net = Network(params['N'])
+# Initialize array
+arr = Array(params['M'], params['N'])
 
 # Generate node-level propensities to extend and receive edges
 if params['alpha_norm_sd'] > 0.0:
-    alpha_norm(net, params['alpha_norm_sd'])
+    alpha_norm(arr, params['alpha_norm_sd'])
 elif params['alpha_unif_sd'] > 0.0:
-    alpha_unif(net, params['alpha_unif_sd'])
+    alpha_unif(arr, params['alpha_unif_sd'])
 elif params['alpha_gamma_sd'] > 0.0:
     # Choosing location somewhat arbitrarily to give unit skewness
-    alpha_gamma(net, 4.0, params['alpha_gamma_sd'])
+    alpha_gamma(arr, 4.0, params['alpha_gamma_sd'])
 else:
-    alpha_zero(net)
+    alpha_zero(arr)
 
 # Generate covariates and associated coefficients
 data_model = NonstationaryLogistic()
@@ -58,8 +59,8 @@ for b in range(params['B']):
 
     def f_x(i_1, i_2):
         return np.random.uniform(-np.sqrt(3), np.sqrt(3))
-    net.new_edge_covariate(name).from_binary_function_ind(f_x)
-data_model.match_kappa(net, params['kappa_target'])
+    arr.new_edge_covariate(name).from_binary_function_ind(f_x)
+data_model.match_kappa(arr, params['kappa_target'])
 
 # Specify parameter of interest that the confidence interval will try to capture
 for c in params['covariates_of_interest']:
@@ -92,13 +93,13 @@ covered = { (m,c): np.empty(params['num_reps'])
 length = { (m,c): np.empty(params['num_reps'])
            for m in methods for c in params['covariates_of_interest'] }
 for rep in range(params['num_reps']):
-    net.generate(data_model)
+    arr.generate(data_model)
 
     if params['do_large_sample']:
-        fit_model.confidence(net)
+        fit_model.confidence(arr)
     if params['do_biometrika']:
         for c in params['covariates_of_interest']:
-            fit_model.confidence_harrison(net, c)
+            fit_model.confidence_harrison(arr, c)
 
     for m in methods:
         print '%s:' % m
