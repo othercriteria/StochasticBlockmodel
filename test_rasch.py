@@ -9,27 +9,28 @@ from scipy.stats import chi2
 
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
+from Confidence import invert_test
 from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
 # Parameters
-params = { 'fixed_example': 'data/rasch_covariates.json',
-           'M': 200,
-           'N': 10,
+params = { 'fixed_example': None, #'data/rasch_covariates.json',
+           'M': 10,
+           'N': 5,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100, 500],
+           'n_MC_levels': [10],
            'wopt_sort': True,
-           'is_T': 100,
-           'n_rep': 100,
-           'L': 601,
+           'is_T': 50,
+           'n_rep': 5,
+           'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
-           'do_prune': True,
+           'do_prune': False,
            'random_seed': 137,
            'verbose': True }
 
@@ -104,21 +105,6 @@ def generate_data(params, seed):
             yield X_p.copy(), v_p.copy()
 
         yield X, v
-
-def invert_test(theta_grid, test_val, crit):
-    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
-
-    C_alpha = theta_grid[test_val > crit]
-    if len(C_alpha) == 0:
-        return 0, 0
-
-    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
-    if C_alpha_l == theta_l_min:
-        C_alpha_l = -np.inf
-    if C_alpha_u == theta_l_max:
-        C_alpha_u = np.inf
-
-    return C_alpha_l, C_alpha_u
 
 def timing(func):
     def inner(*args, **kwargs):
