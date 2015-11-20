@@ -12,20 +12,20 @@ from Models import StationaryLogistic, NonstationaryLogistic, FixedMargins
 from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
 
 # Parameters
-params = { 'N': 20,
-           'B': 2,
+params = { 'N': 50,
+           'B': 1,
            'beta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
            'beta_sd': 1.0,
            'alpha_unif_sd': 0.0,
-           'alpha_norm_sd': 2.0,
+           'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('density', 0.1),
+           'kappa_target': ('row_sum', 2),
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'irls',
            'covariates_of_interest': ['x_0'],
            'do_large_sample': True,
            'do_biometrika': False,
-           'num_reps': 10 }
+           'num_reps': 100 }
 
 # Set random seed for reproducible output
 np.random.seed(137)
@@ -112,7 +112,7 @@ for rep in range(params['num_reps']):
 
 for m in methods:
     print '%s:' % m
-    for c in covariates:
+    for c in params['covariates_of_interest']:
         print ' %s:' % c
         print '  Attained coverage: %.2f' % np.mean(covered[(m,c)])
         print '  Median length: %.2f' % np.median(length[(m,c)])
