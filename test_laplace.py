@@ -14,6 +14,7 @@ from Utility import draw_confidence
 
 # Initialize full network
 N = 300
+sub_N = 100
 net = Network(N)
 alpha_unif(net, 0.5)
 
@@ -46,7 +47,7 @@ ax.set_xlabel('beta_1')
 ax.set_ylabel('beta_2')
 
 # Set up random subnetwork generator, and run fitting experiments
-gen = RandomSubnetworks(net, 100)
+gen = RandomSubnetworks(net, (sub_N, sub_N))
 for rep in range(10):
     subnet = gen.sample()
 
