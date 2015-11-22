@@ -25,7 +25,7 @@ params = { 'M': 20,
            'fit_method': 'conditional',
            'covariates_of_interest': ['x_0'],
            'do_large_sample': True,
-           'do_biometrika': False,
+           'do_biometrika': True,
            'num_reps': 100 }
 
 # Set random seed for reproducible output

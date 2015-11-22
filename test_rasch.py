@@ -169,8 +169,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 
     # Generate sample from k-th component of mixture proposal distribution
     def sample(theta):
-        logit_P = theta * v
-        Y_sparse = cond_a_sample(r, c, np.exp(logit_P))
+        Y_sparse = cond_a_sample(r, c, np.exp(theta * v))
         Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
         for i, j in Y_sparse:
             if i == -1: break

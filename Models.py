@@ -14,10 +14,11 @@ import hashlib
 
 from Utility import logit, inv_logit, logit_mean
 from BinaryMatrix import arbitrary_from_margins
-from BinaryMatrix import approximate_from_margins_weights
+from BinaryMatrix import approximate_from_margins_weights as acsample
 from BinaryMatrix import approximate_conditional_nll as acnll
 from BinaryMatrix import p_margins_saddlepoint
 from BinaryMatrix import log_partition_is
+from Confidence import ci_conservative_generic
 
 # See if embedded R process can be started; this should be done once,
 # globally, to reduce overhead.
@@ -125,7 +126,7 @@ class IndependentBernoulli:
             # conditional distribution
             P = self.edge_probabilities(network)
             w = P / (1.0 - P)
-            gen_sparse = approximate_from_margins_weights(r, c, w)
+            gen_sparse = acsample(r, c, w)
             gen = np.zeros((M,N), dtype=np.bool)
             for i, j in gen_sparse:
                 if i == -1: break 
@@ -678,8 +679,7 @@ class StationaryLogistic(Stationary):
                 else:
                     cnll = acnll(A, w, sort_by_wopt_var = False)
             else:
-                z = approximate_from_margins_weights(r, c, w, T,
-                                                     sort_by_wopt_var = True)
+                z = acsample(r, c, w, T, sort_by_wopt_var = True)
                 if not verbose:
                     logkappa = log_partition_is(z)
                 else:
@@ -1123,92 +1123,41 @@ class StationaryLogistic(Stationary):
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
     def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 100,
                             L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
+        M = network.M
         N = network.N
         A = np.array(network.as_dense())
-
         x = network.edge_covariates[b].matrix()
 
-        # Generate beta grid for inference
-        beta_grid = np.linspace(beta_l_min, beta_l_max, L)
+        theta_grid = np.linspace(beta_l_min, beta_l_max, L)
 
-        # Observed statistic
-        t_X = np.sum(A * x)
+        # Test statistic for CI
+        def t(z):
+            return np.sum(z * x)
+
+        # Evaluate log-likelihood at specified parameter value
+        def log_likelihood(z, theta):
+            return -acnll(z, np.exp(theta * x), sort_by_wopt_var = False)
 
         # Row and column margins; the part of the data we can use to design Q
         r, c = A.sum(1), A.sum(0)
 
-        # Generate samples from the mixture proposal distribution
-        Y = []
-        for n in range(n_MC):
-            l = np.random.randint(L)
-            logit_P_l = beta_grid[l] * x
-        
-            Y_sparse = approximate_from_margins_weights(r, c, np.exp(logit_P_l))
-            Y_dense = np.zeros((N,N), dtype = np.bool)
+        # Generate sample from k-th component of mixture proposal distribution
+        def sample(theta):
+            Y_sparse = acsample(r, c, np.exp(theta * x), T = 0,
+                                sort_by_wopt_var = False)
+            Y_dense = np.zeros((M,N), dtype = np.bool)
             for i, j in Y_sparse:
                 if i == -1: break
                 Y_dense[i,j] = 1
-            Y.append(Y_dense)
+            return Y_dense
 
-        # Statistics for the samples from the proposal distribution only
-        # need to be calculated once...
-        t_Y = np.empty(n_MC)
-        for n in range(n_MC):
-            t_Y[n] = np.sum(Y[n] * x)
-        I_t_Y_plus = t_Y >= t_X
-        I_t_Y_minus = -t_Y >= -t_X
-
-        # Probabilities under each component of the proposal distribution
-        # only need to be calculated once...
-        log_Q_X = np.empty(L)
-        log_Q_Y = np.empty((L,n_MC))
-        for l in range(L):
-            logit_P_l = beta_grid[l] * x
-            log_Q_X[l] = -acnll(A, np.exp(logit_P_l))
-            for n in range(n_MC):
-                log_Q_Y[l,n] = -acnll(Y[n], np.exp(logit_P_l))
-        Q_sum_X = np.exp(np.logaddexp.reduce(log_Q_X))
-        Q_sum_Y = np.empty(n_MC)
-        for n in range(n_MC):
-            Q_sum_Y[n] = np.exp(np.logaddexp.reduce(log_Q_Y[:,n]))
-
-        # Step over the grid, calculating approximate p-values
-        p_plus = np.empty(L)
-        p_minus = np.empty(L)
-        for l in range(L):
-            beta_l = beta_grid[l]
-
-            p_num_plus, p_num_minus, p_denom = 0.0, 0.0, 0.0
-
-            # X contribution
-            w_X = np.exp(beta_l * t_X) / Q_sum_X
-            p_num_plus += w_X
-            p_num_minus += w_X
-            p_denom += w_X
-
-            # Y contribution
-            for n in range(n_MC):
-                w_Y = np.exp(beta_l * t_Y[n]) / Q_sum_Y[n]
-                if I_t_Y_plus[n]: p_num_plus += w_Y
-                if I_t_Y_minus[n]: p_num_minus += w_Y
-                p_denom += w_Y
-
-            p_plus[l] = p_num_plus / p_denom
-            p_minus[l] = p_num_minus / p_denom
-
-        p_plus_minus = np.fmin(1, 2 * np.fmin(p_plus, p_minus))
-
-        C_alpha = beta_grid[p_plus_minus > alpha_level]
+        (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
+                                         log_likelihood, sample, t)        
 
         if not self.conf:
             self.conf = {}
         if not b in self.conf:
             self.conf[b] = {}
-        l, u = np.min(C_alpha), np.max(C_alpha)
-        if l == beta_l_min:
-            l = -np.inf
-        if u == beta_l_max:
-            u = np.inf
         self.conf[b]['harrison'] = (l, u)
 
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
