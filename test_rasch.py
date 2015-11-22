@@ -9,7 +9,7 @@ from scipy.stats import chi2
 
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
-from Confidence import invert_test
+from Confidence import invert_test, ci_conservative_generic
 from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
@@ -155,84 +155,31 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
-    
-    # Observed statistic
-    t_X = np.sum(X * v)
+
+    # Test statistic for CI
+    def t(z):
+        return np.sum(z * v)
+
+    # Evaluate log-likelihood at specified parameter value
+    def log_likelihood(z, theta):
+        return -cond_a_nll(z, np.exp(theta * v))
 
     # Row and column margins; the part of the data we can use to design Q
     r, c = X.sum(1), X.sum(0)
 
-    # Generate samples from the mixture proposal distribution
-    Y = []
-    for k in range(K):
-        l_k = np.random.randint(L)
-        theta_k = theta_grid[l_k]
-        logit_P_l = theta_k * v
-
-        Y_sparse = cond_a_sample(r, c, np.exp(logit_P_l))
+    # Generate sample from k-th component of mixture proposal distribution
+    def sample(theta):
+        logit_P = theta * v
+        Y_sparse = cond_a_sample(r, c, np.exp(logit_P))
         Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
         for i, j in Y_sparse:
             if i == -1: break
             Y_dense[i,j] = 1
-        Y.append(Y_dense)
+        return Y_dense
 
-    # Statistics for the samples from the proposal distribution only
-    # need to be calculated once...
-    t_Y = np.zeros(K + 1)
-    for k in range(K):
-        t_Y[k] = np.sum(Y[k] * v)
-    I_t_Y_plus = t_Y >= t_X
-    I_t_Y_plus[K] = True
-    I_t_Y_minus = -t_Y >= -t_X
-    I_t_Y_minus[K] = True
-
-    # Probabilities under each component of the proposal distribution
-    # only need to be calculated once...
-    log_Q_X = np.empty(L)
-    log_Q_Y = np.empty((L,K))
-    for l in range(L):
-        theta_l = theta_grid[l]
-
-        logit_P_l = theta_l * v
-        log_Q_X[l] = -cond_a_nll(X, np.exp(logit_P_l))
-        for k in range(K):
-            log_Q_Y[l,k] = -cond_a_nll(Y[k], np.exp(logit_P_l))
-        if verbose:
-            print '%.2f: %.2g, %.2g' % \
-              (theta_l, np.exp(log_Q_X[l]), np.exp(log_Q_Y[l].max()))
-    log_Q_sum_X = logsumexp(log_Q_X)
-    log_Q_sum_Y = np.empty(K)
-    for k in range(K):
-        log_Q_sum_Y[k] = logsumexp(log_Q_Y[:,k])
-
-    # Step over the grid, calculating approximate p-values
-    log_p_plus = np.empty(L)
-    log_p_minus = np.empty(L)
-    for l in range(L):
-        theta_l = theta_grid[l]
-        log_w_l = np.empty(K + 1)
-
-        # X contribution
-        log_w_l[K] = (theta_l * t_X) - log_Q_sum_X
-
-        # Y contribution
-        for k in range(K):
-            log_w_l[k] = (theta_l * t_Y[k]) - log_Q_sum_Y[k]
-
-        log_p_num_plus = logsumexp(log_w_l[I_t_Y_plus])
-        log_p_num_minus = logsumexp(log_w_l[I_t_Y_minus])
-        log_p_denom = logsumexp(log_w_l)
-
-        if verbose:
-            print '%.2f: %.2g (%.2g, %.2g)' % \
-              (theta_l, log_w_l[K], log_w_l[0:K].min(), log_w_l[0:K].max())
-
-        log_p_plus[l] = log_p_num_plus - log_p_denom
-        log_p_minus[l] = log_p_num_minus - log_p_denom
-
-    # p_pm = min(1, 2 * min(p_plus, p_minus))
-    log_p_pm = np.fmin(0, np.log(2) + np.fmin(log_p_plus, log_p_minus))
-    return invert_test(theta_grid, log_p_pm, np.log(alpha_level))
+    return ci_conservative_generic(X, K, theta_grid, alpha_level,
+                                   log_likelihood, sample, t,
+                                   verbose)        
 
 def do_experiment(params):
     seed = Seed(params['random_seed'])
