@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import xlrd
 
-from Network import Network
+from Network import network_from_edges
 from Models import Stationary, StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_zero
 
@@ -46,12 +46,11 @@ for r in range(1, ws_network.nrows):
 print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
-net = Network()
-net.network_from_edges(edges)
+net = network_from_edges(edges)
 A = np.array(net.adjacency_matrix())
 r = A.sum(1)
 c = A.sum(0)
-print '# Edges: %d' % net.network.sum()
+print '# Edges: %d' % net.array.sum()
 cov_names = []
 
 # Import soma position from file
@@ -127,7 +126,7 @@ def heatmap(data, cmap = 'binary'):
     plt.imshow(data[o][:,o]).set_cmap(cmap)
 def residuals(data_mean, data_sd):
     r = np.abs((data_mean - A) / data_sd)
-    plt.imshow(r[o][:,o], vmin = 0, vmax = 2.0).set_cmap('binary')
+    plt.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('binary')
 plt.figure()
 plt.subplot(331)
 plt.title('Observed')
@@ -187,27 +186,29 @@ print
 
 print 'Fitting conditional model'
 c_model = StationaryLogistic()
+c_model.fit = c_model.fit_conditional
+c_model.generate = c_model.generate_margins
 for cov_name in cov_names:
     c_model.beta[cov_name] = None
-c_model.fit_conditional(net, T = 50, verbose = True)
+c_model.fit_conditional(net, verbose = True)
 print 'NLL: %.2f' % c_model.nll(net)
 print 'kappa: %.2f' % c_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
 print
 for rep in range(n_samples):
-    c_samples[rep,:,:] = FixedMargins(c_model).generate(net)
+    c_samples[rep,:,:] = c_model.generate(net)
 c_model.confidence(net)
 print 'Pivotal:'
 for cov_name in cov_names:
     ci = c_model.conf[cov_name]['pivotal']
     print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print 'Harrison:'
-for cov_name in cov_names:
-    c_model.confidence_harrison(net, cov_name)
-    ci = c_model.conf[cov_name]['harrison']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print
+#print 'Harrison:'
+#for cov_name in cov_names:
+#    c_model.confidence_harrison(net, cov_name)
+#    ci = c_model.conf[cov_name]['harrison']
+#    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
+#print
 
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)
