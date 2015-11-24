@@ -16,9 +16,9 @@ from Models import FixedMargins, alpha_zero
 params = { 'use_gap': False,
            'use_chemical': True,
            'cov_soma_diff': False,
-           'cov_soma_dist': False,
+           'cov_soma_dist': True,
            'cov_lineage': False,
-           'cov_class': True,
+           'cov_class': False,
            'file_network': 'data/c_elegans_chen/NeuronConnect.xls',
            'file_neurons': 'data/c_elegans_chen/NeuronType.xls',
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
@@ -48,6 +48,10 @@ print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
+net.offset_extremes()
+for i in range(net.N):
+    # TODO: Track down why -np.inf causes problems with CMLE...
+    net.offset[i,i] = -20.0
 A = np.array(net.adjacency_matrix())
 r = A.sum(1)
 c = A.sum(0)
@@ -56,7 +60,7 @@ cov_names = []
 def add_cov_f(name, f):
     cov_names.append(name)
     net.new_edge_covariate(name).from_binary_function_name(f)
-
+    
 # Import soma position from file
 soma_pos = {}
 wb_neurons = xlrd.open_workbook(params['file_neurons'])
