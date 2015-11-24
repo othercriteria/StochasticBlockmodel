@@ -15,9 +15,10 @@ from Models import FixedMargins, alpha_zero
 # Parameters
 params = { 'use_gap': False,
            'use_chemical': True,
-           'cov_soma': True,
+           'cov_soma_diff': False,
+           'cov_soma_dist': False,
            'cov_lineage': False,
-           'cov_class': False,
+           'cov_class': True,
            'file_network': 'data/c_elegans_chen/NeuronConnect.xls',
            'file_neurons': 'data/c_elegans_chen/NeuronType.xls',
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
@@ -52,6 +53,9 @@ r = A.sum(1)
 c = A.sum(0)
 print '# Edges: %d' % net.array.sum()
 cov_names = []
+def add_cov_f(name, f):
+    cov_names.append(name)
+    net.new_edge_covariate(name).from_binary_function_name(f)
 
 # Import soma position from file
 soma_pos = {}
@@ -63,12 +67,14 @@ for r in range(1, ws_neurons.nrows):
     soma_pos[n] = pos
 cov = net.new_node_covariate('soma_pos')
 cov.from_pairs(soma_pos.keys(), soma_pos.values())
-if params['cov_soma']:
-    cov_names.append('soma_dist')
-cov = net.new_edge_covariate('soma_dist')
-def f_soma_pos_dist(n_1, n_2):
-    return abs(soma_pos[n_1] - soma_pos[n_2])
-cov.from_binary_function_name(f_soma_pos_dist)
+if params['cov_soma_diff']:
+    def f_soma_pos_diff(n_1, n_2):
+        return (soma_pos[n_1] - soma_pos[n_2])
+    add_cov_f('soma_dist', f_soma_pos_diff)
+if params['cov_soma_dist']:
+    def f_soma_pos_dist(n_1, n_2):
+        return abs(soma_pos[n_1] - soma_pos[n_2])
+    add_cov_f('soma_dist', f_soma_pos_dist)
 
 # Import landmark type (hence sensory, motor, inter-) from file
 neuron_class = {}
@@ -81,17 +87,14 @@ for r in range(1, ws_landmarks.nrows):
 for n in net.names:
     if not n in neuron_class:
         neuron_class[n] = 'I'
-for class_1 in ['S', 'I', 'M']:
-    for class_2 in ['S', 'I', 'M']:
-        if class_1 == 'I' and class_2 == 'I': continue
-        cov_name = '%s_%s' % (class_1, class_2)
-        if params['cov_class']:
-            cov_names.append(cov_name)
-        cov = net.new_edge_covariate(cov_name)
-        def f_same_class(n_1, n_2):
-            return ((neuron_class[n_1] == class_1) and
-                    (neuron_class[n_2] == class_2))
-        cov.from_binary_function_name(f_same_class)
+if params['cov_class']:
+    for class_1 in ['S', 'I', 'M']:
+        for class_2 in ['S', 'I', 'M']:
+            if class_1 == 'I' and class_2 == 'I': continue
+            def f_same_class(n_1, n_2):
+                return ((neuron_class[n_1] == class_1) and
+                        (neuron_class[n_2] == class_2))
+            add_cov_f('%s_%s' % (class_1, class_2), f_same_class)
 
 # Import lineage distance from files
 dist = {}
@@ -112,12 +115,10 @@ for r in range(1, ws_lineage_1.nrows):
     dist[(n_1,n_2)] = d
     dist[(n_2,n_1)] = d
 if params['cov_lineage']:
-    cov_names.append('lineage_dist')
-cov = net.new_edge_covariate('lineage_dist')
-def f_lineage_dist(n_1, n_2):
-    if n_1 == n_2: return 0
-    return dist[(n_1, n_2)]
-cov.from_binary_function_name(f_lineage_dist)
+    def f_lineage_dist(n_1, n_2):
+        if n_1 == n_2: return 0
+        return dist[(n_1, n_2)]
+    add_cov_f('lineage_dist', f_lineage_dist)
 
 # Display observed network
 o = np.argsort(net.node_covariates['soma_pos'][:])
@@ -197,7 +198,7 @@ for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
 print
 for rep in range(n_samples):
-    c_samples[rep,:,:] = c_model.generate(net)
+    c_samples[rep,:,:] = c_model.generate(net, coverage = 1)
 c_model.confidence(net)
 print 'Pivotal:'
 for cov_name in cov_names:
