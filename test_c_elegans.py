@@ -23,7 +23,10 @@ params = { 'use_gap': False,
            'file_neurons': 'data/c_elegans_chen/NeuronType.xls',
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
            'file_lineage_1': 'data/c_elegans_chen/NeuronLineage_Part1.xls',
-           'file_lineage_2': 'data/c_elegans_chen/NeuronLineage_Part2.xls' }
+           'file_lineage_2': 'data/c_elegans_chen/NeuronLineage_Part2.xls',
+           'n_samples': 100,
+           'n_bootstrap': 100,
+           'outfile': 'out.pdf' }
 
 # Import network connectivity from file
 edges = []
@@ -145,10 +148,9 @@ pos = nx.graphviz_layout(graph, prog = 'neato')
 nx.draw(graph, pos, node_size = 10, with_labels = False)
 
 # Store sampled typical networks from fit models
-n_samples = 100
-s_samples = np.empty((n_samples, net.N, net.N))
-ns_samples = np.empty((n_samples, net.N, net.N))
-c_samples = np.empty((n_samples, net.N, net.N))
+s_samples = np.empty((params['n_samples'], net.N, net.N))
+ns_samples = np.empty((params['n_samples'], net.N, net.N))
+c_samples = np.empty((params['n_samples'], net.N, net.N))
 
 print 'Fitting stationary model'
 s_model = StationaryLogistic()
@@ -160,9 +162,9 @@ print 'kappa: %.2f' % s_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, s_model.beta[cov_name])
 print
-for rep in range(n_samples):
+for rep in range(params['n_samples']):
     s_samples[rep,:,:] = s_model.generate(net)
-s_model.confidence(net)
+s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
 print 'Pivotal:'
 for cov_name in cov_names:
     ci = s_model.conf[cov_name]['pivotal']
@@ -180,9 +182,9 @@ print 'kappa: %.2f' % ns_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, ns_model.beta[cov_name])
 print
-for rep in range(n_samples):
+for rep in range(params['n_samples']):
     ns_samples[rep,:,:] = ns_model.generate(net)
-ns_model.confidence(net)
+ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
 print 'Pivotal:'
 for cov_name in cov_names:
     ci = ns_model.conf[cov_name]['pivotal']
@@ -201,9 +203,9 @@ print 'kappa: %.2f' % c_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
 print
-for rep in range(n_samples):
+for rep in range(params['n_samples']):
     c_samples[rep,:,:] = c_model.generate(net, coverage = 1)
-c_model.confidence(net)
+c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
 print 'Pivotal:'
 for cov_name in cov_names:
     ci = c_model.conf[cov_name]['pivotal']
@@ -239,4 +241,7 @@ plt.title('Conditional')
 heatmap(c_samples_mean)
 plt.subplot(339)
 residuals(c_samples_mean, c_samples_sd)
+
+if params['outfile']:
+    plt.savefig(params['outfile'])
 plt.show()
