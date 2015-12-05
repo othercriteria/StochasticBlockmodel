@@ -150,7 +150,7 @@ class IndependentBernoulli:
         # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
         diag = np.array([[True,False],[False,True]])
         adiag = np.array([[False,True],[True,False]])
-        valid = set([diag.data[0:4], adiag.data[0:4]])
+        valid = frozenset([diag.data[0:4], adiag.data[0:4]])
 
         # Gibbs sampling to match the "location" of the edges to where
         # they are likely under the conditional distribution
@@ -218,7 +218,7 @@ class IndependentBernoulli:
         
         # Precomputing for diagonal/anti-diagonal check in Gibbs sampler
         diag = np.array([[True,False],[False,True]])
-        adiag = np.array([[False,True],[True,False]])
+        adiag = np.array([[False,True],[TrueMFalse]])
 
         # Gibbs sampling to match the "location" of the edges to where
         # they are likely under the conditional distribution
