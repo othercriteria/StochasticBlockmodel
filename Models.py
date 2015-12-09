@@ -180,7 +180,6 @@ class IndependentBernoulli:
                     if not (gen_prop.data[0:4] in valid): continue
                     active.append(np.ix_(i_prop, j_prop))
             A = len(active)
-            coverage_attained += A
 
             # Calculate individual edge probabilities
             P = np.empty((2*A,2))
@@ -195,9 +194,16 @@ class IndependentBernoulli:
                 l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
                 l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
             p_diag = l_diag / (l_diag + l_adiag)
-            
+
+            # Deal with 0/0 nan's
+            nan_free = -np.isnan(p_diag)
+            p_diag = p_diag[nan_free]
+            active = [a for i, a in enumerate(active) if nan_free[i]]
+            A_nan_free = np.sum(nan_free)
+            coverage_attained += A_nan_free
+
             # Update n according to calculated probabilities
-            to_diags = np.random.random(A) < p_diag
+            to_diags = np.random.random(A_nan_free) < p_diag
             for to_diag, ij_prop in zip(to_diags, active):
                 if to_diag:
                     gen[ij_prop] = diag
