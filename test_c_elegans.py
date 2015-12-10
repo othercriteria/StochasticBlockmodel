@@ -191,32 +191,6 @@ for cov_name in cov_names:
     print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
 print
 
-print 'Fitting conditional model'
-c_model = StationaryLogistic()
-c_model.fit = c_model.fit_conditional
-c_model.generate = c_model.generate_margins
-for cov_name in cov_names:
-    c_model.beta[cov_name] = None
-c_model.fit_conditional(net, verbose = True)
-print 'NLL: %.2f' % c_model.nll(net)
-print 'kappa: %.2f' % c_model.kappa
-for cov_name in cov_names:
-    print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
-print
-for rep in range(params['n_samples']):
-    c_samples[rep,:,:] = c_model.generate(net, coverage = 1)
-c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-print 'Pivotal:'
-for cov_name in cov_names:
-    ci = c_model.conf[cov_name]['pivotal']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-#print 'Harrison:'
-#for cov_name in cov_names:
-#    c_model.confidence_harrison(net, cov_name)
-#    ci = c_model.conf[cov_name]['harrison']
-#    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-#print
-
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)
 s_samples_sd = np.sqrt(np.var(s_samples, axis = 0))
@@ -241,6 +215,32 @@ plt.title('Conditional')
 heatmap(c_samples_mean)
 plt.subplot(339)
 residuals(c_samples_mean, c_samples_sd)
+
+print 'Fitting conditional model'
+c_model = StationaryLogistic()
+c_model.fit = c_model.fit_conditional
+c_model.generate = c_model.generate_margins
+for cov_name in cov_names:
+    c_model.beta[cov_name] = None
+c_model.fit_conditional(net, verbose = True)
+print 'NLL: %.2f' % c_model.nll(net)
+print 'kappa: %.2f' % c_model.kappa
+for cov_name in cov_names:
+    print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
+print
+for rep in range(params['n_samples']):
+    c_samples[rep,:,:] = c_model.generate(net, coverage = 1)
+c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+print 'Pivotal:'
+for cov_name in cov_names:
+    ci = c_model.conf[cov_name]['pivotal']
+    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
+print 'Harrison:'
+for cov_name in cov_names:
+    c_model.confidence_harrison(net, cov_name)
+    ci = c_model.conf[cov_name]['harrison']
+    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
+print
 
 if params['outfile']:
     plt.savefig(params['outfile'])
