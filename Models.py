@@ -189,15 +189,16 @@ class IndependentBernoulli:
             # Normalize probabilities of allowed configurations to get
             # conditional probabilities
             l_diag, l_adiag = np.empty(A), np.empty(A)
+            p_diag = np.empty(A)
             for a in range(A):
                 P_a = P[2*a:2*(a+1)]
                 l_diag[a] = P_a[0,0] * P_a[1,1] * (1-P_a[0,1]) * (1-P_a[1,0])
                 l_adiag[a] = P_a[0,1] * P_a[1,0] * (1-P_a[0,0]) * (1-P_a[1,1])
-            p_diag = l_diag / (l_diag + l_adiag)
+            p_denom = l_diag + l_adiag
+            nan_free = p_denom > 0
+            p_diag = l_diag[nan_free] / p_denom[nan_free]
 
             # Deal with 0/0 nan's
-            nan_free = -np.isnan(p_diag)
-            p_diag = p_diag[nan_free]
             active = [a for i, a in enumerate(active) if nan_free[i]]
             A_nan_free = np.sum(nan_free)
             coverage_attained += A_nan_free
