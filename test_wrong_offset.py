@@ -12,7 +12,7 @@ import numpy as np
 
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
-from Experiment import RandomSubnetworks, Results, add_network_stats
+from Experiment import RandomSubnetworks, Results, add_array_stats
 from Utility import logit
 
 # Parameters
@@ -23,7 +23,7 @@ params = { 'N': 300,
            'P_beta_params': (0.1, 0.9),
            'fit_nonstationary': True,
            'num_reps': 10,
-           'sub_sizes': range(10, 160, 10),
+           'sub_sizes': np.arange(10, 160, 10),
            'plot_mse': True,
            'plot_network': True }
 
@@ -71,8 +71,9 @@ for c in covariates:
     fit_model.beta[c] = None
 
 # Set up recording of results from experiment
-results = Results(params['sub_sizes'], params['num_reps'])
-add_network_stats(results)
+results = Results(params['sub_sizes'], params['sub_sizes'],
+                  params['num_reps'])
+add_array_stats(results)
 def f_c(c):
     return (lambda d, f: d.beta[c]), (lambda d, f: f.beta[c])
 for c in covariates:
@@ -90,8 +91,9 @@ results.new('MSE(logit_P_{ij})', 'nm',
 # Repeatedly generate and fit networks
 for sub_size in params['sub_sizes']:
     print 'Subnetwork size = %d' % sub_size
-
-    gen = RandomSubnetworks(net, sub_size)
+    size = (sub_size, sub_size)
+    
+    gen = RandomSubnetworks(net, size)
     for rep in range(params['num_reps']):
         subnet = gen.sample()
         data_model.match_kappa(subnet, ('density', target_dens))
@@ -100,7 +102,7 @@ for sub_size in params['sub_sizes']:
 
         fit_model.fit(subnet)
 
-        results.record(sub_size, rep, subnet, data_model, fit_model)
+        results.record(size, rep, subnet, data_model, fit_model)
 
 # Compute MSEs
 covariate_mses = []
@@ -118,9 +120,8 @@ if params['plot_mse']:
   
 # Plot network statistics as well as sparsity parameter
 if params['plot_network']:
-    results.plot([('Average degree', {'ymin': 0, 'plot_mean': True}),
-                  (['Out-degree', 'Max out-degree', 'Min out-degree'],
+    results.plot([('Density', {'ymin': 0, 'plot_mean': True}),
+                  (['Row-sum', 'Max row-sum', 'Min row-sum'],
                    {'ymin': 0, 'plot_mean': True}),
-                  (['In-degree', 'Max out-degree', 'Min in-degree'],
-                   {'ymin': 0, 'plot_mean': True}),
-                  ('Self-loop density', {'ymin': 0, 'plot_mean': True})])
+                  (['Col-sum', 'Max col-sum', 'Min col-sum'],
+                   {'ymin': 0, 'plot_mean': True})])
