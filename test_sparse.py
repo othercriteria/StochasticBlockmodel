@@ -5,13 +5,13 @@
 
 from datetime import date, timedelta
 
-from Network import Network
+from Network import network_from_edges
 from Models import Stationary, StationaryLogistic, NonstationaryLogistic
 from Web import dump_to_json
 
 # Parameters
 params = { 'file_network': 'data/cit-HepTh/cit-HepTh.txt',
-           'import_limit_edges': 10,
+           'import_limit_edges': 1000,
            'file_dates': 'data/cit-HepTh/cit-HepTh-dates.txt',
            'pub_diff_classes': [180, 360],
            'offset_extremes': True,
@@ -56,8 +56,7 @@ if params['plot']:
     plt.show()
 
 # Initialize network from citation data
-net = Network()
-net.network_from_edges(edges)
+net = network_from_edges(edges)
 if params['plot']: net.show_degree_histograms()
 
 # Process publication date data in covariates
@@ -80,7 +79,7 @@ if params['plot']:
 # Exclude impossible edges using infinite offset
 def f_impossible_pub_order(n_1, n_2):
     if dates[n_1] < dates[n_2]:
-        return -float('inf')
+        return -20.0
     else:
         return 0
 net.initialize_offset().from_binary_function_name(f_impossible_pub_order)
@@ -109,9 +108,10 @@ fit_and_summarize('Nonstationary', NonstationaryLogistic(), True)
 
 # Redisplay heatmap, ordered by estimated alphas from last fit, i.e.,
 # NonstationaryLogistic with publication date difference covariates
-if params['plot']:
-    net.show_heatmap('alpha_out')
-    net.show_heatmap('alpha_in')
+# XX: Following plots are broken
+#if params['plot']:
+#    net.show_heatmap('alpha_out')
+#    net.show_heatmap('alpha_in')
 
 outfile = open('scratch.json', 'w')
 outfile.write(dump_to_json(net))

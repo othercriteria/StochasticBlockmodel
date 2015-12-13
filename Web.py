@@ -22,7 +22,7 @@ def dump_to_json(network):
 
     # Edges
     raw = {}
-    nnz_i, nnz_j = network.network.nonzero()
+    nnz_i, nnz_j = network.array.nonzero()
     for i, j in zip(nnz_i, nnz_j):
         i, j = int(i), int(j)
         s['links'].append({ 'source': i, 'target': j })
