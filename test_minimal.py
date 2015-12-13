@@ -16,7 +16,7 @@ alpha_unif(net, 0.5)
 # Initialize the data model; generate covariates and associated coefficients
 data_model = NonstationaryLogistic()
 data_model.kappa = -7.0
-covariates = ['x_1', 'x_2', 'x_3', 'x_4', 'x_5']
+covariates = ['x_%d' % i for i in range(5)]
 for covariate in covariates:
     data_model.beta[covariate] = normal(0, 1.0)
 
@@ -26,7 +26,7 @@ for covariate in covariates:
     net.new_edge_covariate(covariate).from_binary_function_ind(f_x)
 net.generate(data_model)
 net.show()
-print 'True beta_1: %.2f' % data_model.beta['x_1']
+print 'True theta_0: %.2f' % data_model.beta['x_0']
 
 # Initialize the fit model; specify which covariates it should have terms for
 fit_model = NonstationaryLogistic()
@@ -34,9 +34,9 @@ for covariate in covariates:
     fit_model.beta[covariate] = None
 
 # Set up random subnetwork generator, and run fitting experiments
-gen = RandomSubnetworks(net, 200)
+gen = RandomSubnetworks(net, (200, 200))
 for rep in range(5):
     subnet = gen.sample()
 
     fit_model.fit(subnet)
-    print 'Estimated beta_1: %.2f' % fit_model.beta['x_1']
+    print 'Estimated theta_0: %.2f' % fit_model.beta['x_0']
