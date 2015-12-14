@@ -33,13 +33,14 @@ for i, degree_het in enumerate(['Normal', 'Gamma', 'Uniform', 'None']):
             alpha_unif(net, het_sd)
                 
         for k, sub_size in enumerate(sub_sizes):
-            gen = RandomSubnetworks(net, sub_size)
+            size = (sub_size, sub_size)
+            gen = RandomSubnetworks(net, size)
             
             for l in range(reps):
-                print degree_het, het_sd, sub_size, l
+                print degree_het, het_sd, size, l
 
                 subnet = gen.sample()
-                model.match_kappa(subnet, ('degree', 2))
+                model.match_kappa(subnet, ('row_sum', 2))
                 subnet.generate(model)
                 
                 subnet.offset_extremes()
@@ -68,7 +69,7 @@ for j, het_sd in enumerate([1.0, 2.0, 3.0]):
     for l in range(reps):
         a[j], = plt.plot(sub_sizes, data_het[0,j,:,l], colors[j] + '.')
 plt.legend(a, ['SD = 1.0', 'SD = 2.0', 'SD = 3.0'], loc = 2)
-    
+
 plt.figure()
 for i, degree_het in enumerate(['Normal', 'Gamma', 'Uniform']):
     if i == 0:
@@ -84,5 +85,5 @@ for i, degree_het in enumerate(['Normal', 'Gamma', 'Uniform']):
             a[j], = plt.plot(sub_sizes, data_het[i,j,:,l], colors[j] + '.')
     plt.legend(a, ['SD = 1.0', 'SD = 2.0', 'SD = 3.0'], loc = 2)
 plt.tight_layout()
-    
+
 plt.show()
