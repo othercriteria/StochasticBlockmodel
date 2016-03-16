@@ -1652,13 +1652,13 @@ class Blockmodel(IndependentBernoulli):
     def edge_probabilities(self, network, submatrix = None,
                            ignore_offset = None):
         if ignore_offset is None:
-           ignore_inner_offset = self.ignore_inner_offset
+            ignore_inner_offset = self.ignore_inner_offset
         else:
             ignore_inner_offset = ignore_offset
 
-        old_offset = network.offset.copy()
         if network.offset is None:
             network.initialize_offset()
+        old_offset = network.offset.copy()
         self.apply_to_offset(network)
 
         # If outer ignore_offset, then the inner offset is just block
