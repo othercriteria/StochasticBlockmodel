@@ -1270,31 +1270,32 @@ class NonstationaryLogistic(StationaryLogistic):
         A = np.array(network.as_dense())
         r = np.sum(A, axis = 1, dtype=np.int)[0:(M-1)]
         c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
-        T[(B + 1):(B + 1 + (M-1))] = r
-        T[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = c
+        A_sum = np.sum(A, dtype=np.int)
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
-        T[B] = np.sum(A, dtype=np.int)
+        T[B] = A_sum
+        T[(B + 1):(B + 1 + (M-1))] = r
+        T[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = c
 
         # Initialize theta
         theta = np.zeros(B + 1 + (M-1) + (N-1))
         if fix_beta:
             for b, b_n in enumerate(self.beta):
                 theta[b] = self.beta[b_n]
-        theta[B] = logit(A.sum(dtype=np.int) / (1.0 * M * N))
+        theta[B] = logit(A_sum / (1.0 * M * N))
         if network.offset:
             theta[B] -= logit_mean(O)
         theta[(B + 1):(B + 1 + (M-1) + (N-1))] = -theta[B]
         for i in range(M-1):
             theta[B + 1 + i] += \
-              logit((A[i,:].sum(dtype=np.int) + 1.0) / (N + 1.0))
+              logit((r[i] + 1.0) / (N + 1.0))
             if network.offset:
                 o_row = logit_mean(O[i,:])
                 if np.isfinite(o_row):
                     theta[B + 1 + i] -= o_row
         for j in range(N-1):
             theta[B + 1 + (M-1) + j] += \
-              logit((A[:,j].sum(dtype=np.int) + 1.0) / (M + 1.0))
+              logit((c[j] + 1.0) / (M + 1.0))
             if network.offset:
                 o_col = logit_mean(O[:,j])
                 if np.isfinite(o_col):
