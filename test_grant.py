@@ -9,7 +9,7 @@ import networkx as nx
 
 from datetime import date, timedelta
 
-from Network import Network
+from Network import network_from_edges
 from Models import Stationary, StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_zero
 
@@ -51,8 +51,7 @@ for line in open(params['file_network'], 'r').readlines():
 print '# Nodes: %d' % len(nodes)
 
 # Initialize network from citation data
-net = Network()
-net.network_from_edges(edges)
+net = network_from_edges(edges)
 
 # Process publication date data in covariates
 cov_names = []
