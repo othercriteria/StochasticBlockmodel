@@ -20,7 +20,7 @@ from BinaryMatrix import approximate_conditional_nll
 
 # Parameters
 N = 20
-G = 30
+G = 5
 alpha_sd = 2.0
 theta_true = { 'x_1': 2.0, 'x_2': -1.0 }
 target_degree = 2
@@ -42,7 +42,7 @@ for name in theta_true:
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Instantiate network according to data model
-data_model.match_kappa(net, ('degree', target_degree))
+data_model.match_kappa(net, ('row_sum', target_degree))
 net.generate(data_model)
 #net.show_heatmap('alpha_out')
 #net.show_heatmap('alpha_in')
@@ -110,10 +110,10 @@ def f_nll(net, fit_model):
 grid_fit(StationaryLogistic(), f_nll)
 fit_model = StationaryLogistic
 
-#for c in covariates:
-#    plt.figure()
-#    plt.scatter(net.edge_covariates[c].matrix(), net.adjacency_matrix())
-#    plt.show()
+for c in covariates:
+    plt.figure()
+    plt.scatter(net.edge_covariates[c].matrix(), net.adjacency_matrix())
+    plt.show()
 
-plt.savefig('../grant/figs/simulated_data_no_wopt_sort_10.eps')
-#plt.show()
+#plt.savefig('../grant/figs/simulated_data_no_wopt_sort_10.eps')
+plt.show()
