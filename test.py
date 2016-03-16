@@ -128,6 +128,9 @@ def do_experiment(params):
             def f_x(i_1, i_2):
                 return (params['cov_disc_sd'] *
                         (np.sign(np.random.random() - 0.5)))
+        else:
+            print 'Error: no covariate distribution specified.'
+            sys.exit()
 
         arr.new_edge_covariate(name).from_binary_function_ind(f_x)
 
