@@ -5,14 +5,10 @@
 
 import numpy as np
 from scipy.stats import norm
+from scipy.special import logit as logit
+from scipy.special import expit as inv_logit
 
 import pickle
-
-def logit(x):
-    return np.log(x / (1.0 - x))
-
-def inv_logit(x):
-    return 1.0 / (np.exp(-x) + 1.0)
 
 def logsumexp(x):
     return reduce(np.logaddexp, x)
