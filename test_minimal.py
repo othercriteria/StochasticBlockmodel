@@ -6,7 +6,10 @@
 from Network import Network
 from Models import NonstationaryLogistic, alpha_unif
 from Experiment import RandomSubnetworks
-from numpy.random import normal
+from numpy.random import normal, seed
+
+# Seed random number for reproducible results
+seed(137)
 
 # Initialize full network
 N = 300
@@ -25,6 +28,7 @@ for covariate in covariates:
         return abs(x_node[i_1] - x_node[i_2]) < 0.3
     net.new_edge_covariate(covariate).from_binary_function_ind(f_x)
 net.generate(data_model)
+net.offset_extremes()
 net.show()
 print 'True theta_0: %.2f' % data_model.beta['x_0']
 
