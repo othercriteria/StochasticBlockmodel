@@ -1352,17 +1352,19 @@ class NonstationaryLogistic(StationaryLogistic):
             if verbose:
                 for b, b_n in enumerate(self.beta):
                     if theta_opt[b] in (bounds[b][0], bounds[b][1]):
-                        print '%s: %.2f' % (b_n, theta_opt[b])
+                        print '%s: %.2f (T = %.2f)' % (b_n, theta_opt[b], T[b])
                 if theta_opt[B] in (bounds[B][0], bounds[B][1]):
-                    print 'kappa: %.2f' % theta_opt[B]
+                    print 'kappa: %.2f (T = %.2f)' % (theta_opt[B], T[B])
                 for i in range(M-1):
                     r_i = B + 1 + i
                     if theta_opt[r_i] in (bounds[r_i][0], bounds[r_i][1]):
-                        print 'alpha_%d: %.2f' % (i, theta_opt[r_i])
+                        print 'alpha_%d: %.2f (T = %.2f)' % \
+                            (i, theta_opt[r_i], T[r_i])
                 for j in range(N-1):
                     c_j = B + 1 + (M-1) + j
                     if theta_opt[c_j] in (bounds[c_j][0], bounds[c_j][1]):
-                        print 'beta_%d: %.2f' % (j, theta_opt[c_j])
+                        print 'beta_%d: %.2f (T = %.2f)' % \
+                            (j, theta_opt[c_j], T[c_j])
 
         alpha_out[0:M-1] = theta_opt[(B + 1):(B + 1 + (M-1))]
         alpha_in[0:N-1] = theta_opt[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))]
