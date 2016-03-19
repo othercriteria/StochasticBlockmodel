@@ -523,6 +523,13 @@ class StationaryLogistic(Stationary):
         if (np.any(theta_opt == [b[0] for b in bounds]) or
             np.any(theta_opt == [b[1] for b in bounds])):
             print 'Warning: some constraints active in model fitting.'
+            if verbose:
+                for b, b_n in enumerate(self.beta):
+                    if theta_opt[b] in (bounds[b][0], bounds[b][1]):
+                        print '%s: %.2f (T = %.2f)' % (b_n, theta_opt[b], T[b])
+                if theta_opt[B] in (bounds[B][0], bounds[B][1]):
+                    print 'kappa: %.2f (T = %.2f)' % (theta_opt[B], T[B])
+            
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
         self.kappa = theta_opt[B]
@@ -596,6 +603,13 @@ class StationaryLogistic(Stationary):
         if (np.any(theta_opt == [b[0] for b in bounds]) or
             np.any(theta_opt == [b[1] for b in bounds])):
             print 'Warning: some constraints active in model fitting.'
+            if verbose:
+                for b, b_n in enumerate(self.beta):
+                    if theta_opt[b] in (bounds[b][0], bounds[b][1]):
+                        print '%s: %.2f (T = %.2f)' % (b_n, theta_opt[b], T[b])
+                if theta_opt[B] in (bounds[B][0], bounds[B][1]):
+                    print 'kappa: %.2f (T = %.2f)' % (theta_opt[B], T[B])
+
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
         self.kappa = theta_opt[B]
@@ -868,6 +882,17 @@ class StationaryLogistic(Stationary):
             if (np.any(theta_opt == [b[0] for b in bounds]) or
                 np.any(theta_opt == [b[1] for b in bounds])):
                 print 'Warning: some constraints active in model fitting.'
+                if verbose:
+                    for b, b_n in enumerate(self.beta):
+                        if theta_opt[b] in (bounds[b][0], bounds[b][1]):
+                            print '%s: %.2f (T = %.2f)' % \
+                                (b_n, theta_opt[b], T[b])
+                    for i in range(M-1):
+                        r_i = B + i
+                        if theta_opt[r_i] in (bounds[r_i][0], bounds[r_i][1]):
+                            print 'alpha_%d: %.2f (T = %.2f)' % \
+                                (i, theta_opt[r_i], T[r_i])
+
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta_opt[b]
 
