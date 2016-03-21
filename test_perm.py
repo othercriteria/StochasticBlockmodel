@@ -9,7 +9,7 @@ from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins
 from Models import alpha_zero
-from Experiment import RandomSubnetworks, Results, add_network_stats, rel_mse
+from Experiment import RandomSubnetworks, Results, add_array_stats, rel_mse
 from Utility import logit
 
 # Parameters
@@ -65,8 +65,8 @@ for c in covariates:
     fit_model.beta[c] = None
 
 # Set up recording of results from experiment
-results = Results(params['sub_sizes'], params['num_reps'])
-add_network_stats(results)
+results = Results(params['sub_sizes'], params['sub_sizes'], params['num_reps'])
+add_array_stats(results)
 def true_est_theta_c(c):
     return (lambda d, f: d.base_model.beta[c]), (lambda d, f: f.beta[c])
 for c in covariates:
@@ -108,9 +108,10 @@ if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
                 lambda d, f: np.sqrt(np.sum((f.fit_info['grad_nll_final'])**2)))
 
 for sub_size in params['sub_sizes']:
-    print 'subnetwork size = %d' % sub_size
+    size = (sub_size, sub_size)
+    print 'subnetwork size = %s' % str(size)
 
-    gen = RandomSubnetworks(net, sub_size)
+    gen = RandomSubnetworks(net, size)
 
     for rep in range(params['num_reps']):
         subnet = gen.sample()
@@ -148,7 +149,7 @@ for sub_size in params['sub_sizes']:
         elif params['fit_method'] == 'none':
             pass
             
-        results.record(sub_size, rep, subnet, data_model, fit_model)
+        results.record(size, rep, subnet, data_model, fit_model)
 
 # Compute beta MSEs
 covariate_mses = []
