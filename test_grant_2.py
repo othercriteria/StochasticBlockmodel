@@ -20,7 +20,7 @@ from BinaryMatrix import approximate_conditional_nll
 
 # Parameters
 N = 20
-G = 5
+G = 30
 alpha_sd = 2.0
 theta_true = { 'x_1': 2.0, 'x_2': -1.0 }
 target_degree = 2
@@ -44,8 +44,8 @@ for name in theta_true:
 # Instantiate network according to data model
 data_model.match_kappa(net, ('row_sum', target_degree))
 net.generate(data_model)
-#net.show_heatmap('alpha_out')
-#net.show_heatmap('alpha_in')
+net.show_heatmap(order_by_row = 'alpha_out')
+net.show_heatmap(order_by_col = 'alpha_in')
 
 # Display network
 plt.figure(figsize = (17, 4.25))

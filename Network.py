@@ -104,10 +104,17 @@ class Network(Array):
         system('ps2pdf temp_graphviz.ps %s' % file)
         unlink('temp_graphviz.ps')
 
-    def show_heatmap(self, order_by = None):
+    def show_heatmap(self, order_by = None,
+                     order_by_row = None, order_by_col = None):
         if order_by:
             title = 'Network ordered by node covariate\n"%s"' % order_by
             o = np.argsort(self.node_covariates[order_by][:])
+        elif order_by_row:
+            title = 'Network ordered by row covariate\n"%s"' % order_by_row
+            o = np.argsort(self.row_covariates[order_by_row][:])
+        elif order_by_col:
+            title = 'Network ordered by column covariate\n"%s"' % order_by_col
+            o = np.argsort(self.col_covariates[order_by_col][:])
         else:
             title, o = 'Unordered adjacency matrix', np.arange(self.N)
 
