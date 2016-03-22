@@ -8,16 +8,18 @@ from Models import NonstationaryLogistic
 from Models import alpha_zero, alpha_norm, alpha_gamma, alpha_unif
 from Experiment import RandomSubnetworks
 
+# Parameters
+N = 300
 reps = 10
+sub_sizes = range(10, 110, 10)
+kappa_target = ('row_sum', 2)
 
-sub_sizes = range(10, 60, 10)
-
-net = Network(400)
-
+net = Network(N)
 model = NonstationaryLogistic()
 
-data_none = np.empty((5,reps))
-data_het = np.empty((3,3,5,reps))
+num_sizes = len(sub_sizes)
+data_none = np.empty((num_sizes,reps))
+data_het = np.empty((3,3,num_sizes,reps))
 for i, degree_het in enumerate(['Normal', 'Gamma', 'Uniform', 'None']):
     if degree_het == 'None':
         alpha_zero(net)
@@ -40,7 +42,7 @@ for i, degree_het in enumerate(['Normal', 'Gamma', 'Uniform', 'None']):
                 print degree_het, het_sd, size, l
 
                 subnet = gen.sample()
-                model.match_kappa(subnet, ('row_sum', 2))
+                model.match_kappa(subnet, kappa_target)
                 subnet.generate(model)
                 
                 subnet.offset_extremes()
