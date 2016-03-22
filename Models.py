@@ -1793,7 +1793,7 @@ class Blockmodel(IndependentBernoulli):
                 z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
 
             nll = self.nll(network, ignore_offset = self.ignore_inner_offset)
-            if use_best:
+            if (use_best or store_all):
                 self.sem_trace.append((nll, z.copy()))
 
         if use_best:

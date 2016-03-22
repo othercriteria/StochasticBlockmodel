@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 # Check SEM's ability to stay in the neighborhood of the (label) truth
-# when initialized at the (label) truth, in the absence of degree
-# heterogeneity...
+# when initialized at the (label) truth.
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +13,7 @@ from Models import alpha_zero, alpha_norm
 from Experiment import minimum_disagreement
 
 N = 100
-reps = 200
+reps = 150
 
 net = Network(N)
 
@@ -38,12 +37,11 @@ for name, theta in [('ll', 4.0),
                     ('rr', 3.0),
                     ('lr', -2.0)]:
     data_model.beta[name] = theta
-alpha_norm(net, 1.0)
-data_model.match_kappa(net, ('degree', 2))
+alpha_norm(net, 3.0)
+data_model.match_kappa(net, ('row_sum', 2))
 net.generate(data_model)
 net.show_heatmap()
 net.offset_extremes()
-
 
 fit_base_model = StationaryLogistic()
 fit_base_model.beta['x'] = None
@@ -53,9 +51,11 @@ fit_model = Blockmodel(fit_base_model, 2)
 # Initialize from truth...
 net.new_node_covariate_int('z')
 net.node_covariates['z'][:] = net.node_covariates['value'][:]
+#net.node_covariates['z'][:] = np.random.random(N) < 0.5
 
 # Calculate NLL at truth
-fit_model.fit_sem(net, 1, 0, use_best = False)
+fit_model.fit_sem(net, cycles = 1, sweeps = 0,
+                  use_best = False, store_all = True)
 baseline_nll = fit_model.sem_trace[0][0]
 
 nll_trace = []
@@ -63,8 +63,9 @@ z_trace = np.empty((reps,N))
 disagreement_trace = []
 
 for rep in range(reps):
-    fit_model.fit_sem(net, 1, 5)
-    # fit_model.fit_kl(net, 1)
+    print rep
+    fit_model.fit_sem(net, 1, 2, store_all = True)
+    #fit_model.fit_kl(net, 1)
     nll_trace.append(fit_model.nll(net))
     z_trace[rep,:] = net.node_covariates['z'][:]
     disagreement = minimum_disagreement(net.node_covariates['value'][:],
@@ -73,7 +74,7 @@ for rep in range(reps):
 
 # Eliminate symmetry of 'z'
 for rep in range(reps):
-    if np.mean(z_trace[rep,0]) < 0.5:
+    if np.mean(z_trace[rep,:]) < 0.5:
         z_trace[rep,:] = 1 - z_trace[rep,:]
 z_trace += np.random.normal(0, 0.01, (reps, N))
                     
