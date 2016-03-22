@@ -59,17 +59,26 @@ for i in range(N):
 pos = nx.graphviz_layout(graph, prog = 'neato')
 nx.draw(graph, pos, node_size = 60, with_labels = False)
 
-def grid_fit(fit_model, f_nll):
-    # Evaluate likelihoods on a grid
+def grid_fit(fit_model, f_nll, profile = False, pre_offset = False):
+    # Initialize grid
     theta_star_1 = data_model.beta[covariates[0]]
     theta_star_2 = data_model.beta[covariates[1]]
     x = np.linspace(theta_star_1 - 2.0, theta_star_1 + 2.0, G)
     y = np.linspace(theta_star_2 - 2.0, theta_star_2 + 2.0, G)
     z = np.empty((G,G))
+
+    if pre_offset:
+        net.offset_extremes()
+    else:
+        net.initialize_offset()
+
+    # Evaluate likelihoods on a grid
     for i, theta_1 in enumerate(x):
         for j, theta_2 in enumerate(y):
             fit_model.beta[covariates[0]] = theta_1
             fit_model.beta[covariates[1]] = theta_2
+            if profile:
+                fit_model.fit(net, fix_beta = True)
             z[i,j] = f_nll(net, fit_model)
 
     nll_min = np.min(z)
@@ -90,10 +99,11 @@ def grid_fit(fit_model, f_nll):
 # Grid search for stationary and non-stationary fits
 plt.subplot(142)
 plt.title('Stationary')
-grid_fit(StationaryLogistic(), lambda n, m: m.nll(n))
+grid_fit(StationaryLogistic(), lambda n, m: m.nll(n), profile = True)
 plt.subplot(143)
 plt.title('Nonstationary')
-grid_fit(NonstationaryLogistic(), lambda n, m: m.nll(n))
+grid_fit(NonstationaryLogistic(), lambda n, m: m.nll(n),
+         profile = True, pre_offset = True)
 
 # Grid search for conditional fit
 plt.subplot(144)
