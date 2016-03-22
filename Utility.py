@@ -27,6 +27,14 @@ def logit_mean(x):
 pick = lambda x: pickle.dumps(x, protocol = 0)
 unpick = lambda x: pickle.loads(x)
 
+# Initialize LaTeX rendering in matplotlib
+def init_latex_rendering():
+    import os
+    os.environ['PATH'] += ':/usr/texbin'
+    from matplotlib import rc
+    rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
+    rc('text', usetex = True)
+
 # Convenience functions for plotting ellipses, e.g., 2-d confidence regions
 #
 # Finding the right settings for Ellipse is surprisingly tricky so I follow:

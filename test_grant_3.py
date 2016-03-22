@@ -7,18 +7,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 
-import os
-os.environ['PATH'] += ':/usr/texbin'
-from matplotlib import rc
-rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
-rc('text', usetex = True)
-
 from Network import Network
 from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_norm
 from BinaryMatrix import approximate_conditional_nll
 from BinaryMatrix import approximate_from_margins_weights
 from BinaryMatrix import log_partition_is
+from Utility import init_latex_rendering
+
+init_latex_rendering()
 
 # Parameters
 N = 25
