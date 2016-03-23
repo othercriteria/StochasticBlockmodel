@@ -341,19 +341,22 @@ def minimum_disagreement(z_true, z_est, f = None, normalized = True):
     from itertools import permutations
 
     assert(len(z_true) == len(z_est))
+    N = len(z_true)
 
     if not f:
-        N = len(z_true)
         def f(x, y):
             return np.sum(x != y) / N
 
     true_classes = list(set(z_true))
     est_classes = list(set(z_est))
-    if len(est_classes) < len(true_classes):
-        est_classes += [-1] * (len(true_classes) - len(est_classes))
+    K_true = len(true_classes)
+    K_est = len(est_classes)
+
+    if K_est < K_true:
+        est_classes += [-1] * (K_true - K_est)
     best = np.inf
-    for est_permutation in permutations(est_classes, len(true_classes)):
-        z_est_perm = np.tile(-1, len(z_est))
+    for est_permutation in permutations(est_classes, K_true):
+        z_est_perm = np.repeat(-1, N)
         for s, t in zip(est_permutation, true_classes):
             z_est_perm[z_est == s] = t
         best = min(best, f(z_true, z_est_perm))
@@ -361,7 +364,7 @@ def minimum_disagreement(z_true, z_est, f = None, normalized = True):
     if normalized:
         best_constant = np.inf
         for z in set(z_true):
-            z_constant = np.repeat(z, len(z_true))
+            z_constant = np.repeat(z, N)
             best_constant = min(best_constant, f(z_true, z_constant))
         best /= best_constant
         
