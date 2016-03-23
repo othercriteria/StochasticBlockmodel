@@ -30,12 +30,6 @@ class Array:
     def __setitem__(self, index, x):
         self.array.__setitem__(index, x)
 
-    def tocsr(self):
-        if self.is_sparse():
-            self.array = self.array.tocsr()
-        else:
-            print 'Warning: trying to convert non-sparse array to CSR.'
-
     def new_row_covariate(self, name):
         self.row_covariates[name] = NodeCovariate(self.rnames)
         return self.row_covariates[name]
@@ -63,10 +57,6 @@ class Array:
         sub = Array(sub_M, sub_N)
         sub.rnames = self.rnames[rinds]
         sub.cnames = self.cnames[cinds]
-
-        # TODO: Check if this is actually necessary.
-        if self.is_sparse():
-            self.tocsr()
 
         sub.array = self.array[rinds][:,cinds]
 

@@ -74,9 +74,6 @@ class EdgeCovariate:
 
         return new
 
-    def tocsr(self):
-        self.data = self.data.tocsr()
-
     # Indicate that matrix should not used a cached version
     def dirty(self):
         self.is_dirty = True
@@ -93,9 +90,6 @@ class EdgeCovariate:
         return self.data
 
     def subset(self, rinds, cinds):
-        # TODO: Check if this is actually necessary.
-        #self.tocsr()
-        
         sub = EdgeCovariate(self.rnames[rinds], self.cnames[cinds])
         sub.data[:,:] = self.data[rinds][:,cinds]
 
