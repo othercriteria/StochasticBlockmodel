@@ -362,7 +362,6 @@ Suppose c is a sequence of nonnegative integers. Returns c_conj where:
 """
     cc = np.zeros(n, dtype = np.int);
 
-    ## TODO: Check that this does the right thing for n = 0...
     if n > 0:
         for j, k in enumerate(c):
             if k >= n:
@@ -371,7 +370,7 @@ Suppose c is a sequence of nonnegative integers. Returns c_conj where:
                 cc[k-1] += 1
 
         s = cc[n-1]
-        for j in xrange(n-2,-1,-1):
+        for j in xrange(n-2, -1, -1):
             s += cc[j]
             cc[j] = s
 
@@ -379,11 +378,9 @@ Suppose c is a sequence of nonnegative integers. Returns c_conj where:
 
 # Eliminate extreme rows and columns recursively until all remaining
 # rows and columns are non-extreme. Perform the matching pruning on
-# supplied arrays
+# supplied arrays. Provide a function that can undo this pruning
+# (after sampling).
 def _prune(r, c, *arrays):
-    # FIXME: this will probably break if any of arrays is a matrix (as
-    # opposed to an array)
-
     r = r.copy()
     c = c.copy()
     arrays = list([a.copy() for a in arrays])

@@ -101,7 +101,9 @@ class Array:
 
         # Convenience function to set blocks of the offset
         def set_offset_block(r, c, val):
-            # XXX: Replace this with working vectorized code
+            # Replacing this with a vectorized operation will require
+            # a conversion to CSR. It's not clear if this is worth the
+            # overhead.
             for i in r_ord[r]:
                 for j in c_ord[c]:
                     self.offset[i,j] = val
