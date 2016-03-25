@@ -12,7 +12,7 @@ from time import time
 from itertools import permutations
 import hashlib
 
-from Utility import logit, inv_logit, logit_mean
+from Utility import logit, inv_logit, logit_mean, tree
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights as acsample
 from BinaryMatrix import approximate_conditional_nll as acnll
@@ -280,7 +280,7 @@ class Stationary(IndependentBernoulli):
         self.kappa = 0.0
         self.fit = self.fit_convex_opt
         self.fit_info = None
-        self.conf = None
+        self.conf = tree()
 
     def edge_probabilities(self, network, submatrix = None,
                            ignore_offset = False):
@@ -647,7 +647,7 @@ class StationaryLogistic(Stationary):
         robjects.r('nr <- length(unique(dat$row))')
         robjects.r('nc <- length(unique(dat$col))')
 
-        # Do inference, defaulting to theta_hat = 0.0 if anything goew wrong
+        # Do inference, defaulting to theta_hat = 0.0 if anything goes wrong
         if robjects.r('dim(dat)')[0] == 0:
             self.beta[self.beta.keys()[0]] = 0.0
         else:
@@ -1127,16 +1127,9 @@ class StationaryLogistic(Stationary):
                 theta_hat_bootstraps[b][k] = self.beta[b]
         network.array = network_original
 
-        # Initialize data structure to hold confidence intervals
-        if not self.conf:
-            self.conf = {}
-        for b in self.beta:
-            if not b in self.conf:
-                self.conf[b] = {}
-
         # Construct (asymptotically valid) confidence interval
         p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
-        for b in self.conf:
+        for b in self.beta:
             theta_hat = theta_hats[b]
             theta_hat_bootstrap = theta_hat_bootstraps[b]
             self.conf[b]['percentile'] = \
@@ -1186,10 +1179,6 @@ class StationaryLogistic(Stationary):
         (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
                                          log_likelihood, sample, t)        
 
-        if not self.conf:
-            self.conf = {}
-        if not b in self.conf:
-            self.conf[b] = {}
         self.conf[b]['harrison'] = (l, u)
 
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +

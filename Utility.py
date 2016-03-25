@@ -9,6 +9,7 @@ from scipy.special import logit as logit
 from scipy.special import expit as inv_logit
 
 import pickle
+from collections import defaultdict
 
 def logsumexp(x):
     return reduce(np.logaddexp, x)
@@ -26,6 +27,10 @@ def logit_mean(x):
 # Convenience functions for (un)pickling
 pick = lambda x: pickle.dumps(x, protocol = 0)
 unpick = lambda x: pickle.loads(x)
+
+# Autovivifying nested dictionary
+def tree():
+    return defaultdict(tree)
 
 # Initialize LaTeX rendering in matplotlib
 def init_latex_rendering():

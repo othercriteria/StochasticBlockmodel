@@ -44,3 +44,7 @@ for rep in range(5):
 
     fit_model.fit(subnet)
     print 'Estimated theta_0: %.2f' % fit_model.beta['x_0']
+
+    fit_model.confidence(subnet, n_bootstrap = 5)
+    ci = fit_model.conf['x_0']['normal']
+    print 'Normal CI for theta_0: (%.2f, %.2f)' % ci
