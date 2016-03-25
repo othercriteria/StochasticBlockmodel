@@ -26,7 +26,7 @@ params = { 'fixed_example': None, #'data/rasch_covariates.json',
            'n_MC_levels': [10],
            'wopt_sort': True,
            'is_T': 50,
-           'n_rep': 5,
+           'n_rep': 100,
            'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
@@ -47,6 +47,9 @@ def cond_a_nll(X, w):
 def cond_a_sample(r, c, w, T = 0):
     return cond_a_sample_b(r, c, w, T, sort_by_wopt_var = params['wopt_sort'])
 
+# Generates (or loads) a particular realization of P_{ij} and then
+# repeatedly samples independent Bernoulli random variables according
+# to these cell probabilities.
 def generate_data(params, seed):
     # Advance random seed for parameter and covariate construction
     seed.next()
@@ -128,11 +131,11 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
 @timing
 def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     cmle_is = np.empty_like(theta_grid)
+    r = X.sum(1)
+    c = X.sum(0)
     for l, theta_l in enumerate(theta_grid):
         logit_P_l = theta_l * v
         w_l = np.exp(logit_P_l)
-        r = X.sum(1)
-        c = X.sum(0)
 
         z = cond_a_sample(r, c, w_l, T)
         logf = np.empty(T)
