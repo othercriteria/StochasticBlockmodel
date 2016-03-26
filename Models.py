@@ -616,27 +616,26 @@ class StationaryLogistic(Stationary):
 
         self.fit_info['wall_time'] = time() - start_time
 
-    def fit_brazzale(self, network, alpha_level = 0.05, verbose = False):
-        B = len(self.beta)
-        if not (B == 1):
-            print 'Method only applicable to scalar parameter of interest.'
-            return
-        beta_name = self.beta.keys()[0]
-
+    def fit_brazzale(self, network, target_n,
+                     alpha_level = 0.05, verbose = False):
         M = network.M
         N = network.N
         A = np.array(network.as_dense())
         o = network.offset.matrix()
-        x = network.edge_covariates[beta_name].matrix()
 
         # Construct (flattened) R data frame with data
         y_vec = robjects.FloatVector(A.flatten())
-        x_vec = robjects.FloatVector(x.flatten())
         o_vec = robjects.FloatVector(o.flatten())
         row_vec = robjects.IntVector(np.repeat(range(M), N))
         col_vec = robjects.IntVector(range(N) * M)
-        dat = robjects.DataFrame({'y': y_vec, 'x': x_vec, 'o': o_vec,
-                                  'row': row_vec, 'col': col_vec})
+        dat_cols = { 'y': y_vec, 'o': o_vec, 'row': row_vec, 'col': col_vec}
+        for b_n in self.beta:
+            x_b = network.edge_covariates[b_n].matrix()
+            x_b_vec = robjects.FloatVector(x_b.flatten())
+            if b_n == target_n:
+                b_n = '..target..'
+            dat_cols[b_n] = x_b_vec
+        dat = robjects.DataFrame(dat_cols)
         robjects.globalenv['dat'] = dat
         robjects.r('dat$row <- factor(dat$row)')
         robjects.r('dat$col <- factor(dat$col)')
@@ -650,13 +649,13 @@ class StationaryLogistic(Stationary):
 
         # Do inference, defaulting to theta_hat = 0.0 if anything goes wrong
         if robjects.r('dim(dat)')[0] == 0:
-            self.beta[beta_name] = 0.0
+            self.beta[target_n] = 0.0
         else:
-            robjects.r('dat.glm <- glm(y ~ x + ' + \
+            robjects.r('dat.glm <- glm(y ~ ..target.. + ' + \
               'C(row, how.many=(nr-1)) + C(col, how.many=(nc-1)), ' + \
               'data=dat, family=binomial("logit"))')
             try:
-                robjects.r('dat.cond <- cond(dat.glm, x, ' + \
+                robjects.r('dat.cond <- cond(dat.glm, ..target.., ' + \
                            'from=-6.0, to=6.0, pts=20)')
                 robjects.globalenv['alpha'] = alpha_level
                 robjects.r('dat.cond.summ <- summary(dat.cond, alpha=alpha)')
@@ -665,10 +664,10 @@ class StationaryLogistic(Stationary):
                 theta_opt = robjects.r('dat.cond.summ$coefficients[2,1]')[0]
                 theta_ci_l = robjects.r('dat.cond.summ$conf.int[1,5]')[0]
                 theta_ci_u = robjects.r('dat.cond.summ$conf.int[3,5]')[0]
-                self.beta[beta_name] = theta_opt
-                self.conf[beta_name]['brazzale'] = (theta_ci_l, theta_ci_u)
+                self.beta[target_n] = theta_opt
+                self.conf[target_n]['brazzale'] = (theta_ci_l, theta_ci_u)
             except:
-                self.beta[beta_name] = 0.0
+                self.beta[target_n] = 0.0
 
         self.fit_convex_opt(network, fix_beta = True)
 
