@@ -1300,20 +1300,20 @@ class NonstationaryLogistic(StationaryLogistic):
         if fix_beta:
             for b, b_n in enumerate(self.beta):
                 theta[b] = self.beta[b_n]
-        theta[B] = logit(A_sum / (1.0 * M * N))
+        theta[B] = logit((A_sum + 1.0) / (1.0 * M * N + 2.0))
         if network.offset:
             theta[B] -= logit_mean(O)
         theta[(B + 1):(B + 1 + (M-1) + (N-1))] = -theta[B]
         for i in range(M-1):
             theta[B + 1 + i] += \
-              logit((r[i] + 1.0) / (N + 1.0))
+              logit((r[i] + 1.0) / (N + 2.0))
             if network.offset:
                 o_row = logit_mean(O[i,:])
                 if np.isfinite(o_row):
                     theta[B + 1 + i] -= o_row
         for j in range(N-1):
             theta[B + 1 + (M-1) + j] += \
-              logit((c[j] + 1.0) / (M + 1.0))
+              logit((c[j] + 1.0) / (M + 2.0))
             if network.offset:
                 o_col = logit_mean(O[:,j])
                 if np.isfinite(o_col):
