@@ -13,13 +13,13 @@ from Experiment import RandomSubnetworks, Results, add_array_stats, rel_mse
 from Utility import logit
 
 # Parameters
-params = { 'N': 600,
+params = { 'N': 300,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
-           'fisher_information': False,
+           'fisher_information': True,
            'baseline': False,
-           'fit_nonstationary': False,
+           'fit_nonstationary': True,
            'fit_method': 'conditional',
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1, 2.1, 20)),
@@ -78,7 +78,7 @@ results.new('# Active', 'n', lambda n: n.N ** 2)
 if params['fisher_information']:
     def info_theta_c(c):
         def f_info_theta_c(d, f):
-            return d.I_inv['theta_{%s}' % c]
+            return d.base_model.I_inv['theta_{%s}' % c]
         return f_info_theta_c
     for c in covariates:
         results.new('Info theta_{%s}' % c, 'm', info_theta_c(c))
@@ -118,7 +118,7 @@ for sub_size in params['sub_sizes']:
         subnet.generate(data_model)
 
         if params['fisher_information']:
-            data_model.fisher_information(subnet)
+            data_model.base_model.fisher_information(subnet)
         
         if params['fit_method'] == 'convex_opt':
             if params['verbose']:
