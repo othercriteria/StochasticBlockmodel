@@ -672,8 +672,8 @@ class StationaryLogistic(Stationary):
         self.fit_convex_opt(network, fix_beta = True)
 
     def fit_conditional(self, network,
-                        fit_grid = False, verbose = False, T = 0,
-                        evaluate = False):
+                        fit_grid = False, T = 0, one_sided = False,
+                        evaluate = False, verbose = False):
         B = len(self.beta)
         if fit_grid and not B in (1,2):
             print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
@@ -762,12 +762,20 @@ class StationaryLogistic(Stationary):
                         a_n = 2.0 * scale * n ** (-1.0)
                         c_n = 0.5 * n ** (-1.0 / 3)
                         grad = np.empty(B)
-                        for b in range(B):
-                            e = np.zeros(B)
-                            e[b] = 1.0
-                            y_p = obj(theta + c_n * e)
-                            y_m = obj(theta - c_n * e)
-                            grad[b] = (y_p - y_m) / c_n
+                        if one_sided:
+                            y_0 = obj(theta)
+                            for b in range(B):
+                                e = np.zeros(B)
+                                e[b] = 1.0
+                                y_p = obj(theta + 2.0 * c_n * e)
+                                grad[b] = (y_p - y_0) / c_n
+                        else:
+                            for b in range(B):
+                                e = np.zeros(B)
+                                e[b] = 1.0
+                                y_p = obj(theta + c_n * e)
+                                y_m = obj(theta - c_n * e)
+                                grad[b] = (y_p - y_m) / c_n
                         theta -= a_n * grad
                     theta_opt = theta
                     for b, b_n in enumerate(self.beta):
