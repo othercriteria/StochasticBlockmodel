@@ -621,20 +621,22 @@ class StationaryLogistic(Stationary):
         M = network.M
         N = network.N
         A = np.array(network.as_dense())
-        o = network.offset.matrix()
 
         # Construct (flattened) R data frame with data
         y_vec = robjects.FloatVector(A.flatten())
-        o_vec = robjects.FloatVector(o.flatten())
         row_vec = robjects.IntVector(np.repeat(range(M), N))
         col_vec = robjects.IntVector(range(N) * M)
-        dat_cols = { 'y': y_vec, 'o': o_vec, 'row': row_vec, 'col': col_vec}
+        dat_cols = { 'y': y_vec, 'row': row_vec, 'col': col_vec}
         for b_n in self.beta:
             x_b = network.edge_covariates[b_n].matrix()
             x_b_vec = robjects.FloatVector(x_b.flatten())
             if b_n == target_n:
                 b_n = '..target..'
             dat_cols[b_n] = x_b_vec
+        if network.offset:
+            o = network.offset.matrix()
+            o_vec = robjects.FloatVector(o.flatten())
+            dat_cols['o'] = o_vec
         dat = robjects.DataFrame(dat_cols)
         robjects.globalenv['dat'] = dat
         robjects.r('dat$row <- factor(dat$row)')
