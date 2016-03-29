@@ -22,7 +22,7 @@ from Models import alpha_zero, alpha_norm, alpha_unif, alpha_gamma
 from Experiment import RandomSubnetworks, Seed, \
      Results, add_array_stats, rel_mse
 from BinaryMatrix import approximate_conditional_nll as acnll
-from Utility import logit, pick, unpick
+from Utility import l2, logit, pick, unpick
 
 # Parameters
 params = { 'N': 530,
@@ -238,7 +238,6 @@ def do_experiment(params):
                     w += f.fit_info[work_type]
             return w
         results.new('Work', 'm', lambda d, f: work(f))
-        l2 = lambda x: np.sqrt(np.sum(x ** 2))
         results.new('||ET_final - T||_2', 'm',
                     lambda d, f: l2(f.fit_info['grad_nll_final']))
 

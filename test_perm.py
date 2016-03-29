@@ -10,23 +10,23 @@ from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins
 from Models import alpha_zero
 from Experiment import RandomSubnetworks, Results, add_array_stats, rel_mse
-from Utility import logit
+from Utility import l2, logit
 
 # Parameters
 params = { 'N': 300,
            'B': 1,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
-           'fisher_information': True,
+           'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'convex_opt',
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1, 2.1, 20)),
-           'verbose': False,
-           'plot_mse': True,
+           'verbose': True,
+           'plot_mse': False,
            'plot_network': False,
-           'plot_fit_info': False }
+           'plot_fit_info': True }
 
 
 # Set random seed for reproducible output
@@ -38,10 +38,8 @@ alpha_zero(net)
 
 # Generate covariates and associated coefficients
 data_model = NonstationaryLogistic()
-covariates = []
 for b in range(params['B']):
     name = 'x_%d' % b
-    covariates.append(name)
 
     if name in params['theta_fixed']:
         data_model.beta[name] = params['theta_fixed'][name]
@@ -61,27 +59,27 @@ if params['fit_nonstationary']:
     fit_model = NonstationaryLogistic()
 else:
     fit_model = StationaryLogistic()
-for c in covariates:
-    fit_model.beta[c] = None
+for b in data_model.base_model.beta:
+    fit_model.beta[b] = None
 
 # Set up recording of results from experiment
 results = Results(params['sub_sizes'], params['sub_sizes'], params['num_reps'])
 add_array_stats(results)
-def true_est_theta_c(c):
-    return (lambda d, f: d.base_model.beta[c]), (lambda d, f: f.beta[c])
-for c in covariates:
+def true_est_theta_b(b):
+    return (lambda d, f: d.base_model.beta[b]), (lambda d, f: f.beta[b])
+for b in fit_model.beta:
     # Need to do this hackily to avoid for-loop/lambda-binding weirdness.
-    f_true, f_est = true_est_theta_c(c)
-    results.new('True theta_{%s}' % c, 'm', f_true)
-    results.new('Est. theta_{%s}' % c, 'm', f_est)
+    f_true, f_est = true_est_theta_b(b)
+    results.new('True theta_{%s}' % b, 'm', f_true)
+    results.new('Est. theta_{%s}' % b, 'm', f_est)
 results.new('# Active', 'n', lambda n: n.N ** 2)
 if params['fisher_information']:
-    def info_theta_c(c):
-        def f_info_theta_c(d, f):
-            return d.base_model.I_inv['theta_{%s}' % c]
-        return f_info_theta_c
-    for c in covariates:
-        results.new('Info theta_{%s}' % c, 'm', info_theta_c(c))
+    def info_theta_b(b):
+        def f_info_theta_b(d, f):
+            return d.base_model.I_inv['theta_{%s}' % b]
+        return f_info_theta_b
+    for b in fit_model.beta:
+        results.new('Info theta_{%s}' % b, 'm', info_theta_b(b))
 if params['baseline']:
     def rel_mse_p_ij(n, d, f):
         P = d.edge_probabilities(n)
@@ -105,7 +103,7 @@ if params['fit_method'] in ['convex_opt', 'conditional', 'conditional_is']:
         return w
     results.new('Work', 'm', lambda d, f: work(f))
     results.new('||ET_final - T||_2', 'm',
-                lambda d, f: np.sqrt(np.sum((f.fit_info['grad_nll_final'])**2)))
+                lambda d, f: l2(f.fit_info['grad_nll_final']))
 
 for sub_size in params['sub_sizes']:
     size = (sub_size, sub_size)
@@ -133,16 +131,14 @@ for sub_size in params['sub_sizes']:
         elif params['fit_method'] == 'logistic_l2':
             fit_model.fit_logistic_l2(subnet, prior_precision = 1.0)
         elif params['fit_method'] == 'mh':
-            for c in covariates:
-                fit_model.beta[c] = 0.0
             fit_model.fit_mh(subnet)
         elif params['fit_method'] == 'conditional':
-            fit_model.fit_conditional(subnet, verbose = True)
+            fit_model.fit_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'conditional_is':
             fit_model.fit_conditional(subnet, T = 50, verbose = True)
             fit_model.fit_composite(subnet, T = 100, verbose = True)
         elif params['fit_method'] == 'brazzale':
-            fit_model.fit_brazzale(subnet)
+            fit_model.fit_brazzale(subnet, 'x_0')
         elif params['fit_method'] == 'saddlepoint':
             fit_model.fit_saddlepoint(subnet)
             fit_model.fit_convex_opt(subnet, fix_beta = True)
@@ -153,10 +149,10 @@ for sub_size in params['sub_sizes']:
 
 # Compute beta MSEs
 covariate_mses = []
-for c in covariates:
-    name = 'MSE(theta_{%s})' % c
+for b in fit_model.beta:
+    name = 'MSE(theta_{%s})' % b
     covariate_mses.append(name)
-    results.estimate_mse(name, 'True theta_{%s}' % c, 'Est. theta_{%s}' % c)
+    results.estimate_mse(name, 'True theta_{%s}' % b, 'Est. theta_{%s}' % b)
 results.summary()
 
 # Plot inference performace, in terms of MSE(theta) and MSE(P_ij)
@@ -173,7 +169,7 @@ if params['plot_mse']:
     to_plot.append(('# Active', {'ymin': 0}))
     if params['fisher_information']:
         to_plot.append((['Info theta_i'] + \
-                        ['Info theta_{%s}' % c for c in covariates],
+                        ['Info theta_{%s}' % b for b in fit_model.beta],
                         {'ymin': 0, 'plot_mean': True}))
     results.plot(to_plot)
 
@@ -182,18 +178,17 @@ if params['plot_mse']:
                     {'plot_mean': True, 'loglog': True}))
     if params['fisher_information']:
         to_plot.append((['Info theta_i'] + \
-                        ['Info theta_{%s}' % c for c in covariates],
+                        ['Info theta_{%s}' % b for b in fit_model.beta],
                         {'plot_mean': True, 'loglog': True}))
     results.plot(to_plot)
   
 # Plot network statistics
 if params['plot_network']:
-    to_plot = [('Average degree', {'ymin': 0, 'plot_mean': True}),
-               (['Out-degree', 'Max out-degree', 'Min out-degree'],
+    to_plot = [('Density', {'ymin': 0, 'plot_mean': True}),
+               (['Row-sum', 'Max row-sum', 'Min row-sum'],
                 {'ymin': 0, 'plot_mean': True}),
-               (['In-degree', 'Max out-degree', 'Min in-degree'],
-                {'ymin': 0, 'plot_mean': True}),
-               ('Self-loop density', {'ymin': 0, 'plot_mean': True})]
+               (['Col-sum', 'Max col-sum', 'Min col-sum'],
+                {'ymin': 0, 'plot_mean': True})]
     results.plot(to_plot)
 
 # Plot convex optimization fitting internal details

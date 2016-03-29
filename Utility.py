@@ -11,6 +11,9 @@ from scipy.special import expit as inv_logit
 import pickle
 from collections import defaultdict
 
+def l2(x):
+    return np.sqrt(np.sum(x ** 2))
+
 def logsumexp(x):
     return reduce(np.logaddexp, x)
 
