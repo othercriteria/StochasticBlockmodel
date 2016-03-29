@@ -534,6 +534,7 @@ class StationaryLogistic(Stationary):
         
     def fit_saddlepoint(self, network, verbose = False):
         B = len(self.beta)
+        M = network.M
         N = network.N
         A = np.array(network.as_dense())
 
@@ -543,7 +544,7 @@ class StationaryLogistic(Stationary):
 
         # Identify non-extreme sub-matrix on which saddlepoint
         # approximation is well-defined.
-        i_nonextreme = range(N)
+        i_nonextreme = range(M)
         j_nonextreme = range(N)
         while True:
             found = False
@@ -570,7 +571,7 @@ class StationaryLogistic(Stationary):
 
         # Initialize theta
         theta = np.zeros(B + 1)
-        theta[B] = logit(A.sum(dtype=np.int) / network.N ** 2)
+        theta[B] = logit(np.mean(A[i_nonextreme][:,j_nonextreme]))
         if network.offset:
             theta[B] -= logit_mean(network.offset.matrix())
 
@@ -590,19 +591,22 @@ class StationaryLogistic(Stationary):
             p_denom = np.log(p_margins_saddlepoint(r_non, c_non, P_non))
             cnll = nll + p_denom
             self.fit_info['cnll_evals'] += 1
+            if verbose:
+                print theta, nll, p_denom, cnll
             return cnll
 
         bounds = [(-8,8)] * B + [(-15,15)]
-        theta_opt = opt.fmin_l_bfgs_b(obj, theta, bounds = bounds)[0]
+        theta_opt = opt.fmin_l_bfgs_b(obj, theta, approx_grad = True,
+                                      bounds = bounds)[0]
         if (np.any(theta_opt == [b[0] for b in bounds]) or
             np.any(theta_opt == [b[1] for b in bounds])):
             print 'Warning: some constraints active in model fitting.'
             if verbose:
                 for b, b_n in enumerate(self.beta):
                     if theta_opt[b] in (bounds[b][0], bounds[b][1]):
-                        print '%s: %.2f (T = %.2f)' % (b_n, theta_opt[b], T[b])
+                        print '%s: %.2f' % (b_n, theta_opt[b])
                 if theta_opt[B] in (bounds[B][0], bounds[B][1]):
-                    print 'kappa: %.2f (T = %.2f)' % (theta_opt[B], T[B])
+                    print 'kappa: %.2f' % theta_opt[B]
 
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = theta_opt[b]
@@ -1879,13 +1883,13 @@ class FixedMargins(IndependentBernoulli):
     def generate(self, network, **opts):
         if not self.r_name in network.row_covariates:
             print 'Row covariate "%s" not found.' % self.r_name
-            r = np.asarray(network.as_dense()).sum(1)
+            r = np.asarray(network.as_dense()).sum(1, dtype = np.int)
         else:
             r = network.row_covariates[self.r_name][:]
 
         if not self.c_name in network.col_covariates:
             print 'Column covariate "%s" not found.' % self.c_name
-            c = np.asarray(network.as_dense()).sum(0)
+            c = np.asarray(network.as_dense()).sum(0, dtype = np.int)
         else:
             c = network.col_covariates[self.c_name][:]
 
