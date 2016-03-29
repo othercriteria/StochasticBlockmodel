@@ -279,7 +279,7 @@ class Stationary(IndependentBernoulli):
     def __init__(self):
         self.kappa = 0.0
         self.fit = self.fit_convex_opt
-        self.fit_info = None
+        self.fit_info = tree()
         self.conf = tree()
 
     def edge_probabilities(self, network, submatrix = None,
@@ -329,8 +329,6 @@ class Stationary(IndependentBernoulli):
     # Mechanical specialization of the StationaryLogistic code, so not
     # really ideal for this one-dimensional problem.
     def fit_convex_opt(self, network, verbose = False):
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['nll_evals'] = 0
         self.fit_info['grad_nll_evals'] = 0
         self.fit_info['grad_nll_final'] = np.empty(1)
@@ -461,8 +459,6 @@ class StationaryLogistic(Stationary):
     def fit_convex_opt(self, network, verbose = False, fix_beta = False):
         B = len(self.beta)
 
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['nll_evals'] = 0
         self.fit_info['grad_nll_evals'] = 0
         self.fit_info['grad_nll_final'] = np.empty(B + 1)
@@ -541,8 +537,6 @@ class StationaryLogistic(Stationary):
         N = network.N
         A = np.array(network.as_dense())
 
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['cnll_evals'] = 0
         
         start_time = time()
@@ -681,8 +675,6 @@ class StationaryLogistic(Stationary):
             print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
             fit_grid = False
 
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['cnll_evals'] = 0
 
         start_time = time()
@@ -803,8 +795,6 @@ class StationaryLogistic(Stationary):
         N = network.N
         B = len(self.beta)
 
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['c_cnll_evals'] = 0
 
         start_time = time()
@@ -916,9 +906,6 @@ class StationaryLogistic(Stationary):
         
     def fit_composite(self, network, T = 100, verbose = False):
         B = len(self.beta)
-
-        if not self.fit_info:
-            self.fit_info = {}
 
         start_time = time()
 
@@ -1281,8 +1268,6 @@ class NonstationaryLogistic(StationaryLogistic):
         N = network.N
         B = len(self.beta)
 
-        if not self.fit_info:
-            self.fit_info = {}
         self.fit_info['nll_evals'] = 0
         self.fit_info['grad_nll_evals'] = 0
         self.fit_info['grad_nll_final'] = np.empty(B + 1 + (M-1) + (N-1))
@@ -1411,9 +1396,6 @@ class NonstationaryLogistic(StationaryLogistic):
         N = network.N
         B = len(self.beta)
         P = B + 1 + (M-1) + (N-1)
-
-        if not self.fit_info:
-            self.fit_info = {}
 
         start_time = time()
 
