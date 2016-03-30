@@ -119,19 +119,19 @@ except:
     print 'C support code can\'t load. Falling back to Python.'
     c_support_loaded = False
 
-def p_margins_saddlepoint(r, c, p):
+def log_p_margins_saddlepoint(r, c, p):
     """Return saddlepoint row/column-conditional NLL of binary matrix.
 
-Saddlepoint approximation to P(R = r, C = c) for a matrix with
-independent Bernoulli(p_{ij}) entries. Because of linear dependence
-in the distribution of the margins (which leads to a singular
-K''(s_hat, t_hat), I introduce the additional random variable of the
-sum of all the cells and then only consider the distribution of the
-first (m-1) row and first (n-1) column margins.
+Saddlepoint approximation to log(P(R = r, C = c)) for a matrix with
+independent Bernoulli(p_{ij}) entries. Because of linear dependence in
+the distribution of the margins (which leads to a singular K''(s_hat,
+t_hat), I introduce the additional random variable of the sum of all
+the cells and then only consider the distribution of the first (m-1)
+row and first (n-1) column margins.
 
-Behavior not well-defined if any margins are extreme or if the
-margins don't satisfy the Gale-Ryser conditions.
-"""
+Behavior not well-defined if any margins are extreme or if the margins
+don't satisfy the Gale-Ryser conditions.
+    """
     m, n = len(r), len(c)
     
     a = np.sum(r)
@@ -222,9 +222,9 @@ margins don't satisfy the Gale-Ryser conditions.
 
     K_prime_prime_hat = K_prime_prime(x_hat)
 
-    return (2 * np.pi) ** (-(m+n-1) / 2.0) * \
-        np.linalg.det(K_prime_prime_hat) ** (-0.5) * \
-        np.exp(K_hat - s_hat_dot_r - t_hat_dot_c - u_hat_dot_a)
+    return (-(m+n-1) / 2.0) * np.log(2 * np.pi) + \
+        (-0.5) * np.linalg.slogdet(K_prime_prime_hat)[1] + \
+        K_hat - s_hat_dot_r - t_hat_dot_c - u_hat_dot_a
 
 ##############################################################################
 # Adapting a Matlab routine provided by Jeff Miller

@@ -16,7 +16,7 @@ from Utility import logit, inv_logit, logit_mean, tree
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights as acsample
 from BinaryMatrix import approximate_conditional_nll as acnll
-from BinaryMatrix import p_margins_saddlepoint
+from BinaryMatrix import log_p_margins_saddlepoint
 from BinaryMatrix import log_partition_is
 from Confidence import ci_conservative_generic
 
@@ -588,11 +588,11 @@ class StationaryLogistic(Stationary):
             c_non = np.sum(A_non,0)
             P = self.edge_probabilities(network)
             P_non = P[i_nonextreme][:,j_nonextreme]
-            p_denom = np.log(p_margins_saddlepoint(r_non, c_non, P_non))
-            cnll = nll + p_denom
+            log_p_denom = log_p_margins_saddlepoint(r_non, c_non, P_non)
+            cnll = nll + log_p_denom
             self.fit_info['cnll_evals'] += 1
             if verbose:
-                print theta, nll, p_denom, cnll
+                print theta, nll, log_p_denom, cnll
             return cnll
 
         bounds = [(-8,8)] * B + [(-15,15)]
