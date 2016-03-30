@@ -10,9 +10,8 @@ from scipy.stats import norm
 from scipy.linalg import inv, solve
 from time import time
 from itertools import permutations
-import hashlib
 
-from Utility import logit, inv_logit, logit_mean, tree
+from Utility import logit, inv_logit, logit_mean, tree, digest
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights as acsample
 from BinaryMatrix import approximate_conditional_nll as acnll
@@ -908,7 +907,9 @@ class StationaryLogistic(Stationary):
 
             self.fit_info['wall_time'] = time() - start_time
         
-    def fit_composite(self, network, T = 100, verbose = False):
+    def fit_composite(self, network, T = 100, one_sided = False,
+                      verbose = False):
+        M = network.M
         B = len(self.beta)
 
         start_time = time()
@@ -933,7 +934,7 @@ class StationaryLogistic(Stationary):
                 # Pick a random pair of rows 
                 a, b = 0, 0
                 while a == b:
-                    a, b = np.random.randint(B), np.random.randint(B)
+                    a, b = np.random.randint(M), np.random.randint(M)
 
                 # Extract subnetwork
                 A_sub = A[[a,b],:]
@@ -949,7 +950,7 @@ class StationaryLogistic(Stationary):
                 if active > 8:
                     print 'Skipping row pair with excessive active columns.'
                     continue
-                if np.sum(A_sub[0,:]) in [active, 0]:
+                if not (0 < np.sum(A_sub[0,:]) < active):
                     continue
 
                 logkappa = 0.0
@@ -972,16 +973,24 @@ class StationaryLogistic(Stationary):
             return cnll
 
         # Use Kiefer-Wolfowitz stochastic approximation
-        for n in range(1, 16):
+        for n in range(1, 40):
             a_n = 0.002 * n ** (-1.0)
             c_n = 0.5 * n ** (-1.0 / 3)
             grad = np.empty(B)
-            for b in range(B):
-                e = np.zeros(B)
-                e[b] = 1.0
-                y_p = obj(theta + c_n * e)
-                y_m = obj(theta - c_n * e)
-                grad[b] = (y_p - y_m) / c_n
+            if one_sided:
+                y_0 = obj(theta)
+                for b in range(B):
+                    e = np.zeros(B)
+                    e[b] = 1.0
+                    y_p = obj(theta + 2.0 * c_n * e)
+                    grad[b] = (y_p - y_0) / c_n
+            else:
+                for b in range(B):
+                    e = np.zeros(B)
+                    e[b] = 1.0
+                    y_p = obj(theta + c_n * e)
+                    y_m = obj(theta - c_n * e)
+                    grad[b] = (y_p - y_m) / c_n
             theta -= a_n * grad
         theta_opt = theta
 
@@ -1812,7 +1821,7 @@ class Blockmodel(IndependentBernoulli):
         z_to_nll_cache = {}
         cov_name_to_inds = {}
         def fit_at_z(z):
-            z_hash = hashlib.sha1(z[:].view(np.uint8)).hexdigest()
+            z_hash = digest(z[:])
             if z_hash in z_to_nll_cache:
                 return z_to_nll_cache[z_hash]
             

@@ -6,9 +6,8 @@
 from __future__ import division
 import numpy as np
 from scipy import optimize as opt
-import hashlib
 
-from Utility import logsumexp, logabsdiffexp
+from Utility import logsumexp, logabsdiffexp, digest
 
 # Get machine precision; used to prevent divide by zero
 eps0 = np.spacing(0)
@@ -311,10 +310,10 @@ def canonical_scalings(w, r, c):
     """Find row and column scalings to balance a matrix.
 
 TODO: describe "rc" method.
-"""
-    w_hash = hashlib.sha1(w.view(np.uint8)).hexdigest()
-    r_hash = hashlib.sha1(r.flatten().view(np.uint8)).hexdigest()
-    c_hash = hashlib.sha1(c.flatten().view(np.uint8)).hexdigest()
+    """
+    w_hash = digest(w)
+    r_hash = digest(r.flatten())
+    c_hash = digest(c.flatten())
     hash = (w_hash, r_hash, c_hash)
     if hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[hash]

@@ -9,6 +9,7 @@ from scipy.special import logit as logit
 from scipy.special import expit as inv_logit
 
 import pickle
+import hashlib
 from collections import defaultdict
 
 def l2(x):
@@ -26,6 +27,10 @@ def logabsdiffexp(x, y):
 # Get the "mean" log-odds from a collection of log-odds
 def logit_mean(x):
     return logit(np.mean(inv_logit(x)))
+
+# Create a hash of the data of an array
+def digest(x):
+    return hashlib.sha1(x.view(np.uint8)).hexdigest()
 
 # Convenience functions for (un)pickling
 pick = lambda x: pickle.dumps(x, protocol = 0)
