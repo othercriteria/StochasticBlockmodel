@@ -973,8 +973,9 @@ class StationaryLogistic(Stationary):
             return cnll
 
         # Use Kiefer-Wolfowitz stochastic approximation
+        scale = 1.0 / obj(np.repeat(0, B))
         for n in range(1, 40):
-            a_n = 0.002 * n ** (-1.0)
+            a_n = 2.0 * scale * n ** (-1.0)
             c_n = 0.5 * n ** (-1.0 / 3)
             grad = np.empty(B)
             if one_sided:
