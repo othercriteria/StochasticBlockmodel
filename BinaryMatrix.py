@@ -209,7 +209,8 @@ don't satisfy the Gale-Ryser conditions.
 
         return out
 
-    x_hat = opt.fsolve(s_t_hat_eq, np.zeros((m+n-1)), fprime = K_prime_prime)
+    x_hat = opt.root(s_t_hat_eq, np.zeros((m+n-1)), jac = K_prime_prime,
+                     method='lm')['x']
     s_hat, t_hat, u_hat = unpack_s_t_u(x_hat)
 
     # Compute saddlepoint approximation
