@@ -16,15 +16,18 @@ from Utility import l2, logit
 params = { 'N': 300,
            'B': 1,
            'theta_sd': 1.0,
-           'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },           
+           'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
+           'cov_unif_sd': 0.0,
+           'cov_norm_sd': 1.0,
+           'cov_disc_sd': 0.0,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
            'fit_method': 'convex_opt',
            'num_reps': 15,
-           'sub_sizes': np.floor(np.logspace(1, 2.1, 20)),
+           'sub_sizes': np.floor(np.logspace(1.0, 2.1, 20)),
            'verbose': True,
-           'plot_mse': False,
+           'plot_mse': True,
            'plot_network': False,
            'plot_fit_info': True }
 
@@ -46,14 +49,28 @@ for b in range(params['B']):
     else:
         data_model.beta[name] = np.random.normal(0, params['theta_sd'])
 
-    def f_x(i_1, i_2):
-        return np.random.uniform(-np.sqrt(3), np.sqrt(3))
+    if params['cov_unif_sd'] > 0.0:
+        c = np.sqrt(12) / 2
+        def f_x(i_1, i_2):
+            return np.random.uniform(-c * params['cov_unif_sd'],
+                                     c * params['cov_unif_sd'])
+    elif params['cov_norm_sd'] > 0.0:
+        def f_x(i_1, i_2):
+            return np.random.normal(0, params['cov_norm_sd'])
+    elif params['cov_disc_sd'] > 0.0:
+        def f_x(i_1, i_2):
+            return (params['cov_disc_sd'] *
+                    (np.sign(np.random.random() - 0.5)))
+    else:
+        print 'Error: no covariate distribution specified.'
+        sys.exit()
+
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
 # Specify data model as generation permuation networks
 net.new_node_covariate_int('r')[:] = 1
 net.new_node_covariate_int('c')[:] = 1
-data_model = FixedMargins(data_model, 'r', 'c', coverage = 0.5)
+data_model = FixedMargins(data_model, 'r', 'c', coverage = 2.0)
 
 if params['fit_nonstationary']:
     fit_model = NonstationaryLogistic()
@@ -136,11 +153,12 @@ for sub_size in params['sub_sizes']:
             fit_model.fit_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'conditional_is':
             fit_model.fit_conditional(subnet, T = 50, verbose = True)
+        elif params['fit_method'] == 'composite':
             fit_model.fit_composite(subnet, T = 100, verbose = True)
         elif params['fit_method'] == 'brazzale':
             fit_model.fit_brazzale(subnet, 'x_0')
         elif params['fit_method'] == 'saddlepoint':
-            fit_model.fit_saddlepoint(subnet)
+            fit_model.fit_saddlepoint(subnet, verbose = params['verbose'])
             fit_model.fit_convex_opt(subnet, fix_beta = True)
         elif params['fit_method'] == 'none':
             pass
