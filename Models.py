@@ -449,6 +449,34 @@ class StationaryLogistic(Stationary):
 
         return inv_logit(logit_P)
 
+    def separated(self, network):
+        A = network.as_dense()
+        B = len(self.beta)
+
+        overlap = np.zeros(B, dtype=np.bool)
+        for b, b_n in enumerate(self.beta):
+            b_mat = network.edge_covariates[b_n].matrix()
+
+            b_0 = b_mat[-A]
+            b_1 = b_mat[A]
+
+            l_0 = np.min(b_0)
+            u_0 = np.max(b_0)
+            l_1 = np.min(b_1)
+            u_1 = np.max(b_1)
+
+            print l_0, u_0
+            print l_1, u_1
+
+            if (((l_0 < u_1) and (l_1 < u_0)) or
+                (l_0 == u_0 == l_1 <  u_1) or
+                (l_1 <  u_1 == l_0 == u_0) or
+                (l_1 == u_1 == l_0 <  u_0) or
+                (l_0 <  u_0 == l_1 == u_1)):
+                overlap[b] = True
+
+        return np.any(~overlap)
+
     def baseline(self, network):
         return np.mean(self.edge_probabilities(network))
 
@@ -1890,7 +1918,39 @@ class FixedMargins(IndependentBernoulli):
         self.c_name = c_name
         self.coverage = coverage
 
+    def separated(self, network, samples = 100,
+                  separated_beta_scale = 8.0):
+        A = np.array(network.as_dense())
+
+        beta = self.base_model.beta
+        B = len(beta)
+
+        overlap = np.zeros(B, dtype=np.bool)
+        for b, b_n in enumerate(beta):
+            b_mat = network.edge_covariates[b_n].matrix()
+
+            T_0 = np.sum(b_mat[A])
+            T_samp = np.empty(2 * samples)
+
+            beta[b_n] = separated_beta_scale
+            for s in range(samples):
+                A_samp = self.generate(network)
+                T_samp[s] = np.sum(b_mat[A_samp])
+
+            beta[b_n] = -separated_beta_scale
+            for s in range(samples):
+                A_samp = self.generate(network)
+                T_samp[samples + s] = np.sum(b_mat[A_samp])
+
+            beta[b_n] = 0.0
+
+            overlap[b] = np.min(T_samp) < T_0 < np.max(T_samp)
+
+        return np.any(~overlap)
+
     def generate(self, network, **opts):
+        opts['coverage'] = self.coverage
+
         if not self.r_name in network.row_covariates:
             print 'Row covariate "%s" not found.' % self.r_name
             r = np.asarray(network.as_dense()).sum(1, dtype = np.int)
@@ -1903,8 +1963,7 @@ class FixedMargins(IndependentBernoulli):
         else:
             c = network.col_covariates[self.c_name][:]
 
-        return self.base_model.generate_margins(network, r, c, self.coverage,
-                                                **opts)
+        return self.base_model.generate_margins(network, r, c, **opts)
 
     def nll(self, network, **opts):
         return self.base_model.nll(network, **opts)

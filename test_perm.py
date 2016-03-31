@@ -16,14 +16,14 @@ from Utility import l2, logit
 params = { 'N': 300,
            'B': 1,
            'theta_sd': 1.0,
-           'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
+           'theta_fixed': { 'x_0': 5.0, 'x_1': -1.0 },
            'cov_unif_sd': 0.0,
            'cov_norm_sd': 1.0,
            'cov_disc_sd': 0.0,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'conditional',
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1.0, 2.1, 20)),
            'verbose': True,
@@ -77,7 +77,7 @@ if params['fit_nonstationary']:
 else:
     fit_model = StationaryLogistic()
 for b in data_model.base_model.beta:
-    fit_model.beta[b] = None
+    fit_model.beta[b] = 0.0
 
 # Set up recording of results from experiment
 results = Results(params['sub_sizes'], params['sub_sizes'], params['num_reps'])
@@ -134,14 +134,26 @@ for sub_size in params['sub_sizes']:
 
         if params['fisher_information']:
             data_model.base_model.fisher_information(subnet)
+
+        if params['fit_method'] in ('conditional', 'conditional_is',
+                                    'brazzale', 'saddlepoint'):
+            fixed_model = FixedMargins(base_model = fit_model, coverage = 0.5)
+            separated = fixed_model.separated(subnet)
+        else:
+            separated = fit_model.separated(subnet)
         
-        if params['fit_method'] == 'convex_opt':
+        if separated:
+            print 'Separated, defaulting to theta = 0.'
+            for b in data_model.base_model.beta:
+                fit_model.beta[b] = 0.0
+            fit_model.fit_convex_opt(subnet, fix_beta = True)
+        elif params['fit_method'] == 'convex_opt':
             if params['verbose']:
                 fit_model.fit_convex_opt(subnet, verbose = True)
                 print
             else:
                 fit_model.fit_convex_opt(subnet)
-        if params['fit_method'] == 'irls':
+        elif params['fit_method'] == 'irls':
             fit_model.fit_irls(subnet)
         elif params['fit_method'] == 'logistic':
             fit_model.fit_logistic(subnet)
