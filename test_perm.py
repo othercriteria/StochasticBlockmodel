@@ -163,8 +163,6 @@ for sub_size in params['sub_sizes']:
             fit_model.fit_logistic(subnet)
         elif params['fit_method'] == 'logistic_l2':
             fit_model.fit_logistic_l2(subnet, prior_precision = 1.0)
-        elif params['fit_method'] == 'mh':
-            fit_model.fit_mh(subnet)
         elif params['fit_method'] == 'conditional':
             fit_model.fit_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'conditional_is':

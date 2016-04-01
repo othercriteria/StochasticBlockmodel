@@ -387,36 +387,6 @@ class Stationary(IndependentBernoulli):
 
         self.kappa = coefs[0]
 
-    def fit_mh(self, network):
-        mh = self.mh(network)
-        mh.run()
-        self.kappa = np.mean(mh.results['kappa'])
-        self.fit_info = {'nll': mh.results['nll']}
-    
-    def mh(self, network, kappa_prior = (0,1), kappa_prop_sd = 0.2):
-        from scipy.stats import norm
-        log_prior = lambda x: np.log(norm(*kappa_prior).pdf(x))
-        
-        def update(n, m):
-            kappa_curr = m.kappa
-            kappa_prop = kappa_curr + np.random.normal(0, kappa_prop_sd)
-
-            nll_curr = m.nll(n)
-            log_post_curr = -nll_curr + log_prior(kappa_curr)
-            
-            m.kappa = kappa_prop
-            nll_prop = m.nll(n)
-            log_post_prop = -nll_prop + log_prior(kappa_prop)
-
-            p_acc = np.exp(log_post_prop - log_post_curr)
-            if p_acc >= 1.0 or np.random.random() < p_acc:
-                return nll_prop
-            else:
-                m.kappa = kappa_curr
-                return nll_curr
-
-        return Sampler(network, self, update, {'kappa': lambda n, m: m.kappa})
-
 # P_{ij} = Logit^{-1}(\sum_b x_{bij}*beta_b + kappa + o_{ij}) 
 class StationaryLogistic(Stationary):
     def __init__(self):
@@ -1535,98 +1505,6 @@ class NonstationaryLogistic(StationaryLogistic):
             self.beta[b_n] = coefs[b]
         self.kappa = coefs[B] + alpha_out_mean + alpha_in_mean
 
-    def fit_mh(self, network):
-        mh = self.mh(network)
-        mh.run()
-        self.kappa = np.mean(mh.results['kappa'])
-        for b_n in self.beta:
-            self.beta[b_n] = np.mean(mh.results[b_n])
-        self.fit_info = {'nll': mh.results['nll']}
-    
-    def mh(self, network, kappa_prior = (0,1), kappa_prop_sd = 0.2,
-           beta_prior = (0,1), beta_prop_sd = 0.2,
-           alpha_base = (0,1), alpha_conc = 10.0, alpha_steps = 10):
-        from scipy.stats import norm
-        def log_prior(kappa, beta):
-            lp = np.log(norm(*kappa_prior).pdf(kappa))
-            for b_n in beta:
-                lp += np.log(norm(*beta_prior).pdf(beta[b_n]))
-            return lp
-        def sample_from_base():
-            return np.random.normal(*alpha_base)
-        
-        def update(n, m):
-            # Gibbs steps for alphas
-            vars = [('i', i) for i in range(n.N)] + \
-                [('j', j) for j in range(n.N)]
-            np.random.shuffle(vars)
-            for type, ind in vars[0:alpha_steps]:
-                # Get current table assignment
-                alpha_name = {'i': 'alpha_out', 'j': 'alpha_in'}[type]
-                alphas = n.node_covariates[alpha_name]
-                tables = {}
-                for k, a in enumerate(alphas):
-                    if k == ind: continue
-                    if not a in tables:
-                        tables[a] = 0
-                    tables[a] += 1
-
-                # Use current table assignment to compute prior term
-                T = len(tables)
-                atoms = np.empty(T + 1)
-                table_prob_unscaled = np.empty(T + 1)
-                for t, a in enumerate(tables):
-                    atoms[t] = a
-                    table_prob_unscaled[t] = tables[a]
-                atoms[T] = sample_from_base()
-                table_prob_unscaled[T] = alpha_conc
-
-                # Get posterior term for all possible assignments
-                net_prob = np.empty(T + 1)
-                for t in range(T + 1):
-                    alphas[ind] = atoms[t]
-                    if type == 'i':
-                        submatrix = (np.array([ind]), np.arange(n.N))
-                    if type == 'j':
-                        submatrix = (np.arange(n.N), np.array([ind]))
-                    net_prob[t] = m.nll(n, submatrix)
-
-                # Resample according to conditional distribution
-                cond_prob_unscaled = table_prob_unscaled * net_prob
-                cond_prob = cond_prob_unscaled / np.sum(cond_prob_unscaled)
-                t_new = np.random.multinomial(1, cond_prob).argmax()
-                a_new = atoms[t_new]
-                alphas[ind] = a_new
-            
-            kappa_curr = m.kappa
-            beta_curr = m.beta
-            kappa_prop = kappa_curr + np.random.normal(0, kappa_prop_sd)
-            beta_prop = m.beta.copy()
-            for b_n in beta_prop:
-                beta_prop[b_n] += np.random.normal(0, beta_prop_sd)
-
-            nll_curr = m.nll(n)
-            log_post_curr = -nll_curr + log_prior(kappa_curr, beta_curr)
-            
-            m.kappa = kappa_prop
-            m.beta = beta_prop
-            nll_prop = m.nll(n)
-            log_post_prop = -nll_prop + log_prior(kappa_prop, beta_prop)
-
-            p_acc = np.exp(log_post_prop - log_post_curr)
-            if p_acc >= 1.0 or np.random.random() < p_acc:
-                return nll_prop
-            else:
-                m.kappa = kappa_curr
-                m.beta = beta_curr
-                return nll_curr
-
-        record = {'kappa': lambda n, m: m.kappa}
-        for b_n in self.beta:
-            record[b_n] = lambda n, m: m.beta[b_n]
-
-        return Sampler(network, self, update, record)
-
     # The network is needed for its covariates and degree
     # heterogeneity terms, not for the observed pattern of edges, etc.
     #
@@ -1968,36 +1846,6 @@ class FixedMargins(IndependentBernoulli):
     def edge_probabilities(self, network, submatrix = None):
         return self.base_model.edge_probabilities(network, submatrix)
     
-# Handles the state, updates, and recording for a (usually MCMC) sampler
-class Sampler:
-    def __init__(self, network, model, update, record = {}):
-        self.network = network
-        self.model = model
-        self.update = update
-        self.record = record
-
-        self.results = {'nll_full': [], 'nll': []}
-        for var in self.record:
-            self.results[var] = []
-
-    def step(self):
-        return self.update(self.network, self.model)
-
-    def run(self, samples = 1000, burnin = 1000, thinning = 10):
-        for b in range(burnin):
-            nll = self.step()
-            self.results['nll_full'].append(nll)
-
-        for s in range(samples):
-            nll = self.step()
-            self.results['nll_full'].append(nll)
-            if s % thinning == 0:
-                self.results['nll'].append(nll)
-                for var in self.record:
-                    recorder = self.record[var]
-                    val = recorder(self.network, self.model)
-                    self.results[var].append(val)
-      
 # Generate alpha_out/in for an existing Network
 def center(x):
     return x - np.mean(x)

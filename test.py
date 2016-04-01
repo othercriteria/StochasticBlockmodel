@@ -290,10 +290,6 @@ def do_experiment(params):
                     fit_model.fit_logistic(sub)
                 elif params['fit_method'] == 'logistic_l2':
                     fit_model.fit_logistic_l2(sub, prior_precision = 1.0)
-                elif params['fit_method'] == 'mh':
-                    for c in covariates:
-                        fit_model.beta[c] = 0.0
-                    fit_model.fit_mh(sub)
                 elif params['fit_method'] == 'conditional':
                     fit_model.fit_conditional(sub,
                                               verbose = params['verbose'])
