@@ -666,7 +666,8 @@ class StationaryLogistic(Stationary):
 
         # Use extreme offset values to prune down to non-extreme substructure
         # FIXME: this pruning is overly aggressive for conditional inference!
-        robjects.r('dat <- dat[is.finite(dat$o),]')
+        if network.offset:
+            robjects.r('dat <- dat[is.finite(dat$o),]')
         robjects.r('write.csv(dat, file = "debug.csv")')
         robjects.r('nr <- length(unique(dat$row))')
         robjects.r('nc <- length(unique(dat$col))')
