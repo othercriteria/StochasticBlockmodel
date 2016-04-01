@@ -449,7 +449,7 @@ class StationaryLogistic(Stationary):
 
         return inv_logit(logit_P)
 
-    def separated(self, network):
+    def check_separated(self, network):
         A = network.as_dense()
         B = len(self.beta)
 
@@ -465,9 +465,6 @@ class StationaryLogistic(Stationary):
             l_1 = np.min(b_1)
             u_1 = np.max(b_1)
 
-            print l_0, u_0
-            print l_1, u_1
-
             if (((l_0 < u_1) and (l_1 < u_0)) or
                 (l_0 == u_0 == l_1 <  u_1) or
                 (l_1 <  u_1 == l_0 == u_0) or
@@ -475,7 +472,7 @@ class StationaryLogistic(Stationary):
                 (l_0 <  u_0 == l_1 == u_1)):
                 overlap[b] = True
 
-        return np.any(~overlap)
+        self.fit_info['separated'] = np.any(~overlap)
 
     def baseline(self, network):
         return np.mean(self.edge_probabilities(network))
@@ -1918,8 +1915,7 @@ class FixedMargins(IndependentBernoulli):
         self.c_name = c_name
         self.coverage = coverage
 
-    def separated(self, network, samples = 100,
-                  separated_beta_scale = 8.0):
+    def check_separated(self, network, samples = 100, beta_scale = 8.0):
         A = np.array(network.as_dense())
 
         beta = self.base_model.beta
@@ -1932,12 +1928,12 @@ class FixedMargins(IndependentBernoulli):
             T_0 = np.sum(b_mat[A])
             T_samp = np.empty(2 * samples)
 
-            beta[b_n] = separated_beta_scale
+            beta[b_n] = beta_scale
             for s in range(samples):
                 A_samp = self.generate(network)
                 T_samp[s] = np.sum(b_mat[A_samp])
 
-            beta[b_n] = -separated_beta_scale
+            beta[b_n] = beta_scale
             for s in range(samples):
                 A_samp = self.generate(network)
                 T_samp[samples + s] = np.sum(b_mat[A_samp])
@@ -1946,7 +1942,7 @@ class FixedMargins(IndependentBernoulli):
 
             overlap[b] = np.min(T_samp) < T_0 < np.max(T_samp)
 
-        return np.any(~overlap)
+        self.base_model.fit_info['separated'] = np.any(~overlap)
 
     def generate(self, network, **opts):
         opts['coverage'] = self.coverage

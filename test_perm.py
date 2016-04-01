@@ -16,17 +16,17 @@ from Utility import l2, logit
 params = { 'N': 300,
            'B': 1,
            'theta_sd': 1.0,
-           'theta_fixed': { 'x_0': 5.0, 'x_1': -1.0 },
-           'cov_unif_sd': 0.0,
-           'cov_norm_sd': 1.0,
+           'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
+           'cov_unif_sd': 1.0,
+           'cov_norm_sd': 0.0,
            'cov_disc_sd': 0.0,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'saddlepoint',
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1.0, 2.1, 20)),
-           'verbose': True,
+           'verbose': False,
            'plot_mse': True,
            'plot_network': False,
            'plot_fit_info': True }
@@ -90,6 +90,7 @@ for b in fit_model.beta:
     results.new('True theta_{%s}' % b, 'm', f_true)
     results.new('Est. theta_{%s}' % b, 'm', f_est)
 results.new('# Active', 'n', lambda n: n.N ** 2)
+results.new('Separated', 'm', lambda d, f: f.fit_info['separated'])
 if params['fisher_information']:
     def info_theta_b(b):
         def f_info_theta_b(d, f):
@@ -138,11 +139,11 @@ for sub_size in params['sub_sizes']:
         if params['fit_method'] in ('conditional', 'conditional_is',
                                     'brazzale', 'saddlepoint'):
             fixed_model = FixedMargins(base_model = fit_model, coverage = 0.5)
-            separated = fixed_model.separated(subnet)
+            fixed_model.check_separated(subnet, samples = 100)
         else:
-            separated = fit_model.separated(subnet)
+            fit_model.check_separated(subnet)
         
-        if separated:
+        if fit_model.fit_info['separated']:
             print 'Separated, defaulting to theta = 0.'
             for b in data_model.base_model.beta:
                 fit_model.beta[b] = 0.0
@@ -197,6 +198,7 @@ if params['plot_mse']:
         to_plot.append(('Rel. MSE(logit P_ij)',
                         {'ymin':0, 'ymax': 2, 'baseline': 1}))
     to_plot.append(('# Active', {'ymin': 0}))
+    to_plot.append(('Separated', {'ymin': 0, 'ymax': 1, 'plot_mean': True}))
     if params['fisher_information']:
         to_plot.append((['Info theta_i'] + \
                         ['Info theta_{%s}' % b for b in fit_model.beta],
