@@ -13,8 +13,9 @@ from Models import alpha_zero, alpha_norm
 from Experiment import minimum_disagreement
 
 # Parameters
-N = 30
-alpha_sd = 1.0
+N = 20
+theta = 3.0
+alpha_sd = 2.0
 from_truth = True
 steps = 100
 
@@ -38,11 +39,11 @@ def f_x(i_1, i_2):
 net.new_edge_covariate('x').from_binary_function_ind(f_x)
         
 data_model = NonstationaryLogistic()
-data_model.beta['x'] = 3.0
-for name, theta in [('ll', 4.0),
-                    ('rr', 3.0),
-                    ('lr', -2.0)]:
-    data_model.beta[name] = theta
+data_model.beta['x'] = theta
+for name, block_theta in [('ll', 4.0),
+                          ('rr', 3.0),
+                          ('lr', -2.0)]:
+    data_model.beta[name] = block_theta
 alpha_norm(net, alpha_sd)
 data_model.match_kappa(net, ('row_sum', 2))
 net.generate(data_model)
@@ -61,7 +62,7 @@ if from_truth:
 else:
     net.node_covariates['z'][:] = np.random.random(N) < 0.5
 
-# Calculate NLL at truth
+# Calculate NLL at initialized block assignments
 fit_model.fit_sem(net, cycles = 1, sweeps = 0,
                   use_best = False, store_all = True)
 baseline_nll = fit_model.sem_trace[0][0]
