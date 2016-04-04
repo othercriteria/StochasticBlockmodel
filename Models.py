@@ -374,13 +374,14 @@ class Stationary(IndependentBernoulli):
     def fit_logistic(self, network):
         import statsmodels.api as sm
 
+        M = network.M
         N = network.N
 
-        y = network.as_dense().reshape((N*N,))
-        Phi = np.zeros((N*N,1))
+        y = network.as_dense().reshape((M*N,))
+        Phi = np.zeros((M*N,1))
         Phi[:,0] = 1.0
         if network.offset:
-            offset = network.offset.matrix().reshape((N*N,))
+            offset = network.offset.matrix().reshape((M*N,))
             coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
@@ -1001,16 +1002,17 @@ class StationaryLogistic(Stationary):
     def fit_logistic(self, network):
         import statsmodels.api as sm
 
+        M = network.M
         N = network.N
         B = len(self.beta)
 
-        y = network.as_dense().reshape((N*N,))
-        Phi = np.zeros((N*N,B + 1))
+        y = network.as_dense().reshape((M*N,))
+        Phi = np.zeros((M*N,B + 1))
         Phi[:,B] = 1.0
         for b, b_n in enumerate(self.beta):
-            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((N*N,))
+            Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
         if network.offset:
-            offset = network.offset.matrix().reshape((N*N,))
+            offset = network.offset.matrix().reshape((M*N,))
             coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
         else:
             coefs = sm.Logit(y, Phi).fit().params
@@ -1474,6 +1476,7 @@ class NonstationaryLogistic(StationaryLogistic):
         B = len(self.beta)
         alpha_zero(network)
 
+        # Set up outcome and design matrix for fit
         y = network.as_dense().reshape((M*N,))
         Phi = np.zeros((M*N,B + 1 + (M-1) + (N-1)))
         for b, b_n in enumerate(self.beta):
@@ -1487,11 +1490,18 @@ class NonstationaryLogistic(StationaryLogistic):
             phi_col = np.zeros((M,N))
             phi_col[:,c] = 1.0
             Phi[:,B + 1 + (M-1) + c] = phi_col.reshape((M*N,))
-        if network.offset:
-            offset = network.offset.matrix().reshape((M*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
-        else:
-            coefs = sm.Logit(y, Phi).fit().params
+
+        # Do fit, defaulting to beta = 0 in case of problems
+        try:
+            if network.offset:
+                offset = network.offset.matrix().reshape((M*N,))
+                fit = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit()
+            else:
+                fit = sm.Logit(y, Phi).fit()
+                coefs = fit.params
+        except:
+            print 'Warning: logistic fit failed.'
+            coefs = np.zeros(B + 1 + (M-1) + (N-1))
 
         alpha_out = network.row_covariates['alpha_out']
         alpha_in = network.col_covariates['alpha_in']
