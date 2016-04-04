@@ -380,11 +380,17 @@ class Stationary(IndependentBernoulli):
         y = network.as_dense().reshape((M*N,))
         Phi = np.zeros((M*N,1))
         Phi[:,0] = 1.0
-        if network.offset:
-            offset = network.offset.matrix().reshape((M*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
-        else:
-            coefs = sm.Logit(y, Phi).fit().params
+
+        try:
+            if network.offset:
+                offset = network.offset.matrix().reshape((M*N,))
+                fit = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit()
+            else:
+                fit = sm.Logit(y, Phi).fit()
+            coefs = fit.params
+        except:
+            print 'Warning: logistic fit failed.'
+            coefs = np.zeros(1)
 
         self.kappa = coefs[0]
 
@@ -1011,11 +1017,17 @@ class StationaryLogistic(Stationary):
         Phi[:,B] = 1.0
         for b, b_n in enumerate(self.beta):
             Phi[:,b] =  network.edge_covariates[b_n].matrix().reshape((M*N,))
-        if network.offset:
-            offset = network.offset.matrix().reshape((M*N,))
-            coefs = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit().params
-        else:
-            coefs = sm.Logit(y, Phi).fit().params
+
+        try:
+            if network.offset:
+                offset = network.offset.matrix().reshape((M*N,))
+                fit = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit()
+            else:
+                fit = sm.Logit(y, Phi).fit()
+            coefs = fit.params
+        except:
+            print 'Warning: logistic fit failed.'
+            coefs = np.zeros(B + 1)
 
         for b, b_n in enumerate(self.beta):
             self.beta[b_n] = coefs[b]
@@ -1474,7 +1486,6 @@ class NonstationaryLogistic(StationaryLogistic):
         M = network.M
         N = network.N
         B = len(self.beta)
-        alpha_zero(network)
 
         # Set up outcome and design matrix for fit
         y = network.as_dense().reshape((M*N,))
@@ -1498,11 +1509,12 @@ class NonstationaryLogistic(StationaryLogistic):
                 fit = sm.GLM(y, Phi, sm.families.Binomial(), offset).fit()
             else:
                 fit = sm.Logit(y, Phi).fit()
-                coefs = fit.params
+            coefs = fit.params
         except:
             print 'Warning: logistic fit failed.'
             coefs = np.zeros(B + 1 + (M-1) + (N-1))
 
+        alpha_zero(network)
         alpha_out = network.row_covariates['alpha_out']
         alpha_in = network.col_covariates['alpha_in']
         alpha_out[0:M-1] = coefs[(B + 1):(B + 1 + (M-1))]
