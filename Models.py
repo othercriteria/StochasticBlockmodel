@@ -1829,7 +1829,7 @@ class FixedMargins(IndependentBernoulli):
             T_0 = np.sum(b_mat[A])
             T_samp = np.empty(2 * samples)
 
-            beta[b_n] = beta_scale
+            beta[b_n] = -beta_scale
             for s in range(samples):
                 A_samp = self.generate(network)
                 T_samp[s] = np.sum(b_mat[A_samp])
