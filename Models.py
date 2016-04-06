@@ -501,19 +501,22 @@ class StationaryLogistic(Stationary):
             self.kappa = theta[B]
             ET = np.empty(B + 1)
             P = self.edge_probabilities(network)
-            for b, b_n in enumerate(self.beta):
-                ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
-            ET[B] = np.sum(P)
-            grad = ET - T
             if fix_beta:
-                grad[0:B] = 0.0
+                ET[0:B] = 0.0
+            else:
+                for b, b_n in enumerate(self.beta):
+                    ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
+            ET[B] = np.sum(P)
+            g = ET - T
+            if fix_beta:
+                g[0:B] = 0.0
             self.fit_info['grad_nll_evals'] += 1
-            self.fit_info['grad_nll_final'][:] = grad
+            self.fit_info['grad_nll_final'][:] = g
             if verbose:
-                abs_grad = np.abs(ET - T)
+                abs_grad = np.abs(g)
                 print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
                     (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
-            return grad
+            return g
 
         bounds = [(-8,8)] * B + [(-15,15)]
         theta_opt = opt.fmin_l_bfgs_b(obj, theta, grad, bounds = bounds)[0]
@@ -1381,7 +1384,7 @@ class NonstationaryLogistic(StationaryLogistic):
             if verbose:
                 abs_grad = np.abs(g)
                 print '|ET - T|: %.2f, %.2f, %.2f (min, mean, max)' % \
-                    (np.min(abs_g), np.mean(abs_g), np.max(abs_g))
+                    (np.min(abs_grad), np.mean(abs_grad), np.max(abs_grad))
             return g
 
         bounds = [(-8,8)] * B + [(-15,15)] + [(-8,8)] * ((M-1) + (N-1))
