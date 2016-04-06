@@ -43,44 +43,47 @@ except:
 # P_{ij} = Logit^{-1}(o_{ij})
 class IndependentBernoulli:
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = False):
+                           ignore_offset = False, logit = False):
+        M = network.M
         N = network.N
         if submatrix:
             i_sub, j_sub = submatrix
-            m, n = len(i_sub), len(j_sub)
-        else:
-            m, n = N, N
+            M, N = len(i_sub), len(j_sub)
 
         if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix()
             if submatrix:
                 logit_P = logit[i_sub][:,j_sub]
-            return inv_logit(logit_P)
+            if logit:
+                return logit_P
+            else:
+                return inv_logit(logit_P)
         else:
-            return np.tile(0.5, (m, n))
+            if logit:
+                return np.zeros((M, N))
+            else:
+                return np.tile(0.5, (M, N))
 
     def nll(self, network, submatrix = None, ignore_offset = False):
-        P = self.edge_probabilities(network, submatrix, ignore_offset)
+        log_Q = self.edge_probabilities(network, submatrix, ignore_offset,
+                                        logit = True)
         A = np.asarray(network.as_dense())
         if submatrix:
             i_sub, j_sub = submatrix
             A = A[i_sub][:,j_sub]
 
         # Check for impossible data for the cells with 0/1 probabilities
-        ind_P_zero, ind_P_one = (P == 0.0), (P == 1.0)
-        if np.any(A[ind_P_zero]) or not np.all(A[ind_P_one]):
+        log_Q_neg_inf = log_Q == -np.inf
+        log_Q_pos_inf = log_Q ==  np.inf
+        if np.any(A[log_Q_neg_inf]) or np.any(~A[log_Q_pos_inf]):
             return np.Inf
 
         # Compute the negative log-likelihood for the rest of the cells
-        ind_P_rest = -(ind_P_zero + ind_P_one)
-        P, A = P[ind_P_rest], A[ind_P_rest]
-        nll = -np.sum(A * np.log(P) + (1.0 - A) * np.log1p(-P))
-
-        # Edge cases and numerical weirdness can occur; better to pass
-        # on infinity that at least carries the sign of the blowup
-        if np.isnan(nll):
-            return np.Inf
-        return nll
+        log_Q_rest = ~(log_Q_neg_inf + log_Q_pos_inf)
+        log_Q = log_Q[log_Q_rest]
+        A = A[log_Q_rest]
+        Q = np.exp(log_Q)
+        return np.sum(np.log1p(Q)) - np.sum(log_Q[A])
 
     def generate(self, network):
         M = network.M
@@ -282,21 +285,25 @@ class Stationary(IndependentBernoulli):
         self.conf = tree()
 
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = False):
+                           ignore_offset = False, logit = False):
+        M = network.M
         N = network.N
         if submatrix:
             sub_i, sub_j = submatrix
-            m, n = len(i_sub), len(j_sub)
+            M, N = len(i_sub), len(j_sub)
 
         if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[sub_i][:,sub_j]
         else:
-            logit_P = np.zeros((m,n))
+            logit_P = np.zeros((M,N))
         logit_P += self.kappa
 
-        return inv_logit(logit_P)
+        if logit:
+            return logit_P
+        else:
+            return inv_logit(logit_P)
 
     def match_kappa(self, network, kappa_target):
         M = network.M
@@ -402,21 +409,19 @@ class StationaryLogistic(Stationary):
         self.fit = self.fit_convex_opt
 
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = False):
+                           ignore_offset = False, logit = False):
         M = network.M
         N = network.N
         if submatrix:
             i_sub, j_sub = submatix
-            m, n = len(i_sub), len(j_sub)
-        else:
-            m, n = M, N
+            M, N = len(i_sub), len(j_sub)
         
         if (not ignore_offset) and network.offset:
             logit_P = network.offset.matrix().copy()
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
         else:
-            logit_P = np.zeros((m,n))
+            logit_P = np.zeros((M,N))
         for b in self.beta:
             ec_b = network.edge_covariates[b].matrix()
             if submatrix:
@@ -424,7 +429,10 @@ class StationaryLogistic(Stationary):
             logit_P += self.beta[b] * ec_b
         logit_P += self.kappa
 
-        return inv_logit(logit_P)
+        if logit:
+            return logit_P
+        else:
+            return inv_logit(logit_P)
 
     def check_separated(self, network):
         A = network.as_dense()
@@ -1218,14 +1226,11 @@ class NonstationaryLogistic(StationaryLogistic):
         self.fit = self.fit_convex_opt
         
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = False):
+                           ignore_offset = False, logit = False):
         M = network.M
         N = network.N
         if submatrix:
             i_sub, j_sub = submatrix
-            m, n = len(i_sub), len(j_sub)
-        else:
-            m, n = M, N
 
         alpha_out = network.row_covariates['alpha_out']
         alpha_in = network.col_covariates['alpha_in']
@@ -1238,7 +1243,7 @@ class NonstationaryLogistic(StationaryLogistic):
             if submatrix:
                 logit_P = logit_P[i_sub][:,j_sub]
         else:
-            logit_P = np.zeros((m,n))
+            logit_P = np.zeros((M,N))
         np.add(logit_P, alpha_out[:].reshape((-1,1)), logit_P)
         np.add(logit_P, alpha_in[:].reshape((1,-1)), logit_P)
         for b in self.beta:
@@ -1247,8 +1252,11 @@ class NonstationaryLogistic(StationaryLogistic):
                 ec_b = ec_b[i_sub][:,j_sub]
             logit_P += self.beta[b] * ec_b
         logit_P += self.kappa
-        
-        return inv_logit(logit_P)
+
+        if logit:
+            return logit_P
+        else:
+            return inv_logit(logit_P)
 
     def baseline(self, network):
         M = network.M
@@ -1624,7 +1632,7 @@ class Blockmodel(IndependentBernoulli):
                 network.offset[i,j] += self.Theta[z[i], z[j]]
 
     def edge_probabilities(self, network, submatrix = None,
-                           ignore_offset = None):
+                           ignore_offset = None, logit = False):
         if ignore_offset is None:
             ignore_inner_offset = self.ignore_inner_offset
         else:
@@ -1639,7 +1647,7 @@ class Blockmodel(IndependentBernoulli):
         # effects, and so should be used. If not outer ignore_offset,
         # then the offset should be used anyways.
         P = self.base_model.edge_probabilities(network, submatrix, \
-              ignore_offset = ignore_inner_offset)
+              ignore_offset = ignore_inner_offset, logit = logit)
 
         network.offset = old_offset
 
@@ -1871,8 +1879,8 @@ class FixedMargins(IndependentBernoulli):
     def nll(self, network, **opts):
         return self.base_model.nll(network, **opts)
 
-    def edge_probabilities(self, network, submatrix = None):
-        return self.base_model.edge_probabilities(network, submatrix)
+    def edge_probabilities(self, network, **opts):
+        return self.base_model.edge_probabilities(network, **opts)
     
 # Generate alpha_out/in for an existing Network
 def center(x):
