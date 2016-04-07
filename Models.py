@@ -543,6 +543,127 @@ class StationaryLogistic(Stationary):
         self.kappa = theta_opt[B]
 
         self.fit_info['wall_time'] = time() - start_time
+
+    def fit_conditional(self, network,
+                        fit_grid = False, T = 0, one_sided = False,
+                        evaluate = False, verbose = False):
+        B = len(self.beta)
+        if fit_grid and not B in (1,2):
+            print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
+            fit_grid = False
+
+        self.fit_info['cnll_evals'] = 0
+
+        start_time = time()
+
+        A = np.array(network.as_dense())
+        r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
+
+        def obj(theta):
+            if np.any(np.isnan(theta)):
+                print 'Warning: computing objective for nan-containing vector.'
+                return np.Inf
+            for b, b_n in enumerate(self.beta):
+                self.beta[b_n] = theta[b]
+            P = self.edge_probabilities(network)
+            w = P / (1.0 - P)
+
+            if T == 0:
+                if (np.all(w == 0.0) or np.all(w == np.Inf) or
+                    np.any(np.isnan(w))):
+                    cnll = np.Inf
+                else:
+                    cnll = acnll(A, w, sort_by_wopt_var = False)
+            else:
+                z = acsample(r, c, w, T, sort_by_wopt_var = True)
+                if not verbose:
+                    logkappa = log_partition_is(z)
+                else:
+                    logkappa, logcvsq = log_partition_is(z, cvsq = True)
+                    print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
+                cnll = logkappa - np.sum(np.log(w[A]))
+
+            self.fit_info['cnll_evals'] += 1
+            if verbose:
+                print cnll, theta
+            return cnll
+
+        if fit_grid:
+            if B == 1:
+                G = 100
+                theta_0 = np.linspace(-6.0, 6.0, G)
+                cnll = np.empty(G)
+                for g in range(G):
+                    cnll[g] = obj(np.array([theta_0[g]]))
+                theta_0_opt_ind = np.argmin(cnll)
+                self.beta[self.beta.keys()[0]] = theta_0[theta_0_opt_ind]
+            if B == 2:
+                G = 15
+                theta_0 = np.linspace(-6.0, 6.0, G)
+                theta_1 = np.linspace(-6.0, 6.0, G)
+                cnll = np.empty((G,G))
+                for g_0 in range(G):
+                    for g_1 in range(G):
+                        t_0, t_1 = theta_0[g_0], theta_1[g_1]
+                        cnll[g_0,g_1] = obj(np.array([t_0,t_1]))
+                cnll_min = np.min(cnll)
+                theta_opt_ind = np.where(cnll == cnll_min)
+                theta_0_opt = theta_0[theta_opt_ind[0][0]]
+                theta_1_opt = theta_1[theta_opt_ind[1][0]]
+                self.beta[self.beta.keys()[0]] = theta_0_opt
+                self.beta[self.beta.keys()[1]] = theta_1_opt
+        else:
+            if evaluate:
+                theta = np.zeros(B)
+                for b, b_n in enumerate(self.beta):
+                    theta[b] = self.beta[b_n]
+
+                cnll = obj(theta)
+                self.fit_info['wall_time'] = time() - start_time
+
+                return cnll
+            else:
+                # Initialize theta
+                theta = np.zeros(B)
+
+                if T > 0:
+                    # Use Kiefer-Wolfowitz stochastic approximation
+                    scale = 1.0 / obj(np.repeat(0, B))
+                    for n in range(1, 40):
+                        a_n = 2.0 * scale * n ** (-1.0)
+                        c_n = 0.5 * n ** (-1.0 / 3)
+                        grad = np.empty(B)
+                        if one_sided:
+                            y_0 = obj(theta)
+                            for b in range(B):
+                                e = np.zeros(B)
+                                e[b] = 1.0
+                                y_p = obj(theta + 2.0 * c_n * e)
+                                grad[b] = (y_p - y_0) / c_n
+                        else:
+                            for b in range(B):
+                                e = np.zeros(B)
+                                e[b] = 1.0
+                                y_p = obj(theta + c_n * e)
+                                y_m = obj(theta - c_n * e)
+                                grad[b] = (y_p - y_m) / c_n
+                        theta -= a_n * grad
+                    theta_opt = theta
+                    for b, b_n in enumerate(self.beta):
+                        self.beta[b_n] = theta_opt[b]
+                else:
+                    if B == 1:
+                        obj_scalar = lambda x: obj(np.array([x]))
+                        res = opt.minimize_scalar(obj_scalar,
+                                                  method = 'bounded',
+                                                  bounds = (-10, 10))
+                        self.beta[self.beta.keys()[0]] = res.x
+                    else:
+                        theta_opt = opt.fmin(obj, theta)
+                        for b, b_n in enumerate(self.beta):
+                            self.beta[b_n] = theta_opt[b]
+
+        self.fit_info['wall_time'] = time() - start_time
         
     def fit_saddlepoint(self, network, verbose = False):
         B = len(self.beta)
@@ -683,129 +804,6 @@ class StationaryLogistic(Stationary):
                 self.beta[target_n] = 0.0
 
         self.fit_convex_opt(network, fix_beta = True)
-
-    def fit_conditional(self, network,
-                        fit_grid = False, T = 0, one_sided = False,
-                        evaluate = False, verbose = False):
-        B = len(self.beta)
-        if fit_grid and not B in (1,2):
-            print 'Can only grid search B = 1, 2. Defaulting to minimizer.'
-            fit_grid = False
-
-        self.fit_info['cnll_evals'] = 0
-
-        start_time = time()
-
-        A = np.array(network.as_dense())
-        r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
-
-        def obj(theta):
-            if np.any(np.isnan(theta)):
-                print 'Warning: computing objective for nan-containing vector.'
-                return np.Inf
-            for b, b_n in enumerate(self.beta):
-                self.beta[b_n] = theta[b]
-            P = self.edge_probabilities(network)
-            w = P / (1.0 - P)
-
-            if T == 0:
-                if (np.all(w == 0.0) or np.all(w == np.Inf) or
-                    np.any(np.isnan(w))):
-                    cnll = np.Inf
-                else:
-                    cnll = acnll(A, w, sort_by_wopt_var = False)
-            else:
-                z = acsample(r, c, w, T, sort_by_wopt_var = True)
-                if not verbose:
-                    logkappa = log_partition_is(z)
-                else:
-                    logkappa, logcvsq = log_partition_is(z, cvsq = True)
-                    print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
-                cnll = logkappa - np.sum(np.log(w[A]))
-
-            self.fit_info['cnll_evals'] += 1
-            if verbose:
-                print cnll, theta
-            return cnll
-
-        if fit_grid:
-            if B == 1:
-                G = 100
-                theta_0 = np.linspace(-6.0, 6.0, G)
-                cnll = np.empty(G)
-                for g in range(G):
-                    cnll[g] = obj(np.array([theta_0[g]]))
-                theta_0_opt_ind = np.argmin(cnll)
-                self.beta[self.beta.keys()[0]] = theta_0[theta_0_opt_ind]
-            if B == 2:
-                G = 15
-                theta_0 = np.linspace(-6.0, 6.0, G)
-                theta_1 = np.linspace(-6.0, 6.0, G)
-                cnll = np.empty((G,G))
-                for g_0 in range(G):
-                    for g_1 in range(G):
-                        t_0, t_1 = theta_0[g_0], theta_1[g_1]
-                        cnll[g_0,g_1] = obj(np.array([t_0,t_1]))
-                cnll_min = np.min(cnll)
-                theta_opt_ind = np.where(cnll == cnll_min)
-                theta_0_opt = theta_0[theta_opt_ind[0][0]]
-                theta_1_opt = theta_1[theta_opt_ind[1][0]]
-                self.beta[self.beta.keys()[0]] = theta_0_opt
-                self.beta[self.beta.keys()[1]] = theta_1_opt
-        else:
-            if evaluate:
-                theta = np.zeros(B)
-                for b, b_n in enumerate(self.beta):
-                    theta[b] = self.beta[b_n]
-
-                cnll = obj(theta)
-                self.fit_info['wall_time'] = time() - start_time
-
-                return cnll
-            else:
-                # Initialize theta
-                theta = np.zeros(B)
-
-                if T > 0:
-                    # Use Kiefer-Wolfowitz stochastic approximation
-                    scale = 1.0 / obj(np.repeat(0, B))
-                    for n in range(1, 40):
-                        a_n = 2.0 * scale * n ** (-1.0)
-                        c_n = 0.5 * n ** (-1.0 / 3)
-                        grad = np.empty(B)
-                        if one_sided:
-                            y_0 = obj(theta)
-                            for b in range(B):
-                                e = np.zeros(B)
-                                e[b] = 1.0
-                                y_p = obj(theta + 2.0 * c_n * e)
-                                grad[b] = (y_p - y_0) / c_n
-                        else:
-                            for b in range(B):
-                                e = np.zeros(B)
-                                e[b] = 1.0
-                                y_p = obj(theta + c_n * e)
-                                y_m = obj(theta - c_n * e)
-                                grad[b] = (y_p - y_m) / c_n
-                        theta -= a_n * grad
-                    theta_opt = theta
-                    for b, b_n in enumerate(self.beta):
-                        self.beta[b_n] = theta_opt[b]
-                else:
-                    if B == 1:
-                        obj_scalar = lambda x: obj(np.array([x]))
-                        res = opt.minimize_scalar(obj_scalar,
-                                                  method = 'bounded',
-                                                  bounds = (-10, 10))
-                        self.beta[self.beta.keys()[0]] = res.x
-                    else:
-                        theta_opt = opt.fmin(obj, theta)
-                        for b, b_n in enumerate(self.beta):
-                            self.beta[b_n] = theta_opt[b]
-
-        self.fit_convex_opt(network, fix_beta = True)
-
-        self.fit_info['wall_time'] = time() - start_time
 
     def fit_c_conditional(self, network, verbose = False, evaluate = False):
         M = network.M
@@ -1428,6 +1426,15 @@ class NonstationaryLogistic(StationaryLogistic):
         self.kappa = theta_opt[B] + alpha_out_mean + alpha_in_mean
 
         self.fit_info['wall_time'] = time() - start_time
+
+    def fit_conditional(self, network, **kwargs):
+        StationaryLogistic.fit_conditional(self, network, **kwargs)
+
+        start_time = time()
+
+        self.fit_convex_opt(network, fix_beta = True)
+
+        self.fit_info['wall_time'] += time() - start_time
 
     def fit_irls(self, network, verbose = False, perturb = 1e-4):
         M = network.M
