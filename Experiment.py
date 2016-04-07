@@ -234,14 +234,23 @@ class Results:
             data[self.size_to_ind[size], rep] = val
 
     # To be called after all results have been recorded...
-    def estimate_mse(self, name, true, estimate):
+    def sweep(self, name, func, *args):
         self.results[name] = {'data': np.empty((self.num_conditions,1))}
 
-        t = self.results[true]['data']
-        e = self.results[estimate]['data']
+        data = []
+        for arg in args:
+            data.append(self.results[arg]['data'])
 
         for n in range(self.num_conditions):
-            self.results[name]['data'][n,0] = np.mean((t[n]-e[n])**2)
+            self.results[name]['data'][n,0] = func(n, *data)
+
+    def estimate_mse(self, name, true, estimate):
+        self.sweep(name, lambda n, t, e: np.mean((t[n]-e[n])**2),
+                   true, estimate)
+
+    def estimate_mae(self, name, true, estimate):
+        self.sweep(name, lambda n, t, e: np.median(np.abs(t[n]-e[n])),
+                   true, estimate)
 
     def summary(self):
         for field in self.results:

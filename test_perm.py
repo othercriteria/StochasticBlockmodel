@@ -18,14 +18,14 @@ params = { 'N': 300,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
            'cov_unif_sd': 0.0,
-           'cov_norm_sd': 1.0,
-           'cov_disc_sd': 0.0,
+           'cov_norm_sd': 0.0,
+           'cov_disc_sd': 1.0,
            'fisher_information': False,
            'baseline': False,
            'fit_nonstationary': True,
-           'fit_method': 'brazzale',
-           'ignore_separation': True,
-           'separation_samples': 1,
+           'fit_method': 'convex_opt',
+           'ignore_separation': False,
+           'separation_samples': 10,
            'num_reps': 15,
            'sub_sizes': np.floor(np.logspace(1.0, 2.1, 20)),
            'verbose': True,
@@ -140,7 +140,7 @@ for sub_size in params['sub_sizes']:
 
         if params['fit_method'] in ('conditional', 'conditional_is',
                                     'brazzale', 'saddlepoint'):
-            fixed_model = FixedMargins(base_model = fit_model, coverage = 0.5)
+            fixed_model = FixedMargins(base_model = fit_model, coverage = 2.0)
             fixed_model.check_separated(subnet,
                                         samples = params['separation_samples'])
         else:
@@ -166,7 +166,8 @@ for sub_size in params['sub_sizes']:
         elif params['fit_method'] == 'conditional':
             fit_model.fit_conditional(subnet, verbose = params['verbose'])
         elif params['fit_method'] == 'conditional_is':
-            fit_model.fit_conditional(subnet, T = 50, verbose = True)
+            fit_model.fit_conditional(subnet, T = 50, one_sided = True,
+                                      verbose = params['verbose'])
         elif params['fit_method'] == 'composite':
             fit_model.fit_composite(subnet, T = 100, verbose = True)
         elif params['fit_method'] == 'brazzale':
@@ -179,15 +180,22 @@ for sub_size in params['sub_sizes']:
             
         results.record(size, rep, subnet, data_model, fit_model)
 
-# Compute beta MSEs
+# Compute beta MSEs, MAEs
 covariate_mses = []
+covariate_maes = []
 for b in fit_model.beta:
     name = 'MSE(theta_{%s})' % b
     covariate_mses.append(name)
     results.estimate_mse(name, 'True theta_{%s}' % b, 'Est. theta_{%s}' % b)
+
+    name = 'MAE(theta_{%s})' % b
+    covariate_maes.append(name)
+    results.estimate_mae(name, 'True theta_{%s}' % b, 'Est. theta_{%s}' % b)
+
+# Dump summary results
 results.summary()
 
-# Plot inference performace, in terms of MSE(theta) and MSE(P_ij)
+# Plot inference performance, in terms of MSE(theta), MAE(theta), MSE(P_ij)
 if params['plot_mse']:
     to_plot = []
     if not params['fit_method'] == 'none':
@@ -208,13 +216,16 @@ if params['plot_mse']:
 
     to_plot = []
     to_plot.append((['MSE(theta_i)'] + covariate_mses,
-                    {'plot_mean': True, 'loglog': True}))
+                    {'loglog': True, 'plot_mean': True}))
     if params['fisher_information']:
         to_plot.append((['Info theta_i'] + \
                         ['Info theta_{%s}' % b for b in fit_model.beta],
                         {'plot_mean': True, 'loglog': True}))
     results.plot(to_plot)
-  
+
+    results.plot([(['MAE(theta_i)'] + covariate_maes,
+                   {'loglog': True, 'plot_mean': True})])
+
 # Plot network statistics
 if params['plot_network']:
     to_plot = [('Density', {'ymin': 0, 'plot_mean': True}),
