@@ -14,16 +14,16 @@ from Utility import l2, logit
 
 # Parameters
 params = { 'N': 300,
-           'B': 1,
+           'B': 2,
            'theta_sd': 1.0,
            'theta_fixed': { 'x_0': 2.0, 'x_1': -1.0 },
            'cov_unif_sd': 0.0,
            'cov_norm_sd': 0.0,
            'cov_disc_sd': 1.0,
            'fisher_information': False,
-           'baseline': False,
+           'baseline': True,
            'fit_nonstationary': True,
-           'fit_method': 'convex_opt',
+           'fit_method': 'logistic_l2',
            'ignore_separation': False,
            'separation_samples': 10,
            'num_reps': 15,
@@ -69,7 +69,7 @@ for b in range(params['B']):
 
     net.new_edge_covariate(name).from_binary_function_ind(f_x)
 
-# Specify data model as generation permuation networks
+# Specify data model as generation of permuation networks
 net.new_node_covariate_int('r')[:] = 1
 net.new_node_covariate_int('c')[:] = 1
 data_model = FixedMargins(data_model, 'r', 'c', coverage = 2.0)
@@ -106,9 +106,9 @@ if params['baseline']:
         return rel_mse(f.edge_probabilities(n), f.baseline(n), P)
     results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
     def rel_mse_logit_p_ij(n, d, f):
-        logit_P = logit(d.edge_probabilities(n))
+        logit_P = d.edge_probabilities(n, logit = True)
         logit_Q = f.baseline_logit(n)
-        return rel_mse(logit(f.edge_probabilities(n)), logit_Q, logit_P)
+        return rel_mse(f.edge_probabilities(n, logit = True), logit_Q, logit_P)
     results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
 
 if params['fit_method'] in ['convex_opt', 'conditional',

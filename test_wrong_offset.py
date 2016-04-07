@@ -85,8 +85,8 @@ results.new('MSE(P_{ij})', 'nm',
             lambda n, d, f: np.mean((d.edge_probabilities(n) - \
                                      f.edge_probabilities(n))**2))
 results.new('MSE(logit_P_{ij})', 'nm',
-            lambda n, d, f: np.mean((logit(d.edge_probabilities(n)) - \
-                                     logit(f.edge_probabilities(n)))**2))
+            lambda n, d, f: np.mean((d.edge_probabilities(n, logit = True) - \
+                                     f.edge_probabilities(n, logit = True))**2))
 
 # Repeatedly generate and fit networks
 for sub_size in params['sub_sizes']:

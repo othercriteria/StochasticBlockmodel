@@ -463,7 +463,7 @@ class StationaryLogistic(Stationary):
         return np.mean(self.edge_probabilities(network))
 
     def baseline_logit(self, network):
-        return np.mean(logit(self.edge_probabilities(network)))
+        return np.mean(self.edge_probabilities(network, logit = True))
 
     def fit_convex_opt(self, network, verbose = False, fix_beta = False):
         B = len(self.beta)
@@ -1284,7 +1284,7 @@ class NonstationaryLogistic(StationaryLogistic):
     def baseline_logit(self, network):
         M = network.M
         N = network.N
-        logit_P = logit(self.edge_probabilities(network))
+        logit_P = self.edge_probabilities(network, logit = True)
         a, b = logit_P.mean(1), logit_P.mean(0)
         a_mean, b_mean = a.mean(), b.mean()
         a -= a_mean

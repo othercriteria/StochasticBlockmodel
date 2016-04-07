@@ -219,9 +219,9 @@ def do_experiment(params):
         results.new('Rel. MSE(P_ij)', 'nm', rel_mse_p_ij)
         if not (params['pre_offset'] or params['post_fit']):
             def rel_mse_logit_p_ij(n, d, f):
-                logit_P = logit(d.edge_probabilities(n))
+                logit_P = d.edge_probabilities(n, logit = True)
                 logit_Q = f.baseline_logit(n)
-                return rel_mse(logit(f.edge_probabilities(n)),
+                return rel_mse(f.edge_probabilities(n, logit = True),
                                logit_Q, logit_P)
             results.new('Rel. MSE(logit P_ij)', 'nm', rel_mse_logit_p_ij)
 
