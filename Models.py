@@ -565,7 +565,7 @@ class StationaryLogistic(Stationary):
                 return np.Inf
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
-            P = self.edge_probabilities(network)
+            P = StationaryLogistic.edge_probabilities(self, network)
             w = P / (1.0 - P)
 
             if T == 0:
