@@ -403,7 +403,7 @@ def _prune(r, c, *arrays):
         r_n = (r == n)
         if np.any(r_n):
             r = r[-r_n]
-            unprune_ones.extend([[r_u,c_u]
+            unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune[r_n]
                                  for c_u in c_unprune])
             c -= np.sum(r_n)
@@ -423,7 +423,7 @@ def _prune(r, c, *arrays):
         c_m = (c == m)
         if np.any(c_m):
             c = c[-c_m]
-            unprune_ones.extend([[r_u,c_u]
+            unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune
                                  for c_u in c_unprune[c_m]])
             r -= np.sum(c_m)
@@ -436,10 +436,13 @@ def _prune(r, c, *arrays):
 
     unprune_ones = np.array(unprune_ones)
     def unprune(x):
+        # Unpack into actual samples, logP, logQ
+        x_a, x_b, x_c = x
+        x_a[:,0] = r_unprune[x_a[:,0]]
+        x_a[:,1] = c_unprune[x_a[:,1]]
         if unprune_ones.shape[0] == 0:
-            return x
+            return (x_a, x_b, x_c)
         else:
-            x_a, x_b, x_c = x
             return (np.vstack([x_a, unprune_ones]), x_b, x_c)
 
     # Copy (views of) arrays to put them in C-contiguous form
