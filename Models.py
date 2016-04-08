@@ -111,22 +111,22 @@ class IndependentBernoulli:
                          optimize_perm = True):
         network.gen_info = { 'wall_time': 0.0,
                              'coverage': 0.0, }
+        start_time = time()
         
         M = network.M
         N = network.N
         if r is None:
-            r = np.asarray(network.as_dense()).sum(1)
+            r = network.as_dense().sum(1)
         if c is None:
-            c = np.asarray(network.as_dense()).sum(0)
+            c = network.as_dense().sum(0)
 
-        start_time = time()
         if arbitrary_init:
             # Initialize from an arbitrary matrix with the requested margins
             gen = arbitrary_from_margins(r, c)
         else:
             # Initialize from an approximate sample from the
             # conditional distribution
-            P = self.edge_probabilities(network)
+            P = StationaryLogistic.edge_probabilities(self, network)
             w = P / (1.0 - P)
             gen_sparse = acsample(r, c, w)
             gen = np.zeros((M,N), dtype=np.bool)
@@ -135,7 +135,7 @@ class IndependentBernoulli:
                 gen[i,j] = 1
         network.gen_info['wall_time'] += time() - start_time
 
-        if optimize_perm and np.all(r[:] == 1) and np.all(c[:] == 1):
+        if optimize_perm and (np.all(r[:] == 1) and np.all(c[:] == 1)):
             return self.gibbs_improve_perm(network, gen, coverage)
         else:
             return self.gibbs_improve(network, gen, coverage)                
@@ -159,7 +159,7 @@ class IndependentBernoulli:
         #
         # Scheduling Gibbs sweeps in a checkerboard-like manner to
         # simplify picking distinct random indices.
-        P_full = self.edge_probabilities(network)
+        P_full = StationaryLogistic.edge_probabilities(self, network)
         coverage_attained = 0
         r_inds = np.arange(M)
         c_inds = np.arange(N)
@@ -234,7 +234,7 @@ class IndependentBernoulli:
         #
         # Scheduling Gibbs sweeps in a checkerboard-like manner to
         # simplify picking distinct random indices.
-        P_full = self.edge_probabilities(network)
+        P_full = StationaryLogistic.edge_probabilities(self, network)
         coverage_attained = 0
         inds = np.arange(N)
         while coverage_attained < coverage_target:
@@ -938,7 +938,7 @@ class StationaryLogistic(Stationary):
                 return np.Inf
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
-            P = self.edge_probabilities(network)
+            P = StationaryLogistic.edge_probabilities(self, network)
             w = P / (1.0 - P)
 
             cnll = 0.0
@@ -1867,7 +1867,8 @@ class FixedMargins(IndependentBernoulli):
         self.base_model.fit_info['separated'] = np.any(~overlap)
 
     def generate(self, network, **opts):
-        opts['coverage'] = self.coverage
+        if not 'coverage' in opts:
+            opts['coverage'] = self.coverage
 
         if not self.r_name in network.row_covariates:
             print 'Row covariate "%s" not found.' % self.r_name
