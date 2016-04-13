@@ -40,6 +40,11 @@ unpick = lambda x: pickle.loads(x)
 def tree():
     return defaultdict(tree)
 
+def lift_tree(src, dst):
+    keys = src.keys()
+    for k in keys:
+        dst[k] = src.pop(k)
+
 # Initialize LaTeX rendering in matplotlib
 def init_latex_rendering():
     import os

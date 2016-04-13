@@ -11,7 +11,7 @@ from scipy.linalg import inv, solve
 from time import time
 from itertools import permutations
 
-from Utility import logit, inv_logit, logit_mean, tree, digest
+from Utility import logit, inv_logit, logit_mean, tree, lift_tree, digest
 from BinaryMatrix import arbitrary_from_margins
 from BinaryMatrix import approximate_from_margins_weights as acsample
 from BinaryMatrix import approximate_conditional_nll as acnll
@@ -1095,53 +1095,6 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
-    def fit_mh(self, network):
-        mh = self.mh(network)
-        mh.run()
-        self.kappa = np.mean(mh.results['kappa'])
-        for b_n in self.beta:
-            self.beta[b_n] = np.mean(mh.results[b_n])
-        self.fit_info = {'nll': mh.results['nll']}
-    
-    def mh(self, network, kappa_prior = (0,1), kappa_prop_sd = 0.2,
-           beta_prior = (0,1), beta_prop_sd = 0.2):
-        from scipy.stats import norm
-        def log_prior(kappa, beta):
-            lp = np.log(norm(*kappa_prior).pdf(kappa))
-            for b_n in beta:
-                lp += np.log(norm(*beta_prior).pdf(beta[b_n]))
-            return lp
-        
-        def update(n, m):
-            kappa_curr = m.kappa
-            beta_curr = m.beta
-            kappa_prop = kappa_curr + np.random.normal(0, kappa_prop_sd)
-            beta_prop = m.beta.copy()
-            for b_n in beta_prop:
-                beta_prop[b_n] += np.random.normal(0, beta_prop_sd)
-
-            nll_curr = m.nll(n)
-            log_post_curr = -nll_curr + log_prior(kappa_curr, beta_curr)
-            
-            m.kappa = kappa_prop
-            m.beta = beta_prop
-            nll_prop = m.nll(n)
-            log_post_prop = -nll_prop + log_prior(kappa_prop, beta_prop)
-
-            p_acc = np.exp(log_post_prop - log_post_curr)
-            if p_acc >= 1.0 or np.random.random() < p_acc:
-                return nll_prop
-            else:
-                m.kappa = kappa_curr
-                m.beta = beta_curr
-                return nll_curr
-
-        record = {'kappa': lambda n, m: m.kappa}
-        for b_n in self.beta:
-            record[b_n] = lambda n, m: m.beta[b_n]
-
-        return Sampler(network, self, update, record)
-
     def confidence(self, network, n_bootstrap = 100, alpha = 0.05,
                    **fit_options):
         # Point estimate
@@ -1149,9 +1102,7 @@ class StationaryLogistic(Stationary):
         theta_hats = { b: self.beta[b] for b in self.beta }
 
         # Parametric bootstrap to characterize uncertainty in point estimate
-        network_samples = []
-        for k in range(n_bootstrap):
-            network_samples.append(self.generate(network))
+        network_samples = [self.generate(network) for k in range(n_bootstrap)]
         network_original = network.array.copy()
         theta_hat_bootstraps = { b: np.empty(n_bootstrap) for b in self.beta }
         for k in range(n_bootstrap):
@@ -1836,6 +1787,7 @@ class FixedMargins(IndependentBernoulli):
         self.r_name = r_name
         self.c_name = c_name
         self.coverage = coverage
+        self.conf = tree()
 
     def check_separated(self, network, samples = 100, beta_scale = 8.0):
         A = np.array(network.as_dense())
@@ -1889,6 +1841,18 @@ class FixedMargins(IndependentBernoulli):
 
     def edge_probabilities(self, network, **opts):
         return self.base_model.edge_probabilities(network, **opts)
+
+    def confidence(self, network, **opts):
+        self.base_model.fit = self.fit
+        self.base_model.generate = self.generate
+        self.base_model.confidence(network, **opts)
+        lift_tree(self.base_model.conf, self.conf)
+
+    def confidence_harrison(self, network, b, **opts):
+        self.base_model.fit = self.fit
+        self.base_model.generate = self.generate
+        self.base_model.confidence_harrison(network, b, **opts)
+        lift_tree(self.base_model.conf, self.conf)
     
 # Generate alpha_out/in for an existing Network
 def center(x):
