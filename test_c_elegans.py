@@ -51,13 +51,13 @@ print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
-net.offset_extremes()
+net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
-A = np.array(net.adjacency_matrix())
+A = net.adjacency_matrix()
 r = A.sum(1)
 c = A.sum(0)
-print '# Edges: %d' % net.array.sum()
+print '# Edges: %d' % A.sum()
 cov_names = []
 def add_cov_f(name, f):
     cov_names.append(name)
@@ -151,6 +151,15 @@ s_samples = np.empty((params['n_samples'], net.N, net.N))
 ns_samples = np.empty((params['n_samples'], net.N, net.N))
 c_samples = np.empty((params['n_samples'], net.N, net.N))
 
+def display_cis(model):
+    procedures = model.conf[model.conf.keys()[0]].keys()
+    for procedure in procedures:
+        print '%s:' % procedure
+        for cov_name in cov_names:
+            ci = model.conf[cov_name][procedure]
+            print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
+    print
+
 print 'Fitting stationary model'
 s_model = StationaryLogistic()
 for cov_name in cov_names:
@@ -161,14 +170,12 @@ print 'kappa: %.2f' % s_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, s_model.beta[cov_name])
 print
+s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+display_cis(s_model)
 for rep in range(params['n_samples']):
     s_samples[rep,:,:] = s_model.generate(net)
-s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-print 'Pivotal:'
-for cov_name in cov_names:
-    ci = s_model.conf[cov_name]['pivotal']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print
+
+net.offset_extremes()
 
 print 'Fitting nonstationary model'
 alpha_zero(net)
@@ -181,37 +188,27 @@ print 'kappa: %.2f' % ns_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, ns_model.beta[cov_name])
 print
+ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+display_cis(ns_model)
 for rep in range(params['n_samples']):
     ns_samples[rep,:,:] = ns_model.generate(net)
-ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-print 'Pivotal:'
-for cov_name in cov_names:
-    ci = ns_model.conf[cov_name]['pivotal']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print
 
 print 'Fitting conditional model'
 c_model = FixedMargins(StationaryLogistic())
+c_model.fit = c_model.base_model.fit_conditional
 for cov_name in cov_names:
     c_model.base_model.beta[cov_name] = None
-c_model.base_model.fit_conditional(net, verbose = True)
+c_model.fit(net, verbose = True)
 print 'NLL: %.2f' % c_model.nll(net)
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])
 print
-for rep in range(params['n_samples']):
-    c_samples[rep,:,:] = c_model.generate(net, coverage = 0.1)
 c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-print 'Pivotal:'
-for cov_name in cov_names:
-    ci = c_model.conf[cov_name]['pivotal']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print 'Harrison:'
 for cov_name in cov_names:
     c_model.confidence_harrison(net, cov_name)
-    ci = c_model.conf[cov_name]['harrison']
-    print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
-print
+display_cis(c_model)
+for rep in range(params['n_samples']):
+    c_samples[rep,:,:] = c_model.generate(net, coverage = 0.1)
 
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)
