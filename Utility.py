@@ -43,7 +43,11 @@ def tree():
 def lift_tree(src, dst):
     keys = src.keys()
     for k in keys:
-        dst[k] = src.pop(k)
+        if type(src[k]) == defaultdict:
+            lift_tree(src[k], dst[k])
+            src.pop(k)
+        else:
+            dst[k] = src.pop(k)
 
 # Initialize LaTeX rendering in matplotlib
 def init_latex_rendering():
