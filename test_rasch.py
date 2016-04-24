@@ -14,9 +14,9 @@ from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
 # Parameters
-params = { 'fixed_example': None, #'data/rasch_covariates.json',
-           'M': 10,
-           'N': 5,
+params = { 'fixed_example': 'data/rasch_covariates.json',
+           'M': 20,
+           'N': 10,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
@@ -27,7 +27,7 @@ params = { 'fixed_example': None, #'data/rasch_covariates.json',
            'wopt_sort': True,
            'is_T': 50,
            'n_rep': 100,
-           'L': 61,
+           'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': False,
@@ -118,18 +118,31 @@ def timing(func):
 
     return inner
 
+def plot_statistics(theta_grid, test_val, crit):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.plot(theta_grid, test_val)
+    ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyles = 'dotted')
+    ax.set_ylim(2.0 * crit, 0)
+    plt.show()
+
 @timing
 def ci_cmle_a(X, v, theta_grid, alpha_level):
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
+
     cmle_a = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
         logit_P_l = theta_l * v
         cmle_a[l] = -cond_a_nll(X, np.exp(logit_P_l))
 
-    return invert_test(theta_grid, cmle_a - cmle_a.max(),
-                       -0.5 * chi2.ppf(1 - alpha_level, 1))
+    plot_statistics(theta_grid, cmle_a - cmle_a.max(), crit)
+    return invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
 
 @timing
 def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
+
     cmle_is = np.empty_like(theta_grid)
     r = X.sum(1)
     c = X.sum(0)
@@ -151,8 +164,8 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
         cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
 
-    return invert_test(theta_grid, cmle_is - cmle_is.max(),
-                       -0.5 * chi2.ppf(1 - alpha_level, 1))
+    plot_statistics(theta_grid, cmle_is - cmle_is.max(), crit)
+    return invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
 
 @timing
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
