@@ -11,7 +11,7 @@ from Web import dump_to_json
 
 # Parameters
 params = { 'file_network': 'data/cit-HepTh/cit-HepTh.txt',
-           'import_limit_edges': 1000,
+           'import_limit_edges': 2000,
            'file_dates': 'data/cit-HepTh/cit-HepTh-dates.txt',
            'pub_diff_classes': [180, 360],
            'offset_extremes': True,
@@ -90,7 +90,7 @@ def fit_and_summarize(name, fit_model, use_covs):
     if use_covs:
         for cov_name in cov_names:
             fit_model.beta[cov_name] = None
-    fit_model.fit_convex_opt(net, verbose = params['verbose'])
+    fit_model.fit(net, verbose = params['verbose'])
     print 'NLL: %.2f' % fit_model.nll(net)
     print 'kappa: %.2f' % fit_model.kappa
     if use_covs:
