@@ -1100,32 +1100,40 @@ class StationaryLogistic(Stationary):
         # Point estimate
         self.fit(network, **fit_options)
         theta_hats = { b: self.beta[b] for b in self.beta }
+        theta_hats['_kappa'] = self.kappa
 
         # Parametric bootstrap to characterize uncertainty in point estimate
         network_samples = [self.generate(network) for k in range(n_bootstrap)]
         network_original = network.array.copy()
         theta_hat_bootstraps = { b: np.empty(n_bootstrap) for b in self.beta }
+        theta_hat_bootstraps['_kappa'] = np.empty(n_bootstrap)
         for k in range(n_bootstrap):
             network.array = network_samples[k]
             self.fit(network, **fit_options)
             for b in theta_hat_bootstraps:
+                if b == '_kappa': continue
                 theta_hat_bootstraps[b][k] = self.beta[b]
+            theta_hat_bootstraps['_kappa'][k] = self.kappa
         network.array = network_original
 
         # Construct (asymptotically valid) confidence interval
         p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
-        for b in self.beta:
+        for b in theta_hats:
+            if b == '_kappa':
+                display_name = 'kappa'
+            else:
+                display_name = b
             theta_hat = theta_hats[b]
             theta_hat_bootstrap = theta_hat_bootstraps[b]
-            self.conf[b]['percentile'] = \
+            self.conf[display_name]['percentile'] = \
                 (np.percentile(theta_hat_bootstrap, 100.0 * p_l),
                  np.percentile(theta_hat_bootstrap, 100.0 * p_u))
-            self.conf[b]['pivotal'] = \
+            self.conf[display_name]['pivotal'] = \
                 (2*theta_hat - np.percentile(theta_hat_bootstrap, 100.0 * p_u),
                  2*theta_hat - np.percentile(theta_hat_bootstrap, 100.0 * p_l))
             z_score = norm().ppf(p_u)
             theta_hat_se = np.sqrt(np.mean((theta_hat_bootstrap-theta_hat)**2))
-            self.conf[b]['normal'] = \
+            self.conf[display_name]['normal'] = \
                 (theta_hat - z_score * theta_hat_se,
                  theta_hat + z_score * theta_hat_se)
 
