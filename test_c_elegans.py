@@ -155,9 +155,9 @@ def display_cis(model):
     procedures = model.conf[model.conf.keys()[0]].keys()
     for procedure in procedures:
         print '%s:' % procedure
-        for cov_name in cov_names:
-            ci = model.conf[cov_name][procedure]
-            print ' %s: (%.2f, %.2f)' % (cov_name, ci[0], ci[1])
+        for par in model.conf:
+            ci = model.conf[par][procedure]
+            print ' %s: (%.2f, %.2f)' % (par, ci[0], ci[1])
     print
 
 print 'Fitting stationary model'
@@ -198,7 +198,7 @@ c_model = FixedMargins(StationaryLogistic())
 c_model.fit = c_model.base_model.fit_conditional
 for cov_name in cov_names:
     c_model.base_model.beta[cov_name] = None
-c_model.fit(net, verbose = True)
+c_model.fit(net, verbose = False)
 print 'NLL: %.2f' % c_model.nll(net)
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])
