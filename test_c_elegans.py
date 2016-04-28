@@ -15,6 +15,8 @@ from Models import FixedMargins, alpha_zero
 # Parameters
 params = { 'use_gap': False,
            'use_chemical': True,
+           'cov_gap': True,
+           'cov_chemical': False,
            'cov_soma_diff': False,
            'cov_soma_dist': True,
            'cov_lineage': False,
@@ -33,24 +35,32 @@ edges = []
 nodes = set()
 wb_network = xlrd.open_workbook(params['file_network'])
 ws_network = wb_network.sheet_by_name('NeuronConnect.csv')
+edges_gap = set()
+edges_chemical = set()
 for r in range(1, ws_network.nrows):
     n_1 = ws_network.cell_value(r, 0)
     n_2 = ws_network.cell_value(r, 1)
     t = ws_network.cell_value(r, 2)[0]
     if n_1 == 'NMJ' or n_2 == 'NMJ': continue
-    if params['use_gap'] and t == 'E':
-        edges.append((n_1, n_2))
-        edges.append((n_2, n_1))
-        nodes.add(n_1)
-        nodes.add(n_2)
-    if params['use_chemical'] and t == 'S':
-        edges.append((n_1, n_2))
-        nodes.add(n_1)
-        nodes.add(n_2)
+    if t == 'E':
+        edges_gap.add((n_1, n_2))
+        edges_gap.add((n_2, n_1))
+        if params['use_gap']:
+            edges.append((n_1, n_2))
+            edges.append((n_2, n_1))
+            nodes.add(n_1)
+            nodes.add(n_2)
+    if t == 'S':
+        edges_chemical.add((n_1, n_2))
+        if params['use_chemical']:
+            edges.append((n_1, n_2))
+            nodes.add(n_1)
+            nodes.add(n_2)
 print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
+net = net.subnetwork(np.arange(30))
 net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
@@ -62,7 +72,17 @@ cov_names = []
 def add_cov_f(name, f):
     cov_names.append(name)
     net.new_edge_covariate(name).from_binary_function_name(f)
-    
+
+# Covariates from other synapse type
+if params['cov_gap']:
+    def f_gap(n_1, n_2):
+        return (n_1, n_2) in edges_gap
+    add_cov_f('gap', f_gap)
+if params['cov_chemical']:
+    def f_chemical(n_1, n_2):
+        return (n_1, n_2) in edges_chemical
+    add_cov_f('chemical', f_chemical)
+
 # Import soma position from file
 soma_pos = {}
 wb_neurons = xlrd.open_workbook(params['file_neurons'])
