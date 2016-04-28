@@ -15,7 +15,7 @@ from Models import FixedMargins, alpha_zero
 # Parameters
 params = { 'use_gap': False,
            'use_chemical': True,
-           'cov_gap': True,
+           'cov_gap': False,
            'cov_chemical': False,
            'cov_soma_diff': False,
            'cov_soma_dist': True,
@@ -60,7 +60,6 @@ print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
-net = net.subnetwork(np.arange(30))
 net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
@@ -174,10 +173,14 @@ ns_samples = np.empty((params['n_samples'], net.N, net.N))
 c_samples = np.empty((params['n_samples'], net.N, net.N))
 
 def display_cis(model):
-    procedures = model.conf[model.conf.keys()[0]].keys()
+    procedures = set()
+    for par in model.conf:
+        for procedure in model.conf[par]:
+            procedures.add(procedure)
     for procedure in procedures:
         print '%s:' % procedure
         for par in model.conf:
+            if not procedure in model.conf[par]: continue
             ci = model.conf[par][procedure]
             print ' %s: (%.2f, %.2f)' % (par, ci[0], ci[1])
     print
