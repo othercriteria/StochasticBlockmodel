@@ -129,11 +129,13 @@ if params['cov_lineage']:
 # Display observed network
 o = np.argsort(net.node_covariates['soma_pos'][:])
 A = np.asarray(net.adjacency_matrix())
-def heatmap(data, cmap = 'binary'):
-    plt.imshow(data[o][:,o]).set_cmap(cmap)
+def heatmap(data):
+    plt.imshow(data[o][:,o]).set_cmap('binary')
 def residuals(data_mean, data_sd):
     r = np.abs((data_mean - A) / data_sd)
-    plt.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('binary')
+    r[(data_sd == 0) * (data_mean == A)] = 0.0
+    r[(data_sd == 0) * (data_mean != A)] = np.inf
+    plt.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
 plt.figure()
 plt.subplot(331)
 plt.title('Observed')
