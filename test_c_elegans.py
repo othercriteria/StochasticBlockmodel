@@ -60,6 +60,7 @@ print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
+net = net.subnetwork(np.arange(30))
 net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
@@ -145,16 +146,24 @@ if params['cov_lineage']:
         return dist[(n_1, n_2)]
     add_cov_f('lineage_dist', f_lineage_dist)
 
+# Function to style plot axes
+def style(ax):
+    ax.tick_params(axis = 'both', which = 'both',
+                   bottom = 'off', top = 'off', labelbottom = 'off',
+                   left = 'off', right = 'off', labelleft = 'off')
+
 # Display observed network
 o = np.argsort(net.node_covariates['soma_pos'][:])
 A = np.asarray(net.adjacency_matrix())
 def heatmap(ax, data):
     ax.imshow(data[o][:,o]).set_cmap('binary')
+    style(ax)
 def residuals(ax, data_mean, data_sd):
     r = np.abs((data_mean - A) / data_sd)
     r[(data_sd == 0) * (data_mean == A)] = 0.0
     r[(data_sd == 0) * (data_mean != A)] = np.inf
     ax.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
+    style(ax)
 fig, ax = plt.subplots()
 ax.set_title('Observed')
 heatmap(ax, A)
@@ -246,20 +255,20 @@ c_samples_sd = np.sqrt(np.var(c_samples, axis = 0))
 
 # Finish plotting
 plt.figure()
-ax = plt.subplot(321)
-plt.title('Stationary')
+ax = plt.subplot(231)
+ax.set_title('Stationary')
 heatmap(ax, s_samples_mean)
-ax = plt.subplot(322)
+ax = plt.subplot(234)
 residuals(ax, s_samples_mean, s_samples_sd)
-ax = plt.subplot(323)
-plt.title('Nonstationary')
+ax = plt.subplot(232)
+ax.set_title('Nonstationary')
 heatmap(ax, ns_samples_mean)
-ax = plt.subplot(324)
+ax = plt.subplot(235)
 residuals(ax, ns_samples_mean, ns_samples_sd)
-ax = plt.subplot(325)
-plt.title('Conditional')
+ax = plt.subplot(233)
+ax.set_title('Conditional')
 heatmap(ax, c_samples_mean)
-ax = plt.subplot(326)
+ax = plt.subplot(236)
 residuals(ax, c_samples_mean, c_samples_sd)
 
 if params['outfile']:
