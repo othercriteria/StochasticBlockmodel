@@ -148,24 +148,25 @@ if params['cov_lineage']:
 # Display observed network
 o = np.argsort(net.node_covariates['soma_pos'][:])
 A = np.asarray(net.adjacency_matrix())
-def heatmap(data):
-    plt.imshow(data[o][:,o]).set_cmap('binary')
-def residuals(data_mean, data_sd):
+def heatmap(ax, data):
+    ax.imshow(data[o][:,o]).set_cmap('binary')
+def residuals(ax, data_mean, data_sd):
     r = np.abs((data_mean - A) / data_sd)
     r[(data_sd == 0) * (data_mean == A)] = 0.0
     r[(data_sd == 0) * (data_mean != A)] = np.inf
-    plt.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
-plt.figure()
-plt.subplot(331)
-plt.title('Observed')
-heatmap(A)
-plt.subplot(332)
-plt.title('Network')
+    ax.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
+fig, ax = plt.subplots()
+ax.set_title('Observed')
+heatmap(ax, A)
+plt.show()
+fig, ax = plt.subplots()
+ax.set_title('Network')
 graph = nx.DiGraph()
 for n1, n2 in edges:
     graph.add_edge(n1, n2)
 pos = nx.graphviz_layout(graph, prog = 'neato')
 nx.draw(graph, pos, node_size = 10, with_labels = False)
+plt.show()
 
 # Store sampled typical networks from fit models
 s_samples = np.empty((params['n_samples'], net.N, net.N))
@@ -244,21 +245,22 @@ c_samples_mean = np.mean(c_samples, axis = 0)
 c_samples_sd = np.sqrt(np.var(c_samples, axis = 0))
 
 # Finish plotting
-plt.subplot(334)
+plt.figure()
+ax = plt.subplot(321)
 plt.title('Stationary')
-heatmap(s_samples_mean)
-plt.subplot(337)
-residuals(s_samples_mean, s_samples_sd)
-plt.subplot(335)
+heatmap(ax, s_samples_mean)
+ax = plt.subplot(322)
+residuals(ax, s_samples_mean, s_samples_sd)
+ax = plt.subplot(323)
 plt.title('Nonstationary')
-heatmap(ns_samples_mean)
-plt.subplot(338)
-residuals(ns_samples_mean, ns_samples_sd)
-plt.subplot(336)
+heatmap(ax, ns_samples_mean)
+ax = plt.subplot(324)
+residuals(ax, ns_samples_mean, ns_samples_sd)
+ax = plt.subplot(325)
 plt.title('Conditional')
-heatmap(c_samples_mean)
-plt.subplot(339)
-residuals(c_samples_mean, c_samples_sd)
+heatmap(ax, c_samples_mean)
+ax = plt.subplot(326)
+residuals(ax, c_samples_mean, c_samples_sd)
 
 if params['outfile']:
     plt.savefig(params['outfile'])
