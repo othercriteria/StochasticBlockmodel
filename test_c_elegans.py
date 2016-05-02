@@ -9,7 +9,7 @@ import networkx as nx
 import xlrd
 
 from Network import network_from_edges
-from Models import Stationary, StationaryLogistic, NonstationaryLogistic
+from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_zero
 
 # Parameters
@@ -18,9 +18,9 @@ params = { 'use_gap': False,
            'cov_gap': True,
            'cov_chemical': False,
            'cov_soma_diff': False,
-           'cov_soma_dist': True,
-           'cov_lineage': True,
-           'cov_class': True,
+           'cov_soma_dist': False,
+           'cov_lineage': False,
+           'cov_class': False,
            'file_network': 'data/c_elegans_chen/NeuronConnect.xls',
            'file_neurons': 'data/c_elegans_chen/NeuronType.xls',
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
@@ -32,11 +32,11 @@ params = { 'use_gap': False,
 
 # Import network connectivity from file
 edges = []
+edges_gap = set()
+edges_chemical = set()
 nodes = set()
 wb_network = xlrd.open_workbook(params['file_network'])
 ws_network = wb_network.sheet_by_name('NeuronConnect.csv')
-edges_gap = set()
-edges_chemical = set()
 for r in range(1, ws_network.nrows):
     n_1 = ws_network.cell_value(r, 0)
     n_2 = ws_network.cell_value(r, 1)
@@ -209,10 +209,11 @@ display_cis(s_model)
 for rep in range(params['n_samples']):
     s_samples[rep,:,:] = s_model.generate(net)
 
+# Offset extreme substructure after Stationary model is fit
 net.offset_extremes()
 
 print 'Fitting nonstationary model'
-alpha_zero(net)
+#alpha_zero(net)
 ns_model = NonstationaryLogistic()
 for cov_name in cov_names:
     ns_model.beta[cov_name] = None
