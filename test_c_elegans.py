@@ -15,12 +15,12 @@ from Models import FixedMargins, alpha_zero
 # Parameters
 params = { 'use_gap': False,
            'use_chemical': True,
-           'cov_gap': False,
+           'cov_gap': True,
            'cov_chemical': False,
            'cov_soma_diff': False,
            'cov_soma_dist': True,
-           'cov_lineage': False,
-           'cov_class': False,
+           'cov_lineage': True,
+           'cov_class': True,
            'file_network': 'data/c_elegans_chen/NeuronConnect.xls',
            'file_neurons': 'data/c_elegans_chen/NeuronType.xls',
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
@@ -60,7 +60,6 @@ print '# Nodes: %d' % len(nodes)
 
 # Initialize network from connectivity data
 net = network_from_edges(edges)
-net = net.subnetwork(np.arange(30))
 net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
