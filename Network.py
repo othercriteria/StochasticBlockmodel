@@ -55,9 +55,6 @@ class Network(Array):
     def nodes(self):
         return self.names
 
-    def adjacency_matrix(self):
-        return self.as_dense()
-
     def edges(self):
         if self.is_sparse():
             nz_i, nz_j = self.array.nonzero()
@@ -121,7 +118,7 @@ class Network(Array):
         f, (ax_im, ax_ord) = plt.subplots(2, sharex = True)
         f.set_figwidth(3)
         f.set_figheight(6)
-        A = self.adjacency_matrix()
+        A = self.as_dense()
         ax_im.imshow(A[o][:,o]).set_cmap('binary')
         ax_im.set_ylim(0, self.N - 1)
         ax_im.set_xticks([])
@@ -240,12 +237,12 @@ if __name__ == '__main__':
     print net.edge_covariates['self_edge']
     print net.edge_covariates['ec_2']
     
-    print net.adjacency_matrix()
+    print net.as_dense()
     print net.nodes()
     net.show()
 
     net_2 = net.subnetwork(np.array([5,0,1,6]))
-    print net_2.adjacency_matrix()
+    print net_2.as_dense()
     print net_2.node_covariates['x_0']
     print net_2.node_covariates['x_1']
     print net_2.edge_covariates['self_edge']

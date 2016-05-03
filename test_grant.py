@@ -77,7 +77,7 @@ net.initialize_offset().from_binary_function_name(f_impossible_pub_order)
 
 # Display observed network
 o = np.argsort(net.node_covariates['pub_date'][:])
-A = np.asarray(net.adjacency_matrix())
+A = net.as_dense()
 def heatmap(data, cmap = 'binary'):
     plt.imshow(data[o][:,o]).set_cmap(cmap)
 def residuals(data_mean, data_sd):
@@ -126,26 +126,24 @@ for cov_name in cov_names:
 print
 
 print 'Fitting conditional model'
-c_model = StationaryLogistic()
+c_model = FixedMargins(StationaryLogistic())
 for cov_name in cov_names:
-    c_model.beta[cov_name] = None
-c_model.fit_conditional(net, T = 0, verbose = True)
+    c_model.base_model.beta[cov_name] = None
+c_model.base_model.fit_conditional(net, verbose = True)
 print 'NLL: %.2f' % c_model.nll(net)
-print 'kappa: %.2f' % c_model.kappa
 for cov_name in cov_names:
-    print '%s: %.2f' % (cov_name, c_model.beta[cov_name])
+    print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])
 print
 
 # Sample typical networks from fit models
-n_samples = 100
-s_samples = np.empty((n_samples, net.N, net.N))
-ns_samples = np.empty((n_samples, net.N, net.N))
-c_samples = np.empty((n_samples, net.N, net.N))
-r, c = A.sum(1), A.sum(0)
-for rep in range(n_samples):
+reps = 100
+s_samples = np.empty((reps, net.N, net.N))
+ns_samples = np.empty((reps, net.N, net.N))
+c_samples = np.empty((reps, net.N, net.N))
+for rep in range(reps):
     s_samples[rep,:,:] = s_model.generate(net)
     ns_samples[rep,:,:] = ns_model.generate(net)
-    c_samples[rep,:,:] = FixedMargins(c_model).generate(net)
+    c_samples[rep,:,:] = c_model.generate(net, coverage = 0.2)
 
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)

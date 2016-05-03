@@ -63,7 +63,7 @@ net = network_from_edges(edges)
 net.initialize_offset()
 for i in range(net.N):
     net.offset[i,i] = -np.inf
-A = net.adjacency_matrix()
+A = net.as_dense()
 r = A.sum(1)
 c = A.sum(0)
 print '# Edges: %d' % A.sum()
@@ -153,7 +153,7 @@ def style(ax):
 
 # Display observed network
 o = np.argsort(net.node_covariates['soma_pos'][:])
-A = np.asarray(net.adjacency_matrix())
+A = net.as_dense()
 def heatmap(ax, data):
     ax.imshow(data[o][:,o]).set_cmap('binary')
     style(ax)
@@ -233,7 +233,7 @@ c_model = FixedMargins(StationaryLogistic())
 c_model.fit = c_model.base_model.fit_conditional
 for cov_name in cov_names:
     c_model.base_model.beta[cov_name] = None
-c_model.fit(net, verbose = False)
+c_model.fit(net, verbose = True)
 print 'NLL: %.2f' % c_model.nll(net)
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])

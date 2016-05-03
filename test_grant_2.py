@@ -49,7 +49,7 @@ plt.figure(figsize = (17, 4.25))
 plt.subplot(141)
 plt.title('Network')
 graph = nx.DiGraph()
-A = net.adjacency_matrix()
+A = net.as_dense()
 for i in range(N):
     graph.add_node(i)
 for i in range(N):
@@ -111,13 +111,13 @@ plt.title('Conditional')
 def f_nll(n, m):
     P = m.edge_probabilities(n)
     w = P / (1.0 - P)
-    A = np.array(n.adjacency_matrix())
+    A = n.as_dense()
     return approximate_conditional_nll(A, w)
 grid_fit(StationaryLogistic(), f_nll)
 
 for c in covariates:
     plt.figure()
-    plt.scatter(net.edge_covariates[c].matrix(), net.adjacency_matrix())
+    plt.scatter(net.edge_covariates[c].matrix(), net.as_dense())
     plt.show()
 
 #plt.savefig('../grant/figs/simulated_data_no_wopt_sort_10.eps')

@@ -84,7 +84,7 @@ class Array:
         
     def as_dense(self):
         if self.is_sparse():
-            return self.array.todense()
+            return np.asarray(self.array.todense())
         else:
             return self.array
 
@@ -94,7 +94,7 @@ class Array:
 
         # (Separately) sort rows and columns of adjacency matrix by
         # increasing sum
-        A = np.asarray(self.as_dense())
+        A = self.as_dense()
         r_ord = np.argsort(A.sum(1))
         c_ord = np.argsort(A.sum(0))
         A = A[r_ord][:,c_ord]

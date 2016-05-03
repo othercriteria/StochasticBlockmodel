@@ -67,7 +67,7 @@ class IndependentBernoulli:
     def nll(self, network, submatrix = None, ignore_offset = False):
         log_Q = self.edge_probabilities(network, submatrix, ignore_offset,
                                         logit = True)
-        A = np.asarray(network.as_dense())
+        A = network.as_dense()
         if submatrix:
             i_sub, j_sub = submatrix
             A = A[i_sub][:,j_sub]
@@ -476,7 +476,7 @@ class StationaryLogistic(Stationary):
 
         # Calculate observed sufficient statistics
         T = np.empty(B + 1)
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         for b, b_n in enumerate(self.beta):
             T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
         T[B] = np.sum(A, dtype=np.int)
@@ -556,7 +556,7 @@ class StationaryLogistic(Stationary):
 
         start_time = time()
 
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         r, c = A.sum(1, dtype=np.int), A.sum(0, dtype=np.int)
 
         def obj(theta):
@@ -669,7 +669,7 @@ class StationaryLogistic(Stationary):
         B = len(self.beta)
         M = network.M
         N = network.N
-        A = np.array(network.as_dense())
+        A = network.as_dense()
 
         self.fit_info['cnll_evals'] = 0
         
@@ -751,7 +751,7 @@ class StationaryLogistic(Stationary):
                      alpha_level = 0.05, verbose = False):
         M = network.M
         N = network.N
-        A = np.array(network.as_dense())
+        A = network.as_dense()
 
         # Construct (flattened) R data frame with data
         y_vec = robjects.FloatVector(A.flatten())
@@ -816,7 +816,7 @@ class StationaryLogistic(Stationary):
 
         # Pre-compute column statistics
         T_c = {}
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         c = np.sum(A, axis = 0, dtype=np.int)
         for b, b_n in enumerate(self.beta):
             T_b = A * network.edge_covariates[b_n].matrix()
@@ -926,7 +926,7 @@ class StationaryLogistic(Stationary):
 
         start_time = time()
 
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         r, c = A.sum(1), A.sum(0)
 
         # Initialize theta
@@ -1143,7 +1143,7 @@ class StationaryLogistic(Stationary):
                             L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
         M = network.M
         N = network.N
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         x = network.edge_covariates[b].matrix()
 
         theta_grid = np.linspace(beta_l_min, beta_l_max, L)
@@ -1272,7 +1272,7 @@ class NonstationaryLogistic(StationaryLogistic):
 
         # Calculate observed sufficient statistics
         T = np.empty(B + 1 + (M-1) + (N-1))
-        A = np.array(network.as_dense())
+        A = network.as_dense()
         r = np.sum(A, axis = 1, dtype=np.int)[0:(M-1)]
         c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
         A_sum = np.sum(A, dtype=np.int)
@@ -1651,7 +1651,7 @@ class Blockmodel(IndependentBernoulli):
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
-        A = np.array(network.as_dense())
+        A = network.as_dense()
 
         self.sem_trace = []
 
@@ -1723,7 +1723,7 @@ class Blockmodel(IndependentBernoulli):
         K, Theta = self.K, self.Theta
         N = network.N
         z = network.node_covariates[self.block_name]
-        A = np.array(network.as_dense())
+        A = network.as_dense()
 
         z_to_nll_cache = {}
         cov_name_to_inds = {}
@@ -1798,7 +1798,7 @@ class FixedMargins(IndependentBernoulli):
         self.conf = tree()
 
     def check_separated(self, network, samples = 100, beta_scale = 8.0):
-        A = np.array(network.as_dense())
+        A = network.as_dense()
 
         beta = self.base_model.beta
         B = len(beta)
@@ -1845,7 +1845,10 @@ class FixedMargins(IndependentBernoulli):
         return self.base_model.generate_margins(network, r, c, **opts)
 
     def nll(self, network, **opts):
-        return self.base_model.nll(network, **opts)
+        A = network.as_dense()
+        w = np.exp(self.edge_probabilities(network, logit = True, **opts))
+
+        return acnll(A, w)
 
     def edge_probabilities(self, network, **opts):
         return self.base_model.edge_probabilities(network, **opts)

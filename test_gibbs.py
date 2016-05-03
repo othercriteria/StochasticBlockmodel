@@ -95,7 +95,7 @@ for rep in range(params['num_reps']):
     nll_trace = [data_model.nll(net)]
 
     for coverage_inc in params['coverage_increments']:
-        data_model.gibbs_improve_perm(net, net.adjacency_matrix(), coverage_inc)
+        data_model.gibbs_improve_perm(net, net.as_dense(), coverage_inc)
 
         wall_time_trace.append(net.gen_info['wall_time'])
         nll_trace.append(data_model.nll(net))
