@@ -37,10 +37,10 @@ edges_chemical = set()
 nodes = set()
 wb_network = xlrd.open_workbook(params['file_network'])
 ws_network = wb_network.sheet_by_name('NeuronConnect.csv')
-for r in range(1, ws_network.nrows):
-    n_1 = ws_network.cell_value(r, 0)
-    n_2 = ws_network.cell_value(r, 1)
-    t = ws_network.cell_value(r, 2)[0]
+for row in range(1, ws_network.nrows):
+    n_1 = ws_network.cell_value(row, 0)
+    n_2 = ws_network.cell_value(row, 1)
+    t = ws_network.cell_value(row, 2)[0]
     if n_1 == 'NMJ' or n_2 == 'NMJ': continue
     if t == 'E':
         edges_gap.add((n_1, n_2))
@@ -86,9 +86,9 @@ if params['cov_chemical']:
 soma_pos = {}
 wb_neurons = xlrd.open_workbook(params['file_neurons'])
 ws_neurons = wb_neurons.sheet_by_name('NeuronType.csv')
-for r in range(1, ws_neurons.nrows):
-    n = ws_neurons.cell_value(r, 0)
-    pos = ws_neurons.cell_value(r, 1)
+for row in range(1, ws_neurons.nrows):
+    n = ws_neurons.cell_value(row, 0)
+    pos = ws_neurons.cell_value(row, 1)
     soma_pos[n] = pos
 cov = net.new_node_covariate('soma_pos')
 cov.from_pairs(soma_pos.keys(), soma_pos.values())
@@ -105,9 +105,9 @@ if params['cov_soma_dist']:
 neuron_class = {}
 wb_landmarks = xlrd.open_workbook(params['file_landmarks'])
 ws_landmarks = wb_landmarks.sheet_by_name('NeuronFixedPoints.csv')
-for r in range(1, ws_landmarks.nrows):
-    n = ws_landmarks.cell_value(r, 0)
-    t = ws_landmarks.cell_value(r, 1)[0]
+for row in range(1, ws_landmarks.nrows):
+    n = ws_landmarks.cell_value(row, 0)
+    t = ws_landmarks.cell_value(row, 1)[0]
     neuron_class[n] = t
 for n in net.names:
     if not n in neuron_class:
@@ -125,18 +125,18 @@ if params['cov_class']:
 dist = {}
 wb_lineage_1 = xlrd.open_workbook(params['file_lineage_1'])
 ws_lineage_1 = wb_lineage_1.sheet_by_name('NeuronLineage_Part1.csv')
-for r in range(1, ws_lineage_1.nrows):
-    n_1 = ws_lineage_1.cell_value(r, 0)
-    n_2 = ws_lineage_1.cell_value(r, 1)
-    d = ws_lineage_1.cell_value(r, 2)
+for row in range(1, ws_lineage_1.nrows):
+    n_1 = ws_lineage_1.cell_value(row, 0)
+    n_2 = ws_lineage_1.cell_value(row, 1)
+    d = ws_lineage_1.cell_value(row, 2)
     dist[(n_1,n_2)] = d
     dist[(n_2,n_1)] = d
 wb_lineage_2 = xlrd.open_workbook(params['file_lineage_2'])
 ws_lineage_2 = wb_lineage_2.sheet_by_name('NeuronLineage_Part2.csv')
-for r in range(1, ws_lineage_1.nrows):
-    n_1 = ws_lineage_2.cell_value(r, 0)
-    n_2 = ws_lineage_2.cell_value(r, 1)
-    d = ws_lineage_2.cell_value(r, 2)
+for row in range(1, ws_lineage_1.nrows):
+    n_1 = ws_lineage_2.cell_value(row, 0)
+    n_2 = ws_lineage_2.cell_value(row, 1)
+    d = ws_lineage_2.cell_value(row, 2)
     dist[(n_1,n_2)] = d
     dist[(n_2,n_1)] = d
 if params['cov_lineage']:
@@ -158,10 +158,10 @@ def heatmap(ax, data):
     ax.imshow(data[o][:,o]).set_cmap('binary')
     style(ax)
 def residuals(ax, data_mean, data_sd):
-    r = np.abs((data_mean - A) / data_sd)
-    r[(data_sd == 0) * (data_mean == A)] = 0.0
-    r[(data_sd == 0) * (data_mean != A)] = np.inf
-    ax.imshow(r[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
+    resid = np.abs((data_mean - A) / data_sd)
+    resid[(data_sd == 0) * (data_mean == A)] = 0.0
+    resid[(data_sd == 0) * (data_mean != A)] = np.inf
+    ax.imshow(resid[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
     style(ax)
 fig, ax = plt.subplots()
 ax.set_title('Observed')
@@ -204,10 +204,10 @@ print 'kappa: %.2f' % s_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, s_model.beta[cov_name])
 print
-s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-display_cis(s_model)
 for rep in range(params['n_samples']):
     s_samples[rep,:,:] = s_model.generate(net)
+s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+display_cis(s_model)
 
 # Offset extreme substructure after Stationary model is fit
 net.offset_extremes()
@@ -223,27 +223,29 @@ print 'kappa: %.2f' % ns_model.kappa
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, ns_model.beta[cov_name])
 print
-ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
-display_cis(ns_model)
 for rep in range(params['n_samples']):
     ns_samples[rep,:,:] = ns_model.generate(net)
+ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+display_cis(ns_model)
 
 print 'Fitting conditional model'
 c_model = FixedMargins(StationaryLogistic())
+net.new_row_covariate('r', np.int)[:] = r
+net.new_col_covariate('c', np.int)[:] = c
 c_model.fit = c_model.base_model.fit_conditional
 for cov_name in cov_names:
     c_model.base_model.beta[cov_name] = None
-c_model.fit(net, verbose = True)
+c_model.fit(net)
 print 'NLL: %.2f' % c_model.nll(net)
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])
 print
+for rep in range(params['n_samples']):
+    c_samples[rep,:,:] = c_model.generate(net, coverage = 0.1)
 c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
 for cov_name in cov_names:
     c_model.confidence_harrison(net, cov_name)
 display_cis(c_model)
-for rep in range(params['n_samples']):
-    c_samples[rep,:,:] = c_model.generate(net, coverage = 0.1)
 
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)

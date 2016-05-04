@@ -30,12 +30,12 @@ class Array:
     def __setitem__(self, index, x):
         self.array.__setitem__(index, x)
 
-    def new_row_covariate(self, name):
-        self.row_covariates[name] = NodeCovariate(self.rnames)
+    def new_row_covariate(self, name, dtype = np.float64):
+        self.row_covariates[name] = NodeCovariate(self.rnames, dtype)
         return self.row_covariates[name]
 
-    def new_col_covariate(self, name):
-        self.col_covariates[name] = NodeCovariate(self.cnames)
+    def new_col_covariate(self, name, dtype = np.float64):
+        self.col_covariates[name] = NodeCovariate(self.cnames, dtype)
         return self.col_covariates[name]
 
     def new_edge_covariate(self, name):
