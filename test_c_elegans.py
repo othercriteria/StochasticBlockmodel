@@ -19,6 +19,7 @@ params = { 'use_gap': False,
            'cov_chemical': False,
            'cov_soma_diff': False,
            'cov_soma_dist': False,
+           'cov_soma_dir': False,
            'cov_lineage': False,
            'cov_class': False,
            'file_network': 'data/c_elegans_chen/NeuronConnect.xls',
@@ -100,6 +101,10 @@ if params['cov_soma_dist']:
     def f_soma_pos_dist(n_1, n_2):
         return abs(soma_pos[n_1] - soma_pos[n_2])
     add_cov_f('soma_dist', f_soma_pos_dist)
+if params['cov_soma_dir']:
+    def f_soma_pos_dir(n_1, n_2):
+        return soma_pos[n_2] > soma_pos[n_1]
+    add_cov_f('soma_dir', f_soma_pos_dir)
 
 # Import landmark type (hence sensory, motor, inter-) from file
 neuron_class = {}
@@ -145,35 +150,35 @@ if params['cov_lineage']:
         return dist[(n_1, n_2)]
     add_cov_f('lineage_dist', f_lineage_dist)
 
-# Function to style plot axes
+# Functions for plotting
 def style(ax):
     ax.tick_params(axis = 'both', which = 'both',
                    bottom = 'off', top = 'off', labelbottom = 'off',
                    left = 'off', right = 'off', labelleft = 'off')
-
-# Display observed network
-o = np.argsort(net.node_covariates['soma_pos'][:])
-A = net.as_dense()
 def heatmap(ax, data):
     ax.imshow(data[o][:,o]).set_cmap('binary')
     style(ax)
 def residuals(ax, data_mean, data_sd):
     resid = np.abs((data_mean - A) / data_sd)
     resid[(data_sd == 0) * (data_mean == A)] = 0.0
-    resid[(data_sd == 0) * (data_mean != A)] = np.inf
+    resid[(data_sd == 0) * (data_mean != A)] = 10.0
     ax.imshow(resid[o][:,o], vmin = 0, vmax = 3.0).set_cmap('gray')
     style(ax)
+
+# Display observed network
+o = np.argsort(net.node_covariates['soma_pos'][:])
+A = net.as_dense()
 fig, ax = plt.subplots()
-ax.set_title('Observed')
+ax.set_title('Observed connectome')
 heatmap(ax, A)
 plt.show()
 fig, ax = plt.subplots()
-ax.set_title('Network')
+ax.set_title('Observed connectome network')
 graph = nx.DiGraph()
 for n1, n2 in edges:
     graph.add_edge(n1, n2)
-pos = nx.graphviz_layout(graph, prog = 'neato')
-nx.draw(graph, pos, node_size = 10, with_labels = False)
+pos = nx.graphviz_layout(graph, prog = 'fdp')
+nx.draw(graph, pos, ax = ax, node_size = 50, with_labels = False)
 plt.show()
 
 # Store sampled typical networks from fit models
@@ -213,7 +218,6 @@ display_cis(s_model)
 net.offset_extremes()
 
 print 'Fitting nonstationary model'
-#alpha_zero(net)
 ns_model = NonstationaryLogistic()
 for cov_name in cov_names:
     ns_model.beta[cov_name] = None
@@ -272,6 +276,7 @@ ax.set_title('Conditional')
 heatmap(ax, c_samples_mean)
 ax = plt.subplot(236)
 residuals(ax, c_samples_mean, c_samples_sd)
+plt.tight_layout()
 
 if params['outfile']:
     plt.savefig(params['outfile'])
