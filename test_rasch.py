@@ -6,6 +6,7 @@ from time import time
 
 import numpy as np
 from scipy.stats import chi2
+import matplotlib.pyplot as plt
 
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
@@ -23,7 +24,7 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10],
+           'n_MC_levels': [10, 50, 100, 500],
            'wopt_sort': True,
            'is_T': 50,
            'n_rep': 100,
@@ -118,14 +119,23 @@ def timing(func):
 
     return inner
 
-def plot_statistics(theta_grid, test_val, crit):
-    import matplotlib.pyplot as plt
+def plot_statistics(ax, theta_grid, test_val, crit):
+    # Compute confidence interval from test statistics
+    ci_l, ci_u = invert_test(theta_grid, test_val, crit)
+    ci_l = max(ci_l, params['theta_l'])
+    ci_u = min(ci_u, params['theta_u'])
 
-    fig, ax = plt.subplots()
-    ax.plot(theta_grid, test_val)
-    ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyles = 'dotted')
+    ax.plot(theta_grid, test_val, color = 'b')
+    ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyle = 'dotted')
+    ax.hlines(crit, ci_l, ci_u, color = 'r')
+    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 8, alpha = 0.2)
+    ax.vlines(ci_l, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
+    ax.vlines(ci_u, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.set_ylim(2.0 * crit, 0)
-    plt.show()
+
+# Set up plots
+fig_cmle_a, ax_cmle_a = plt.subplots()
+fig_cmle_is, ax_cmle_is = plt.subplots()
 
 @timing
 def ci_cmle_a(X, v, theta_grid, alpha_level):
@@ -136,7 +146,7 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
         logit_P_l = theta_l * v
         cmle_a[l] = -cond_a_nll(X, np.exp(logit_P_l))
 
-    plot_statistics(theta_grid, cmle_a - cmle_a.max(), crit)
+    plot_statistics(ax_cmle_a, theta_grid, cmle_a - cmle_a.max(), crit)
     return invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
 
 @timing
@@ -164,7 +174,7 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
         cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
 
-    plot_statistics(theta_grid, cmle_is - cmle_is.max(), crit)
+    plot_statistics(ax_cmle_is, theta_grid, cmle_is - cmle_is.max(), crit)
     return invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
 
 @timing
@@ -256,6 +266,11 @@ def do_experiment(params):
     return results
 
 results = do_experiment(params)
+
+ax_cmle_a.set_title('CMLE-A confidence intervals')
+ax_cmle_is.set_title('CMLE-IS confidence intervals')
+plt.show()
+
 R = results.pop('completed_trials')
 print '\nCompleted trials: %d\n\n' % R
 
