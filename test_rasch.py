@@ -128,7 +128,8 @@ def plot_statistics(ax, theta_grid, test_val, crit):
     ax.plot(theta_grid, test_val, color = 'b')
     ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyle = 'dotted')
     ax.hlines(crit, ci_l, ci_u, color = 'r')
-    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 8,
+    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'w', linewidth = 8, zorder = 99)
+    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 8, zorder = 100,
               alpha = 1.0 / ((1 - params['alpha_level']) * params['n_rep']))
     ax.vlines(ci_l, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.vlines(ci_u, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
