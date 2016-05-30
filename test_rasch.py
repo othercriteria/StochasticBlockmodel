@@ -15,19 +15,19 @@ from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
 
 # Parameters
-params = { 'fixed_example': 'data/rasch_covariates.json',
-           'M': 20,
-           'N': 10,
+params = { 'fixed_example': None,#'data/rasch_covariates.json',
+           'M': 10,
+           'N': 5,
            'theta': 2.0,
            'kappa': -1.628,
            'alpha_min': -0.4,
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100, 500],
+           'n_MC_levels': [],#[10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 100,
+           'n_rep': 3,
            'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
@@ -128,8 +128,9 @@ def plot_statistics(ax, theta_grid, test_val, crit):
     ax.plot(theta_grid, test_val, color = 'b')
     ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyle = 'dotted')
     ax.hlines(crit, ci_l, ci_u, color = 'r')
-    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'w', linewidth = 8, zorder = 99)
-    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 8, zorder = 100,
+    ax.hlines(2.0 * crit, theta_grid[0], theta_grid[-1],
+              color = 'w', linewidth = 9, zorder = 99)
+    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 9, zorder = 100,
               alpha = 1.0 / ((1 - params['alpha_level']) * params['n_rep']))
     ax.vlines(ci_l, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.vlines(ci_u, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
