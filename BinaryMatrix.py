@@ -4,6 +4,7 @@
 # Daniel Klein, 5/11/2012
 
 from __future__ import division
+from time import time
 import numpy as np
 from scipy import optimize as opt
 
@@ -491,6 +492,10 @@ B_sample can be recovered from B_sample_sparse via:
         if i == -1: break 
         B_sample[i,j] = 1
 """
+    start_time = time()
+    global c_total_time
+    c_total_time = 0.0
+
     r_prune, c_prune, arrays_prune, unprune = _prune(r, c, w)
     w_prune = arrays_prune[0]
 
@@ -542,17 +547,26 @@ B_sample can be recovered from B_sample_sparse via:
     count_init = np.sum(rsort)
 
     def do_sample():
+        global c_total_time
+        c_start_time = time()
         sample_prune = _compute_sample(logw,
                                        count_init, m_init, n_init,
                                        r_init, rndx_init, irndx_init,
                                        csort, cndx, cconj_init,
                                        G)
+        c_total_time += (time() - c_start_time)
         return unprune(sample_prune)
     
     if T:
-        return [do_sample() for t in xrange(T)]
+        out = [do_sample() for t in xrange(T)]
+        total_time = (time() - start_time)
+        print c_total_time, total_time
+        return out
     else:
-        return do_sample()[0]
+        out = do_sample()[0]
+        total_time = (time() - start_time)
+        print c_total_time, total_time
+        return out
     
 def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     """Return approximate row/column-conditional NLL of binary matrix.
@@ -567,6 +581,10 @@ Inputs:
 Output:
   ncll: negative conditional log-likelihood
 """
+    start_time = time()
+    global c_total_time
+    c_total_time = 0.0
+
     assert(A.shape == w.shape)
     M, N = A.shape
 
@@ -599,10 +617,18 @@ Output:
     csort = c[cndx];
     wopt = wopt[:,cndx]
 
+    c_start_time = time()
+
     # Compute G
     G = _compute_G(r, m, n, wopt)
 
-    return _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
+    out = _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
+
+    c_total_time = (time() - c_start_time)
+    total_time = (time() - start_time)
+    print c_total_time, total_time
+
+    return out
     
 
 def _compute_G(r, m, n, wopt):
