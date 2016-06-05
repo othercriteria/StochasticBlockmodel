@@ -4,7 +4,6 @@
 # Daniel Klein, 5/11/2012
 
 from __future__ import division
-from time import time
 import numpy as np
 from scipy import optimize as opt
 
@@ -308,14 +307,12 @@ then undoing the sorting after the target matrix is generated."""
 
 _dict_canonical_scalings = {}
 def canonical_scalings(w, r, c):
-    """Find row and column scalings to balance a matrix.
+    """From weights and margins, find scalings to balance a matrix.
 
 TODO: describe "rc" method.
     """
     w_hash = digest(w)
-    r_hash = digest(r.flatten())
-    c_hash = digest(c.flatten())
-    hash = (w_hash, r_hash, c_hash)
+    hash = (w_hash, tuple(r), tuple(c))
     if hash in _dict_canonical_scalings:
         return _dict_canonical_scalings[hash]
 
@@ -355,12 +352,17 @@ TODO: describe "rc" method.
     _dict_canonical_scalings[hash] = (a, b)
     return a, b
 
+_dict_conjugate = {}
 def conjugate(c, n):
     """Return the conjugate of degree sequence *c* of size *n*.
       
 Suppose c is a sequence of nonnegative integers. Returns c_conj where:
   c_conj(k) := sum(c > k),    k = 0, ..., (n-1)
 """
+    hash = (tuple(c), n)
+    if hash in _dict_conjugate:
+        return _dict_conjugate[hash].copy()
+
     cc = np.zeros(n, dtype = np.int);
 
     if n > 0:
@@ -375,6 +377,7 @@ Suppose c is a sequence of nonnegative integers. Returns c_conj where:
             s += cc[j]
             cc[j] = s
 
+    _dict_conjugate[hash] = cc
     return cc
 
 # Eliminate extreme rows and columns recursively until all remaining
@@ -396,7 +399,7 @@ def _prune(r, c, *arrays):
         r_0 = (r == 0)
         if np.any(r_0):
             r = r[-r_0]
-            for a in range(A):
+            for a in xrange(A):
                 arrays[a] = arrays[a][-r_0]
             r_unprune = r_unprune[-r_0]
             continue
@@ -408,7 +411,7 @@ def _prune(r, c, *arrays):
                                  for r_u in r_unprune[r_n]
                                  for c_u in c_unprune])
             c -= np.sum(r_n)
-            for a in range(A):
+            for a in xrange(A):
                 arrays[a] = arrays[a][-r_n]
             r_unprune = r_unprune[-r_n]
             continue
@@ -416,7 +419,7 @@ def _prune(r, c, *arrays):
         c_0 = (c == 0)
         if np.any(c_0):
             c = c[-c_0]
-            for a in range(A):
+            for a in xrange(A):
                 arrays[a] = arrays[a][:,-c_0]
             c_unprune = c_unprune[-c_0]
             continue
@@ -428,7 +431,7 @@ def _prune(r, c, *arrays):
                                  for r_u in r_unprune
                                  for c_u in c_unprune[c_m]])
             r -= np.sum(c_m)
-            for a in range(A):
+            for a in xrange(A):
                 arrays[a] = arrays[a][:,-c_m]
             c_unprune = c_unprune[-c_m]
             continue
@@ -492,10 +495,6 @@ B_sample can be recovered from B_sample_sparse via:
         if i == -1: break 
         B_sample[i,j] = 1
 """
-    start_time = time()
-    global c_total_time
-    c_total_time = 0.0
-
     r_prune, c_prune, arrays_prune, unprune = _prune(r, c, w)
     w_prune = arrays_prune[0]
 
@@ -547,26 +546,17 @@ B_sample can be recovered from B_sample_sparse via:
     count_init = np.sum(rsort)
 
     def do_sample():
-        global c_total_time
-        c_start_time = time()
         sample_prune = _compute_sample(logw,
                                        count_init, m_init, n_init,
                                        r_init, rndx_init, irndx_init,
                                        csort, cndx, cconj_init,
                                        G)
-        c_total_time += (time() - c_start_time)
         return unprune(sample_prune)
     
     if T:
-        out = [do_sample() for t in xrange(T)]
-        total_time = (time() - start_time)
-        print c_total_time, total_time
-        return out
+        return [do_sample() for t in xrange(T)]
     else:
-        out = do_sample()[0]
-        total_time = (time() - start_time)
-        print c_total_time, total_time
-        return out
+        return do_sample()[0]
     
 def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     """Return approximate row/column-conditional NLL of binary matrix.
@@ -581,10 +571,6 @@ Inputs:
 Output:
   ncll: negative conditional log-likelihood
 """
-    start_time = time()
-    global c_total_time
-    c_total_time = 0.0
-
     assert(A.shape == w.shape)
     M, N = A.shape
 
@@ -617,18 +603,10 @@ Output:
     csort = c[cndx];
     wopt = wopt[:,cndx]
 
-    c_start_time = time()
-
     # Compute G
     G = _compute_G(r, m, n, wopt)
 
-    out = _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
-
-    c_total_time = (time() - c_start_time)
-    total_time = (time() - start_time)
-    print c_total_time, total_time
-
-    return out
+    return _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
     
 
 def _compute_G(r, m, n, wopt):
