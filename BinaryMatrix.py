@@ -363,7 +363,7 @@ Suppose c is a sequence of nonnegative integers. Returns c_conj where:
     if hash in _dict_conjugate:
         return _dict_conjugate[hash].copy()
 
-    cc = np.zeros(n, dtype = np.int);
+    cc = np.zeros(n, dtype = np.int)
 
     if n > 0:
         for j, k in enumerate(c):
@@ -526,7 +526,7 @@ B_sample can be recovered from B_sample_sparse via:
         cndx = np.lexsort((-wopt.var(0), c_prune))
     else:
         cndx = np.argsort(c_prune)
-    csort = c_prune[cndx];
+    csort = c_prune[cndx]
     wopt = wopt[:,cndx]
 
     # Precompute log weights
@@ -600,7 +600,7 @@ Output:
         cndx = np.lexsort((-wopt.var(0), c))
     else:
         cndx = np.argsort(c)
-    csort = c[cndx];
+    csort = c[cndx]
     wopt = wopt[:,cndx]
 
     # Compute G
@@ -613,7 +613,8 @@ def _compute_G(r, m, n, wopt):
     logwopt = np.log(wopt)
     r_max = max(1, np.max(r))
 
-    G = np.tile(-np.inf, (r_max+1, m, n-1))
+    G = np.empty((r_max+1, m, n-1))
+    G[:] = -np.inf
     G[0,:,:] = 0.0
     G[1,:,n-2] = logwopt[:,n-1]
     if c_support_loaded:
@@ -1097,7 +1098,7 @@ if __name__ == '__main__':
     print conjugate([1,1,1,1,2,8], 10)
 
     # Test of approximate margins-conditional sampling
-    N = 50;
+    N = 50
     a_out = np.random.normal(0, 1, N)
     a_in = np.random.normal(0, 1, N)
     x = np.random.normal(0, 1, (N,N))
