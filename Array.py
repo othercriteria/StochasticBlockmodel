@@ -146,3 +146,14 @@ class Array:
 
             to_screen.append((r_act[i_split:], c_act[:j_split]))
             to_screen.append((r_act[:i_split], c_act[j_split:]))
+
+def array_from_data(z, xs = []):
+    """Populate an Array with data z and covariates xs."""
+    M, N = z.shape
+    arr = Array(M, N)
+    arr.array[:] = z
+
+    for i, x in enumerate(xs):
+        arr.new_edge_covariate('x_%d' % i)[:] = x
+
+    return arr

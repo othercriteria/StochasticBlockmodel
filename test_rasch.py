@@ -8,12 +8,15 @@ import numpy as np
 from scipy.stats import chi2
 import matplotlib.pyplot as plt
 
+from Array import array_from_data
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from BinaryMatrix import clear_cache
 from Confidence import invert_test, ci_conservative_generic
-from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
+from Models import NonstationaryLogistic, alpha_zero
+from Utility import logsumexp, logabsdiffexp
+
 
 # Parameters
 params = { 'fixed_example': 'data/rasch_covariates.json',
@@ -152,6 +155,18 @@ fig_cmle_a, ax_cmle_a = plt.subplots()
 fig_cmle_is, ax_cmle_is = plt.subplots()
 
 @timing
+def ci_umle(X, v, alpha_level):
+    arr = array_from_data(X, [v])
+    arr.offset_extremes()
+    alpha_zero(arr)
+
+    fit_model = NonstationaryLogistic()
+    fit_model.beta['x_0'] = None
+    fit_model.confidence(arr, alpha = alpha_level)
+
+    return fit_model.conf['x_0']['pivotal']
+
+@timing
 @fresh_cache
 def ci_cmle_a(X, v, theta_grid, alpha_level):
     crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
@@ -235,7 +250,8 @@ def do_experiment(params):
     
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
-    for method, display in [('cmle_a', 'CMLE-A'),
+    for method, display in [('umle', 'UMLE'),
+                            ('cmle_a', 'CMLE-A'),
                             ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
                            [('cons_%d' % s, 'Conservative (n = %d)' % n_MC)
                             for s, n_MC in enumerate(params['n_MC_levels'])]:
@@ -243,7 +259,7 @@ def do_experiment(params):
                             'in_interval': [],
                             'length': [],
                             'total_time': 0.0 }
-    def do_and_record(out, name):
+    def do(out, name):
         ci, elapsed = out
         ci_l, ci_u = ci
 
@@ -263,16 +279,15 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
-        do_and_record(ci_cmle_a(X, v, theta_grid, alpha),
-                      'cmle_a')
+        do(ci_umle(X, v, alpha), 'umle')
 
-        do_and_record(ci_cmle_is(X, v, theta_grid, alpha, T, verbose),
-                      'cmle_is')
+        do(ci_cmle_a(X, v, theta_grid, alpha), 'cmle_a')
+
+        do(ci_cmle_is(X, v, theta_grid, alpha, T, verbose), 'cmle_is')
 
         for s, n_MC in enumerate(params['n_MC_levels']):
-            do_and_record(ci_conservative(X, v, n_MC, theta_grid, alpha,
-                                          verbose),
-                          'cons_%d' % s)
+            do(ci_conservative(X, v, n_MC, theta_grid, alpha, verbose),
+               'cons_%d' % s)
 
         results['completed_trials'] += 1
 
