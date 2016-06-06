@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 from BinaryMatrix import approximate_conditional_nll as cond_a_nll_b
 from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
+from BinaryMatrix import clear_cache
 from Confidence import invert_test, ci_conservative_generic
 from Utility import logsumexp, logabsdiffexp
 from Experiment import Seed
@@ -33,7 +34,8 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'theta_u': 6.0,
            'do_prune': False,
            'random_seed': 137,
-           'verbose': True }
+           'verbose': True,
+           'clear_cache': False }
 
 terminated = False
 def sigint_handler(signum, frame):
@@ -119,6 +121,14 @@ def timing(func):
 
     return inner
 
+def fresh_cache(func):
+    def inner(*args, **kwargs):
+        if params['clear_cache']:
+            clear_cache()
+        return func(*args, **kwargs)
+
+    return inner
+
 def plot_statistics(ax, theta_grid, test_val, crit):
     # Compute confidence interval from test statistics
     ci_l, ci_u = invert_test(theta_grid, test_val, crit)
@@ -142,6 +152,7 @@ fig_cmle_a, ax_cmle_a = plt.subplots()
 fig_cmle_is, ax_cmle_is = plt.subplots()
 
 @timing
+@fresh_cache
 def ci_cmle_a(X, v, theta_grid, alpha_level):
     crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
 
@@ -154,6 +165,7 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
     return invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
 
 @timing
+@fresh_cache
 def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
 
@@ -182,6 +194,7 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     return invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
 
 @timing
+@fresh_cache
 def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
@@ -271,10 +284,6 @@ def do_experiment(params):
 
 results = do_experiment(params)
 
-ax_cmle_a.set_title('CMLE-A confidence intervals')
-ax_cmle_is.set_title('CMLE-IS confidence intervals')
-plt.show()
-
 R = results.pop('completed_trials')
 print '\nCompleted trials: %d\n\n' % R
 
@@ -286,3 +295,7 @@ for method in results:
     print 'Median length: %.2f' % np.median(result['length'][0:R])
     print 'Total time: %.2f sec' % result['total_time']
     print
+
+ax_cmle_a.set_title('CMLE-A confidence intervals')
+ax_cmle_is.set_title('CMLE-IS confidence intervals')
+#plt.show()

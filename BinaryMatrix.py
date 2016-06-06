@@ -305,6 +305,10 @@ then undoing the sorting after the target matrix is generated."""
 # Adapting Matlab code provided by Matt Harrison (matt_harrison@brown.edu).
 ##############################################################################
 
+def clear_cache():
+    _dict_canonical_scalings = {}
+    _dict_conjugate = {}
+
 _dict_canonical_scalings = {}
 def canonical_scalings(w, r, c):
     """From weights and margins, find scalings to balance a matrix.
