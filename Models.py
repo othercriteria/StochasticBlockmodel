@@ -790,7 +790,7 @@ class StationaryLogistic(Stationary):
               'data=dat, family=binomial("logit"))')
             try:
                 robjects.r('dat.cond <- cond(dat.glm, ..target.., ' + \
-                           'from=-6.0, to=6.0, pts=20)')
+                           'from=-8.0, to=8.0, pts=30)')
                 robjects.globalenv['alpha'] = alpha_level
                 robjects.r('dat.cond.summ <- summary(dat.cond, alpha=alpha)')
                 if verbose:
