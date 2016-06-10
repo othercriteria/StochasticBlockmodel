@@ -24,6 +24,7 @@ params = { 'M': 20,
            'fit_nonstationary': True,
            'fit_method': 'convex_opt',
            'covariates_of_interest': ['x_0'],
+           'alpha_level': 0.05,
            'do_large_sample': True,
            'do_biometrika': False,
            'num_reps': 100 }
@@ -97,7 +98,7 @@ for rep in range(params['num_reps']):
     arr.generate(data_model)
 
     if params['do_large_sample']:
-        fit_model.confidence_boot(arr)
+        fit_model.confidence_boot(arr, alpha_level = params['alpha_level'])
     if params['do_biometrika']:
         for c in params['covariates_of_interest']:
             fit_model.confidence_harrison(arr, c)

@@ -162,7 +162,7 @@ def ci_umle_boot(X, v, alpha_level):
 
     fit_model = NonstationaryLogistic()
     fit_model.beta['x_0'] = None
-    fit_model.confidence_boot(arr, alpha = alpha_level)
+    fit_model.confidence_boot(arr, alpha_level = alpha_level)
 
     return fit_model.conf['x_0']['pivotal']
 
@@ -254,7 +254,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, corrected,
 def do_experiment(params):
     seed = Seed(params['random_seed'])
 
-    alpha = params['alpha_level']
+    alpha_level = params['alpha_level']
     verbose = params['verbose']
 
     L = params['L']
@@ -295,18 +295,20 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
-        do(ci_umle_boot(X, v, alpha), 'umle_boot')
+        do(ci_umle_boot(X, v, alpha_level), 'umle_boot')
 
-        do(ci_brazzale(X, v, alpha), 'brazzale')
+        do(ci_brazzale(X, v, alpha_level), 'brazzale')
 
-        do(ci_cmle_a(X, v, theta_grid, alpha), 'cmle_a')
+        do(ci_cmle_a(X, v, theta_grid, alpha_level), 'cmle_a')
 
-        do(ci_cmle_is(X, v, theta_grid, alpha, T, verbose), 'cmle_is')
+        do(ci_cmle_is(X, v, theta_grid, alpha_level, T, verbose), 'cmle_is')
 
         for s, n_MC in enumerate(params['n_MC_levels']):
-            do(ci_conservative(X, v, n_MC, theta_grid, alpha, True, verbose),
+            do(ci_conservative(X, v, n_MC, theta_grid,
+                               alpha_level, True, verbose),
                'is_c_%d' % s)
-            do(ci_conservative(X, v, n_MC, theta_grid, alpha, False, verbose),
+            do(ci_conservative(X, v, n_MC, theta_grid,
+                               alpha_level, False, verbose),
                'is_u_%d' % s)
 
         results['completed_trials'] += 1

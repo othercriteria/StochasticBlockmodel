@@ -1095,7 +1095,7 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
-    def confidence_boot(self, network, n_bootstrap = 100, alpha = 0.05,
+    def confidence_boot(self, network, n_bootstrap = 100, alpha_level = 0.05,
                         **fit_options):
         # Point estimate
         self.fit(network, **fit_options)
@@ -1117,7 +1117,7 @@ class StationaryLogistic(Stationary):
         network.array = network_original
 
         # Construct (asymptotically valid) confidence interval
-        p_l, p_u = alpha / 2.0, 1.0 - alpha / 2.0
+        p_l, p_u = alpha_level / 2.0, 1.0 - alpha_level / 2.0
         for b in theta_hats:
             if b == '_kappa':
                 display_name = 'kappa'
