@@ -790,7 +790,7 @@ class StationaryLogistic(Stationary):
               'data=dat, family=binomial("logit"))')
             try:
                 robjects.r('dat.cond <- cond(dat.glm, ..target.., ' + \
-                           'from=-8.0, to=8.0, pts=30)')
+                           'from=-8.0, to=8.0, pts=0)')
                 robjects.globalenv['alpha'] = alpha_level
                 robjects.r('dat.cond.summ <- summary(dat.cond, alpha=alpha)')
                 if verbose:
@@ -1095,8 +1095,8 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
-    def confidence(self, network, n_bootstrap = 100, alpha = 0.05,
-                   **fit_options):
+    def confidence_boot(self, network, n_bootstrap = 100, alpha = 0.05,
+                        **fit_options):
         # Point estimate
         self.fit(network, **fit_options)
         theta_hats = { b: self.beta[b] for b in self.beta }
@@ -1853,10 +1853,10 @@ class FixedMargins(IndependentBernoulli):
     def edge_probabilities(self, network, **opts):
         return self.base_model.edge_probabilities(network, **opts)
 
-    def confidence(self, network, **opts):
+    def confidence_boot(self, network, **opts):
         self.base_model.fit = self.fit
         self.base_model.generate = self.generate
-        self.base_model.confidence(network, **opts)
+        self.base_model.confidence_boot(network, **opts)
         lift_tree(self.base_model.conf, self.conf)
 
     def confidence_harrison(self, network, b, **opts):

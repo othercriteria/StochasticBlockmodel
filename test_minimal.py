@@ -19,7 +19,7 @@ alpha_unif(net, 0.5)
 # Initialize the data model; generate covariates and associated coefficients
 data_model = NonstationaryLogistic()
 data_model.kappa = -7.0
-covariates = ['x_%d' % i for i in range(5)]
+covariates = ['x_%d' % i for i in range(1)]
 for covariate in covariates:
     data_model.beta[covariate] = normal(0, 1.0)
 
@@ -42,9 +42,9 @@ gen = RandomSubnetworks(net, (200, 200))
 for rep in range(5):
     subnet = gen.sample()
 
-    fit_model.fit(subnet)
+    fit_model.fit_brazzale(subnet, 'x_0', verbose = True)
     print 'Estimated theta_0: %.2f' % fit_model.beta['x_0']
 
-    fit_model.confidence(subnet, n_bootstrap = 5)
-    ci = fit_model.conf['x_0']['normal']
+    #fit_model.confidence_boot(subnet, n_bootstrap = 10)
+    ci = fit_model.conf['x_0']['brazzale']
     print 'Normal CI for theta_0: (%.2f, %.2f)' % ci

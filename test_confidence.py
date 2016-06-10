@@ -22,10 +22,10 @@ params = { 'M': 20,
            'alpha_gamma_sd': 0.0,
            'kappa_target': ('row_sum', 5),
            'fit_nonstationary': True,
-           'fit_method': 'conditional',
+           'fit_method': 'convex_opt',
            'covariates_of_interest': ['x_0'],
            'do_large_sample': True,
-           'do_biometrika': True,
+           'do_biometrika': False,
            'num_reps': 100 }
 
 # Set random seed for reproducible output
@@ -62,7 +62,8 @@ for b in range(params['B']):
     arr.new_edge_covariate(name).from_binary_function_ind(f_x)
 data_model.match_kappa(arr, params['kappa_target'])
 
-# Specify parameter of interest that the confidence interval will try to capture
+# Specify parameter of interest that  the confidence interval will try
+# to capture
 for c in params['covariates_of_interest']:
     theta_true = data_model.beta[c]
     print '%s theta_true: %.2f' % (c, theta_true)
@@ -96,7 +97,7 @@ for rep in range(params['num_reps']):
     arr.generate(data_model)
 
     if params['do_large_sample']:
-        fit_model.confidence(arr)
+        fit_model.confidence_boot(arr)
     if params['do_biometrika']:
         for c in params['covariates_of_interest']:
             fit_model.confidence_harrison(arr, c)

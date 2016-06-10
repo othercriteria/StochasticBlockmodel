@@ -113,6 +113,7 @@ ws_landmarks = wb_landmarks.sheet_by_name('NeuronFixedPoints.csv')
 for row in range(1, ws_landmarks.nrows):
     n = ws_landmarks.cell_value(row, 0)
     t = ws_landmarks.cell_value(row, 1)[0]
+    print ws_landmarks.cell_value(row, 1)
     neuron_class[n] = t
 for n in net.names:
     if not n in neuron_class:
@@ -211,7 +212,7 @@ for cov_name in cov_names:
 print
 for rep in range(params['n_samples']):
     s_samples[rep,:,:] = s_model.generate(net)
-s_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+s_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
 display_cis(s_model)
 
 # Offset extreme substructure after Stationary model is fit
@@ -229,7 +230,7 @@ for cov_name in cov_names:
 print
 for rep in range(params['n_samples']):
     ns_samples[rep,:,:] = ns_model.generate(net)
-ns_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+ns_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
 display_cis(ns_model)
 
 print 'Fitting conditional model'
@@ -246,7 +247,7 @@ for cov_name in cov_names:
 print
 for rep in range(params['n_samples']):
     c_samples[rep,:,:] = c_model.generate(net, coverage = 0.1)
-c_model.confidence(net, n_bootstrap = params['n_bootstrap'])
+c_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
 for cov_name in cov_names:
     c_model.confidence_harrison(net, cov_name)
 display_cis(c_model)

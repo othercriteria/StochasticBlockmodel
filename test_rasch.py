@@ -28,11 +28,11 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100, 500],
+           'n_MC_levels': [10, 50],#[10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 100,
-           'L': 601,
+           'n_rep': 10,
+           'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': False,
@@ -155,16 +155,28 @@ fig_cmle_a, ax_cmle_a = plt.subplots()
 fig_cmle_is, ax_cmle_is = plt.subplots()
 
 @timing
-def ci_umle(X, v, alpha_level):
+def ci_umle_boot(X, v, alpha_level):
     arr = array_from_data(X, [v])
     arr.offset_extremes()
     alpha_zero(arr)
 
     fit_model = NonstationaryLogistic()
     fit_model.beta['x_0'] = None
-    fit_model.confidence(arr, alpha = alpha_level)
+    fit_model.confidence_boot(arr, alpha = alpha_level)
 
     return fit_model.conf['x_0']['pivotal']
+
+@timing
+def ci_brazzale(X, v, alpha_level):
+    arr = array_from_data(X, [v])
+    arr.offset_extremes()
+    alpha_zero(arr)
+
+    fit_model = NonstationaryLogistic()
+    fit_model.beta['x_0'] = None
+    fit_model.fit_brazzale(arr, 'x_0', alpha_level = alpha_level)
+
+    return fit_model.conf['x_0']['brazzale']
 
 @timing
 @fresh_cache
@@ -210,13 +222,14 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
 @timing
 @fresh_cache
-def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
+def ci_conservative(X, v, K, theta_grid, alpha_level, corrected,
+                    verbose = False):
     M_p, N_p = X.shape
     L = len(theta_grid)
 
     # Test statistic for CI
-    def t(z):
-        return np.sum(z * v)
+    def t(z, theta):
+        return log_likelihood(X, theta) - log_likelihood(z, theta)
 
     # Evaluate log-likelihood at specified parameter value
     def log_likelihood(z, theta):
@@ -236,7 +249,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, verbose = False):
 
     return ci_conservative_generic(X, K, theta_grid, alpha_level,
                                    log_likelihood, sample, t,
-                                   verbose)        
+                                   corrected, False, verbose)
 
 def do_experiment(params):
     seed = Seed(params['random_seed'])
@@ -250,12 +263,15 @@ def do_experiment(params):
     
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
-    for method, display in [('umle', 'UMLE'),
-                            ('cmle_a', 'CMLE-A'),
-                            ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
-                           [('cons_%d' % s, 'Conservative (n = %d)' % n_MC)
-                            for s, n_MC in enumerate(params['n_MC_levels'])]:
-        results[method] = { 'display': display,
+    for method, disp in [('umle', 'UMLE (bootstrap)'),
+                         ('brazzale', 'Conditional (Brazzale)'),
+                         ('cmle_a', 'CMLE-A'),
+                         ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
+                        [('is_c_%d' % s, 'IS-corrected (n = %d)' % n_MC)
+                         for s, n_MC in enumerate(params['n_MC_levels'])] + \
+                        [('is_u_%d' % s, 'IS-uncorrected (n = %d)' % n_MC)
+                         for s, n_MC in enumerate(params['n_MC_levels'])]:
+        results[method] = { 'display': disp,
                             'in_interval': [],
                             'length': [],
                             'total_time': 0.0 }
@@ -279,15 +295,19 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
-        do(ci_umle(X, v, alpha), 'umle')
+        do(ci_umle_boot(X, v, alpha), 'umle_boot')
+
+        do(ci_brazzale(X, v, alpha), 'brazzale')
 
         do(ci_cmle_a(X, v, theta_grid, alpha), 'cmle_a')
 
         do(ci_cmle_is(X, v, theta_grid, alpha, T, verbose), 'cmle_is')
 
         for s, n_MC in enumerate(params['n_MC_levels']):
-            do(ci_conservative(X, v, n_MC, theta_grid, alpha, verbose),
-               'cons_%d' % s)
+            do(ci_conservative(X, v, n_MC, theta_grid, alpha, True, verbose),
+               'is_c_%d' % s)
+            do(ci_conservative(X, v, n_MC, theta_grid, alpha, False, verbose),
+               'is_u_%d' % s)
 
         results['completed_trials'] += 1
 

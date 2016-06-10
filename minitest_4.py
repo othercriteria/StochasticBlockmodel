@@ -62,7 +62,7 @@ for n in range(n_rep):
     net.new_row_covariate('r', np.int)[:] = r
     net.new_col_covariate('c', np.int)[:] = c
     c_fit.fit = c_fit.base_model.fit_conditional
-    c_fit.confidence(net, n_bootstrap = n_boot, alpha = alpha_level)
+    c_fit.confidence_boot(net, n_bootstrap = n_boot, alpha = alpha_level)
     cb_ci_l, cb_ci_u = c_fit.conf['x_0']['pivotal']
     if cb_ci_l < theta < cb_ci_u:
         cb_covered += 1
