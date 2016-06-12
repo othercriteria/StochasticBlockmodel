@@ -25,7 +25,8 @@ params = { 'M': 20,
            'fit_method': 'convex_opt',
            'covariates_of_interest': ['x_0'],
            'alpha_level': 0.05,
-           'do_large_sample': True,
+           'do_wald': True,
+           'do_bootstrap': True,
            'do_biometrika': False,
            'num_reps': 100 }
 
@@ -86,10 +87,12 @@ else:
     
 # Test coverage
 methods = []
-if params['do_large_sample']:
+if params['do_wald']:
+    methods.append('wald')
+if params['do_bootstrap']:
     methods.extend(['pivotal', 'percentile', 'normal'])
 if params['do_biometrika']:
-    methods.extend(['harrison'])
+    methods.append('harrison')
 covered = { (m,c): np.empty(params['num_reps'])
             for m in methods for c in params['covariates_of_interest'] }
 length = { (m,c): np.empty(params['num_reps'])
@@ -97,6 +100,8 @@ length = { (m,c): np.empty(params['num_reps'])
 for rep in range(params['num_reps']):
     arr.generate(data_model)
 
+    if params['do_wald']:
+        fit_model.confidence_wald(arr, alpha_level = params['alpha_level'])
     if params['do_large_sample']:
         fit_model.confidence_boot(arr, alpha_level = params['alpha_level'])
     if params['do_biometrika']:
