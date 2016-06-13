@@ -465,19 +465,37 @@ class StationaryLogistic(Stationary):
                 I[1 + b_1,1 + b_2] = v
                 I[1 + b_2,1 + b_1] = v
 
-        if inverse: I_inv = inv(I)
-
-        I_names = ['kappa'] + ['theta_{%s}' % b for b in self.beta]
+        names_theta = ['theta_{%s}' % b for b in self.beta]
+        I_names = np.array(['kappa'] + names_theta)
         self.I = {}
-        if inverse: self.I_inv = {}
         for i in range(1 + B):
             for j in range(1 + B):
                 if i == j:
                     self.I[I_names[i]] = I[i,i]
-                    if inverse: self.I_inv[I_names[i]] = I_inv[i,i]
                 else:
                     self.I[(I_names[i],I_names[j])] = I[i,j]
-                    if inverse: self.I_inv[(I_names[i],I_names[j])] = I_inv[i,j]
+
+        if not inverse:
+            return
+
+        I_r_keep = (I.sum(1) != 0)
+        L = np.sum(I_r_keep)
+        I_keep = I[I_r_keep][:,I_r_keep]
+
+        try:
+            I_inv = inv(I_keep)
+        except:
+            print 'Warning: unable to invert Fisher information matrix.'
+            return
+
+        I_inv_names = I_names[I_r_keep]
+        self.I_inv = {}
+        for i in range(L):
+            for j in range(L):
+                if i == j:
+                    self.I_inv[I_inv_names[i]] = I_inv[i,i]
+                else:
+                    self.I_inv[(I_inv_names[i],I_inv_names[j])] = I_inv[i,j]
 
     def check_separated(self, network):
         A = network.as_dense()
@@ -1639,7 +1657,12 @@ class NonstationaryLogistic(StationaryLogistic):
         I_r_keep = (I.sum(1) != 0)
         L = np.sum(I_r_keep)
         I_keep = I[I_r_keep][:,I_r_keep]
-        I_inv = inv(I_keep)
+
+        try:
+            I_inv = inv(I_keep)
+        except:
+            print 'Warning: unable to invert Fisher information matrix.'
+            return
 
         I_inv_names = I_names[I_r_keep]
         self.I_inv = {}
