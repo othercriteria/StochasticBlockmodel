@@ -102,7 +102,7 @@ for rep in range(params['num_reps']):
 
     if params['do_wald']:
         fit_model.confidence_wald(arr, alpha_level = params['alpha_level'])
-    if params['do_large_sample']:
+    if params['do_bootstrap']:
         fit_model.confidence_boot(arr, alpha_level = params['alpha_level'])
     if params['do_biometrika']:
         for c in params['covariates_of_interest']:
