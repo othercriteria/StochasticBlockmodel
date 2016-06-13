@@ -1621,22 +1621,34 @@ class NonstationaryLogistic(StationaryLogistic):
                 I[(M-1) + (N-1) + 1 + b_1,(M-1) + (N-1) + 1 + b_2] = v
                 I[(M-1) + (N-1) + 1 + b_2,(M-1) + (N-1) + 1 + b_1] = v
 
-        if inverse: I_inv = inv(I)
-
-        I_names = ['alpha_{%s}' % n for n in network.rnames[0:(M-1)]] + \
-            ['beta_{%s}' % n for n in network.cnames[0:(N-1)]] + \
-            ['kappa'] + \
-            ['theta_{%s}' % b for b in self.beta]
+        names_alpha = ['alpha_{%s}' % n for n in network.rnames[0:(M-1)]]
+        names_beta = ['beta_{%s}' % n for n in network.cnames[0:(N-1)]]
+        names_theta = ['theta_{%s}' % b for b in self.beta]
+        I_names = np.array(names_alpha + names_beta + ['kappa'] + names_theta)
         self.I = {}
-        if inverse: self.I_inv = {}
         for i in range((M-1) + (N-1) + 1 + B):
             for j in range((M-1) + (N-1) + 1 + B):
                 if i == j:
                     self.I[I_names[i]] = I[i,i]
-                    if inverse: self.I_inv[I_names[i]] = I_inv[i,i]
                 else:
                     self.I[(I_names[i],I_names[j])] = I[i,j]
-                    if inverse: self.I_inv[(I_names[i],I_names[j])] = I_inv[i,j]
+
+        if not inverse:
+            return
+
+        I_r_keep = (I.sum(1) != 0)
+        L = np.sum(I_r_keep)
+        I_keep = I[I_r_keep][:,I_r_keep]
+        I_inv = inv(I_keep)
+
+        I_inv_names = I_names[I_r_keep]
+        self.I_inv = {}
+        for i in range(L):
+            for j in range(L):
+                if i == j:
+                    self.I_inv[I_inv_names[i]] = I_inv[i,i]
+                else:
+                    self.I_inv[(I_inv_names[i],I_inv_names[j])] = I_inv[i,j]
 
 # P_{ij} = Logit^{-1}(base_model(i,j) + Theta_{z_i,z_j})
 # Constraints: \sum_{i,j} z_{i,j} = 0
