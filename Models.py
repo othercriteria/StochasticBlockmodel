@@ -1095,6 +1095,21 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
+    def confidence_wald(self, network, alpha_level = 0.05, **fit_options):
+        self.fit(network, **fit_options)
+        self.fisher_information(network, inverse = True)
+
+        z_score = norm().ppf(1.0 - alpha_level / 2.0)
+        I_inv_kappa = self.I_inv['kappa']
+        self.conf['kappa']['wald'] = \
+            (self.kappa - z_score * I_inv_kappa,
+             self.kappa + z_score * I_inv_kappa)
+        for b in self.beta:
+            I_inv_b = self.I_inv['theta_{%s}' % b]
+            self.conf[b]['wald'] = \
+                (self.beta[b] - z_score * I_inv_b,
+                 self.beta[b] + z_score * I_inv_b)
+
     def confidence_boot(self, network, n_bootstrap = 100, alpha_level = 0.05,
                         **fit_options):
         # Point estimate
