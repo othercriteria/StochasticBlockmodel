@@ -434,6 +434,51 @@ class StationaryLogistic(Stationary):
         else:
             return inv_logit(logit_P)
 
+    # The network is needed for its covariates, not for the observed
+    # pattern of edges, etc.
+    #
+    # Typically, the inverse Fisher information matrix will be more
+    # useful (it gives a lower bound on the variances/covariances of
+    # an unbised estimator), so that is calculated by default.
+    def fisher_information(self, network, inverse = True):
+        M = network.M
+        N = network.N
+        B = len(self.beta)
+
+        P = self.edge_probabilities(network)
+
+        x = np.empty((B,M,N))
+        for i, b in enumerate(self.beta):
+            x[i] = network.edge_covariates[b].matrix()
+
+        P_bar = P * (1.0 - P)
+
+        I = np.zeros((1 + B, 1 + B))
+        I[0,0] = np.sum(P_bar)
+        for b in range(B):
+            v = np.sum(x[b] * P_bar)
+            I[1 + b,0] = v
+            I[0,1 + b] = v
+        for b_1 in range(B):
+            for b_2 in range(B):
+                v = np.sum(x[b_1] * x[b_2] * P_bar)
+                I[1 + b_1,1 + b_2] = v
+                I[1 + b_2,1 + b_1] = v
+
+        if inverse: I_inv = inv(I)
+
+        I_names = ['kappa'] + ['theta_{%s}' % b for b in self.beta]
+        self.I = {}
+        if inverse: self.I_inv = {}
+        for i in range(1 + B):
+            for j in range(1 + B):
+                if i == j:
+                    self.I[I_names[i]] = I[i,i]
+                    if inverse: self.I_inv[I_names[i]] = I_inv[i,i]
+                else:
+                    self.I[(I_names[i],I_names[j])] = I[i,j]
+                    if inverse: self.I_inv[(I_names[i],I_names[j])] = I_inv[i,j]
+
     def check_separated(self, network):
         A = network.as_dense()
         B = len(self.beta)
