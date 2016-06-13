@@ -478,9 +478,12 @@ class StationaryLogistic(Stationary):
                 else:
                     self.I[(I_names[i],I_names[j])] = I[i,j]
 
-        if not inverse:
-            return
+        if inverse:
+            self._invert_fisher_information(I, I_names)
 
+    def _invert_fisher_information(self, I, I_names):
+        self.I_inv = {}
+        
         I_r_keep = (I.sum(1) != 0)
         L = np.sum(I_r_keep)
         I_keep = I[I_r_keep][:,I_r_keep]
@@ -856,7 +859,7 @@ class StationaryLogistic(Stationary):
               'data=dat, family=binomial("logit"))')
             try:
                 robjects.r('dat.cond <- cond(dat.glm, ..target.., ' + \
-                           'from=-8.0, to=8.0, pts=0)')
+                           'from=-8.0, to=8.0, pts=30)')
                 robjects.globalenv['alpha'] = alpha_level
                 robjects.r('dat.cond.summ <- summary(dat.cond, alpha=alpha)')
                 if verbose:
@@ -1654,27 +1657,8 @@ class NonstationaryLogistic(StationaryLogistic):
                 else:
                     self.I[(I_names[i],I_names[j])] = I[i,j]
 
-        if not inverse:
-            return
-
-        I_r_keep = (I.sum(1) != 0)
-        L = np.sum(I_r_keep)
-        I_keep = I[I_r_keep][:,I_r_keep]
-
-        try:
-            I_inv = inv(I_keep)
-        except:
-            print 'Warning: unable to invert Fisher information matrix.'
-            return
-
-        I_inv_names = I_names[I_r_keep]
-        self.I_inv = {}
-        for i in range(L):
-            for j in range(L):
-                if i == j:
-                    self.I_inv[I_inv_names[i]] = I_inv[i,i]
-                else:
-                    self.I_inv[(I_inv_names[i],I_inv_names[j])] = I_inv[i,j]
+        if inverse:
+            self._invert_fisher_information(I, I_names)
 
 # P_{ij} = Logit^{-1}(base_model(i,j) + Theta_{z_i,z_j})
 # Constraints: \sum_{i,j} z_{i,j} = 0
