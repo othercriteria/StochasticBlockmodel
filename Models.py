@@ -92,29 +92,6 @@ class IndependentBernoulli:
         P = self.edge_probabilities(network)
         return np.random.random((M,N)) < P
 
-    # Placing this here makes it accessibe to FixedMargins
-    def _invert_fisher_information(self, I, I_names):
-        self.I_inv = {}
-        
-        I_r_keep = (I.sum(1) != 0)
-        L = np.sum(I_r_keep)
-        I_keep = I[I_r_keep][:,I_r_keep]
-
-        try:
-            I_inv = inv(I_keep)
-        except:
-            print 'Warning: unable to invert Fisher information matrix.'
-            return
-
-        I_inv_names = I_names[I_r_keep]
-        self.I_inv = {}
-        for i in range(L):
-            for j in range(L):
-                if i == j:
-                    self.I_inv[I_inv_names[i]] = I_inv[i,i]
-                else:
-                    self.I_inv[(I_inv_names[i],I_inv_names[j])] = I_inv[i,j]
-    
     # Generate sample (approximately) from the conditional
     # distribution with fixed margins.
     #
@@ -149,8 +126,9 @@ class IndependentBernoulli:
         else:
             # Initialize from an approximate sample from the
             # conditional distribution
-            P = StationaryLogistic.edge_probabilities(self, network)
-            w = P / (1.0 - P)
+            logit_P = StationaryLogistic.edge_probabilities(self, network,
+                                                            logit = True)
+            w = np.exp(logit_P)
             gen_sparse = acsample(r, c, w)
             gen = np.zeros((M,N), dtype=np.bool)
             for i, j in gen_sparse:
@@ -504,6 +482,27 @@ class StationaryLogistic(Stationary):
         if inverse:
             self._invert_fisher_information(I, I_names)
 
+    def _invert_fisher_information(self, I, I_names):
+        self.I_inv = {}
+
+        I_r_keep = (I.sum(1) != 0)
+        L = np.sum(I_r_keep)
+        I_keep = I[I_r_keep][:,I_r_keep]
+
+        try:
+            I_inv = inv(I_keep)
+        except:
+            print 'Warning: unable to invert Fisher information matrix.'
+            return
+
+        I_inv_names = I_names[I_r_keep]
+        for i in range(L):
+            for j in range(L):
+                if i == j:
+                    self.I_inv[I_inv_names[i]] = I_inv[i,i]
+                else:
+                    self.I_inv[(I_inv_names[i],I_inv_names[j])] = I_inv[i,j]
+
     def check_separated(self, network):
         A = network.as_dense()
         B = len(self.beta)
@@ -635,8 +634,9 @@ class StationaryLogistic(Stationary):
                 return np.Inf
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
-            P = StationaryLogistic.edge_probabilities(self, network)
-            w = P / (1.0 - P)
+            logit_P = StationaryLogistic.edge_probabilities(self, network,
+                                                            logit = True)
+            w = np.exp(logit_P)
 
             if T == 0:
                 if (np.all(w == 0.0) or np.all(w == np.Inf) or
@@ -722,16 +722,23 @@ class StationaryLogistic(Stationary):
                     for b, b_n in enumerate(self.beta):
                         self.beta[b_n] = theta_opt[b]
                 else:
-                    if B == 1:
-                        obj_scalar = lambda x: obj(np.array([x]))
-                        res = opt.minimize_scalar(obj_scalar,
-                                                  method = 'bounded',
-                                                  bounds = (-10, 10))
-                        self.beta[self.beta.keys()[0]] = res.x
-                    else:
-                        theta_opt = opt.fmin(obj, theta)
-                        for b, b_n in enumerate(self.beta):
-                            self.beta[b_n] = theta_opt[b]
+                    theta_opt = opt.fmin(obj, theta)
+                    res = opt.minimize(obj, theta, method = 'L-BFGS-B',
+                                       bounds = [(-10, 10)] * B)
+
+                    for b, b_n in enumerate(self.beta):
+                        self.beta[b_n] = res.x[b]
+
+                    h_inv = res.hess_inv.todense()
+                    self.hess_inv = {}
+                    names = ['theta_{%s}' % b for b in self.beta]
+                    for i in range(B):
+                        for j in range(B):
+                            if i == j:
+                                self.hess_inv[names[i]] = h_inv[i,i]
+                            else:
+                                ij_name = (names[i],names[j])
+                                self.hess_inv[ij_name] = h_inv[i,j]
 
         self.fit_info['wall_time'] = time() - start_time
         
@@ -1008,8 +1015,9 @@ class StationaryLogistic(Stationary):
                 return np.Inf
             for b, b_n in enumerate(self.beta):
                 self.beta[b_n] = theta[b]
-            P = StationaryLogistic.edge_probabilities(self, network)
-            w = P / (1.0 - P)
+            logit_P = StationaryLogistic.edge_probabilities(self, network,
+                                                            logit = True)
+            w = np.exp(logit_P)
 
             cnll = 0.0
             for t in range(T):
@@ -1936,52 +1944,12 @@ class FixedMargins(IndependentBernoulli):
     def edge_probabilities(self, network, **opts):
         return self.base_model.edge_probabilities(network, **opts)
 
-    # The network is needed for its covariates, not for the observed
-    # pattern of edges, etc.
-    #
-    # Typically, the inverse Fisher information matrix will be more
-    # useful (it gives a lower bound on the variances/covariances of
-    # an unbised estimator), so that is calculated by default.
-    def fisher_information(self, network, inverse = True):
-        M = network.M
-        N = network.N
-        B = len(self.base_model.beta)
-
-        P = self.edge_probabilities(network)
-
-        x = np.empty((B,M,N))
-        for i, b in enumerate(self.base_model.beta):
-            x[i] = network.edge_covariates[b].matrix()
-
-        P_bar = P * (1.0 - P)
-
-        I = np.zeros((B,B))
-        for b_1 in range(B):
-            for b_2 in range(B):
-                v = np.sum(x[b_1] * x[b_2] * P_bar)
-                I[b_1,b_2] = v
-                I[b_2,b_1] = v
-
-        names_theta = ['theta_{%s}' % b for b in self.base_model.beta]
-        I_names = np.array(names_theta)
-        self.I = {}
-        for i in range(B):
-            for j in range(B):
-                if i == j:
-                    self.I[I_names[i]] = I[i,i]
-                else:
-                    self.I[(I_names[i],I_names[j])] = I[i,j]
-
-        if inverse:
-            self._invert_fisher_information(I, I_names)
-
     def confidence_wald(self, network, alpha_level = 0.05, **fit_options):
         self.fit(network, **fit_options)
-        self.fisher_information(network, inverse = True)
 
         z_score = norm().ppf(1.0 - alpha_level / 2.0)
         for b in self.base_model.beta:
-            I_inv_b = self.I_inv['theta_{%s}' % b]
+            I_inv_b = self.base_model.hess_inv['theta_{%s}' % b]
             self.conf[b]['wald'] = \
                 (self.base_model.beta[b] - z_score * np.sqrt(I_inv_b),
                  self.base_model.beta[b] + z_score * np.sqrt(I_inv_b))
