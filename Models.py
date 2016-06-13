@@ -401,6 +401,9 @@ class Stationary(IndependentBernoulli):
 
         self.kappa = coefs[0]
 
+    def reset_confidence(self):
+        self.conf = tree()
+
 # P_{ij} = Logit^{-1}(\sum_b x_{bij}*beta_b + kappa + o_{ij}) 
 class StationaryLogistic(Stationary):
     def __init__(self):
@@ -1959,7 +1962,10 @@ class FixedMargins(IndependentBernoulli):
         self.base_model.generate = self.generate
         self.base_model.confidence_harrison(network, b, **opts)
         lift_tree(self.base_model.conf, self.conf)
-    
+
+    def reset_confidence(self):
+        self.conf = tree()
+
 # Generate alpha_out/in for an existing Network
 def center(x):
     return x - np.mean(x)
