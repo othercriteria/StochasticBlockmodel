@@ -1233,7 +1233,7 @@ class StationaryLogistic(Stationary):
     # Implementation of ideas from "Conservative Hypothesis Tests and
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
     def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 100,
-                            L = 121, beta_l_min = -6.0, beta_l_max = 6.0):
+                            L = 601, beta_l_min = -6.0, beta_l_max = 6.0):
         M = network.M
         N = network.N
         A = network.as_dense()
@@ -1242,8 +1242,9 @@ class StationaryLogistic(Stationary):
         theta_grid = np.linspace(beta_l_min, beta_l_max, L)
 
         # Test statistic for CI
-        def t(z):
-            return np.sum(z * x)
+        def t(z, theta):
+            #return np.sum(z * x)
+            return log_likelihood(z, theta) - log_likelihood(A, theta)
 
         # Evaluate log-likelihood at specified parameter value
         def log_likelihood(z, theta):
@@ -1263,7 +1264,7 @@ class StationaryLogistic(Stationary):
             return Y_dense
 
         (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
-                                         log_likelihood, sample, t)        
+                                         x, log_likelihood, sample, t)
 
         self.conf[b]['harrison'] = (l, u)
 

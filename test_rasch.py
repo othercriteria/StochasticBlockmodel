@@ -28,7 +28,7 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50],#[10, 50, 100, 500],
+           'n_MC_levels': [10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
            'n_rep': 10,
@@ -229,7 +229,8 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, corrected,
 
     # Test statistic for CI
     def t(z, theta):
-        return log_likelihood(X, theta) - log_likelihood(z, theta)
+        return log_likelihood(z, theta) - log_likelihood(X, theta)
+        #return np.sum(z * X)
 
     # Evaluate log-likelihood at specified parameter value
     def log_likelihood(z, theta):
@@ -248,7 +249,7 @@ def ci_conservative(X, v, K, theta_grid, alpha_level, corrected,
         return Y_dense
 
     return ci_conservative_generic(X, K, theta_grid, alpha_level,
-                                   log_likelihood, sample, t,
+                                   v, log_likelihood, sample, t,
                                    corrected, False, verbose)
 
 def do_experiment(params):
@@ -263,7 +264,7 @@ def do_experiment(params):
     
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
-    for method, disp in [('umle', 'UMLE (bootstrap)'),
+    for method, disp in [('umle_boot', 'UMLE (bootstrap)'),
                          ('brazzale', 'Conditional (Brazzale)'),
                          ('cmle_a', 'CMLE-A'),
                          ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
