@@ -14,7 +14,8 @@ from BinaryMatrix import approximate_from_margins_weights as cond_a_sample_b
 from BinaryMatrix import clear_cache
 from Confidence import invert_test, ci_conservative_generic
 from Experiment import Seed
-from Models import NonstationaryLogistic, alpha_zero
+from Models import FixedMargins, StationaryLogistic, NonstationaryLogistic
+from Models import alpha_zero
 from Utility import logsumexp, logabsdiffexp
 
 
@@ -28,11 +29,11 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50, 100, 500],
+           'n_MC_levels': [10, 50],#[10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 10,
-           'L': 61,
+           'n_rep': 100,
+           'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'do_prune': False,
@@ -154,6 +155,26 @@ def plot_statistics(ax, theta_grid, test_val, crit):
 fig_cmle_a, ax_cmle_a = plt.subplots()
 fig_cmle_is, ax_cmle_is = plt.subplots()
 
+# For methods like Wald that can sometimes fail to produce CIs
+def safe_ci(model, name, method):
+    if name in model.conf:
+        if method in model.conf[name]:
+            return model.conf[name][method]
+    else:
+        return (0.0, 0.0)
+
+@timing
+def ci_umle_wald(X, v, alpha_level):
+    arr = array_from_data(X, [v])
+    arr.offset_extremes()
+    alpha_zero(arr)
+
+    fit_model = NonstationaryLogistic()
+    fit_model.beta['x_0'] = None
+    fit_model.confidence_wald(arr, alpha_level = alpha_level)
+
+    return safe_ci(fit_model, 'x_0', 'wald')
+
 @timing
 def ci_umle_boot(X, v, alpha_level):
     arr = array_from_data(X, [v])
@@ -162,6 +183,46 @@ def ci_umle_boot(X, v, alpha_level):
 
     fit_model = NonstationaryLogistic()
     fit_model.beta['x_0'] = None
+    fit_model.confidence_boot(arr, alpha_level = alpha_level)
+
+    return fit_model.conf['x_0']['pivotal']
+
+@timing
+@fresh_cache
+def ci_cmle_wald(X, v, alpha_level):
+    arr = array_from_data(X, [v])
+
+    A = arr.as_dense()
+    r = A.sum(1)
+    c = A.sum(0)
+    
+    s_model = StationaryLogistic()
+    s_model.beta['x_0'] = None
+    fit_model = FixedMargins(s_model)
+    arr.new_row_covariate('r', np.int)[:] = r
+    arr.new_col_covariate('c', np.int)[:] = c
+    fit_model.fit = fit_model.base_model.fit_conditional
+
+    fit_model.confidence_wald(arr, alpha_level = alpha_level)
+
+    return safe_ci(fit_model, 'x_0', 'wald')
+
+@timing
+@fresh_cache
+def ci_cmle_boot(X, v, alpha_level):
+    arr = array_from_data(X, [v])
+
+    A = arr.as_dense()
+    r = A.sum(1)
+    c = A.sum(0)
+    
+    s_model = StationaryLogistic()
+    s_model.beta['x_0'] = None
+    fit_model = FixedMargins(s_model)
+    arr.new_row_covariate('r', np.int)[:] = r
+    arr.new_col_covariate('c', np.int)[:] = c
+    fit_model.fit = fit_model.base_model.fit_conditional
+
     fit_model.confidence_boot(arr, alpha_level = alpha_level)
 
     return fit_model.conf['x_0']['pivotal']
@@ -222,35 +283,17 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
 @timing
 @fresh_cache
-def ci_conservative(X, v, K, theta_grid, alpha_level, corrected,
-                    verbose = False):
-    M_p, N_p = X.shape
-    L = len(theta_grid)
+def ci_cons(X, v, alpha_level, L, theta_l, theta_u,
+            K, test = 'lr', corrected = True, verbose = False):
+    arr = array_from_data(X, [v])
 
-    # Test statistic for CI
-    def t(z, theta):
-        return log_likelihood(z, theta) - log_likelihood(X, theta)
-        #return np.sum(z * X)
+    fit_model = StationaryLogistic()
+    fit_model.beta['x_0'] = None
+    fit_model.confidence_cons(arr, 'x_0', alpha_level, K,
+                              L, theta_l, theta_u, test, verbose)
 
-    # Evaluate log-likelihood at specified parameter value
-    def log_likelihood(z, theta):
-        return -cond_a_nll(z, np.exp(theta * v))
-
-    # Row and column margins; the part of the data we can use to design Q
-    r, c = X.sum(1), X.sum(0)
-
-    # Generate sample from k-th component of mixture proposal distribution
-    def sample(theta):
-        Y_sparse = cond_a_sample(r, c, np.exp(theta * v))
-        Y_dense = np.zeros((M_p,N_p), dtype = np.bool)
-        for i, j in Y_sparse:
-            if i == -1: break
-            Y_dense[i,j] = 1
-        return Y_dense
-
-    return ci_conservative_generic(X, K, theta_grid, alpha_level,
-                                   v, log_likelihood, sample, t,
-                                   corrected, False, verbose)
+    method = 'conservative-%s' % test
+    return fit_model.conf['x_0'][method]
 
 def do_experiment(params):
     seed = Seed(params['random_seed'])
@@ -264,14 +307,21 @@ def do_experiment(params):
     
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
-    for method, disp in [('umle_boot', 'UMLE (bootstrap)'),
+    for method, disp in [('umle_wald', 'UMLE Wald'),
+                         ('umle_boot', 'UMLE bootstrap (pivotal)'),
+                         ('cmle_wald', 'CMLE Wald'),
+                         ('cmle_boot', 'CMLE bootstrap (pivotal)'),
                          ('brazzale', 'Conditional (Brazzale)'),
-                         ('cmle_a', 'CMLE-A'),
-                         ('cmle_is', 'CMLE-IS (T = %d)' % T)] + \
-                        [('is_c_%d' % s, 'IS-corrected (n = %d)' % n_MC)
-                         for s, n_MC in enumerate(params['n_MC_levels'])] + \
-                        [('is_u_%d' % s, 'IS-uncorrected (n = %d)' % n_MC)
-                         for s, n_MC in enumerate(params['n_MC_levels'])]:
+                         ('cmle_a', 'CMLE-A LR'),
+                         ('cmle_is', 'CMLE-IS (T = %d) LR' % T)] + \
+                        [('is_sc_c_%d' % n_MC, 'IS-score (n = %d)' % n_MC)
+                         for n_MC in params['n_MC_levels']] + \
+                        [('is_sc_u_%d' % n_MC, 'IS-score [un] (n = %d)' % n_MC)
+                         for n_MC in params['n_MC_levels']] + \
+                        [('is_lr_c_%d' % n_MC, 'IS-LR (n = %d)' % n_MC)
+                         for n_MC in params['n_MC_levels']] + \
+                        [('is_lr_u_%d' % n_MC, 'IS-LR [un] (n = %d)' % n_MC)
+                         for n_MC in params['n_MC_levels']]:
         results[method] = { 'display': disp,
                             'in_interval': [],
                             'length': [],
@@ -296,7 +346,13 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
+        do(ci_umle_wald(X, v, alpha_level), 'umle_wald')
+
         do(ci_umle_boot(X, v, alpha_level), 'umle_boot')
+
+        do(ci_cmle_wald(X, v, alpha_level), 'cmle_wald')
+
+        do(ci_cmle_boot(X, v, alpha_level), 'cmle_boot')
 
         do(ci_brazzale(X, v, alpha_level), 'brazzale')
 
@@ -304,13 +360,14 @@ def do_experiment(params):
 
         do(ci_cmle_is(X, v, theta_grid, alpha_level, T, verbose), 'cmle_is')
 
-        for s, n_MC in enumerate(params['n_MC_levels']):
-            do(ci_conservative(X, v, n_MC, theta_grid,
-                               alpha_level, True, verbose),
-               'is_c_%d' % s)
-            do(ci_conservative(X, v, n_MC, theta_grid,
-                               alpha_level, False, verbose),
-               'is_u_%d' % s)
+        for n_MC in params['n_MC_levels']:
+            for test in ['lr', 'score']:
+                for corrected_str, corrected in [('c', True), ('u', False)]:
+                    do(ci_cons(X, v, alpha_level, params['L'],
+                               params['theta_l'], params['theta_u'],
+                               n_MC, test = test, corrected = corrected,
+                               verbose = verbose),
+                       'is_%s_%s_%d' % (test[0:2], corrected_str, n_MC))
 
         results['completed_trials'] += 1
 
