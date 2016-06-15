@@ -33,14 +33,19 @@ def ci_conservative_generic(X, K, theta_grid, alpha_level,
 
     # Test statistic at observation, for each grid point
     t_X = np.array([t(X, theta_l) for theta_l in theta_grid]).reshape((L, 1))
+    if verbose:
+        print 'X: t_min = %.2f, t_max = %.2f' % (t_X.min(), t_X.max())
         
     # Statistics for the samples from the proposal distribution only
     # need to be calculated once...
     t_Y = np.empty((L, K+1))
     t_Y[:,K] = 0.0
-    for l in range(L):
-        for k in range(K):
+    for k in range(K):
+        for l in range(L):
             t_Y[l,k] = t(Y[k], theta_grid[l])
+        if verbose:
+            print 'Y_%d: t_min = %.2f, t_max = %.2f' % \
+                (k, t_Y[:,k].min(), t_Y[:,k].max())
     if two_sided:
         I_t_Y_plus = t_Y >= t_X
         I_t_Y_plus[:,K] = True
