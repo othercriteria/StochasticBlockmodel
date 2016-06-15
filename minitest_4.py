@@ -7,12 +7,12 @@ from Network import Network
 from Models import FixedMargins, StationaryLogistic, NonstationaryLogistic
 from Models import alpha_norm
 
-N = 10
+N = 50
 D = 1
 theta = 2.0
 kappa_target = ('row_sum', 2)
 alpha_sd = 2.0
-n_rep = 10
+n_rep = 100
 n_boot = 10
 alpha_level = 0.05
 
@@ -47,7 +47,8 @@ wc_covered = 0
 bs_covered = 0
 bn_covered = 0
 bc_covered = 0
-ca_covered = 0
+cs_covered = 0
+cl_covered = 0
 for n in range(n_rep):
     new = net.subnetwork(np.arange(N))
     new.generate(data_model)
@@ -106,11 +107,17 @@ for n in range(n_rep):
     if bc_ci_l < theta < bc_ci_u:
         bc_covered += 1
 
-    c_fit.fit(new)
-    c_fit.confidence_harrison(new, 'x_0', alpha_level = alpha_level, L = 31)
-    ca_ci_l, ca_ci_u = c_fit.conf['x_0']['harrison']
-    if ca_ci_l < theta < ca_ci_u:
-        ca_covered += 1
+    c_fit.confidence_cons(new, 'x_0', alpha_level = alpha_level, L = 61,
+                          test = 'score')
+    cs_ci_l, cs_ci_u = c_fit.conf['x_0']['conservative-score']
+    if cs_ci_l < theta < cs_ci_u:
+        cs_covered += 1
+
+    c_fit.confidence_cons(new, 'x_0', alpha_level = alpha_level, L = 61,
+                          test = 'lr')
+    cl_ci_l, cl_ci_u = c_fit.conf['x_0']['conservative-lr']
+    if cl_ci_l < theta < cl_ci_u:
+        cl_covered += 1
 
 print 'Wald (stationary): %.2f' % (1.0 * ws_covered / n_rep)
 print 'Wald (nonstationary): %.2f' % (1.0 * wn_covered / n_rep)
@@ -119,4 +126,5 @@ print 'Bootstrap (stationary): %.2f' % (1.0 * bs_covered / n_rep)
 print 'Bootstrap (nonstationary): %.2f' % (1.0 * bn_covered / n_rep)
 print 'Bootstrap (conditional): %.2f' % (1.0 * bc_covered / n_rep)
 print 'Brazzale: %.2f' % (1.0 * braz_covered / n_rep)
-print 'Conservative (CMLE-A LR): %.2f' % (1.0 * ca_covered / n_rep)
+print 'Conservative (score): %.2f' % (1.0 * cs_covered / n_rep)
+print 'Conservative (CMLE-A LR): %.2f' % (1.0 * cl_covered / n_rep)

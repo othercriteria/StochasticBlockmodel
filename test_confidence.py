@@ -20,7 +20,7 @@ params = { 'M': 20,
            'alpha_unif_sd': 0.0,
            'alpha_norm_sd': 1.0,
            'alpha_gamma_sd': 0.0,
-           'kappa_target': ('row_sum', 5),
+           'kappa_target': ('row_sum', 1),
            'fit_nonstationary': True,
            'fit_method': 'convex_opt',
            'covariates_of_interest': ['x_0'],
@@ -92,7 +92,7 @@ if params['do_wald']:
 if params['do_bootstrap']:
     methods.extend(['pivotal', 'percentile', 'normal'])
 if params['do_biometrika']:
-    methods.append('harrison')
+    methods.append('conservative')
 covered = { (m,c): np.empty(params['num_reps'])
             for m in methods for c in params['covariates_of_interest'] }
 length = { (m,c): np.empty(params['num_reps'])
@@ -106,7 +106,7 @@ for rep in range(params['num_reps']):
         fit_model.confidence_boot(arr, alpha_level = params['alpha_level'])
     if params['do_biometrika']:
         for c in params['covariates_of_interest']:
-            fit_model.confidence_harrison(arr, c)
+            fit_model.confidence_cons(arr, c)
 
     for m in methods:
         print '%s:' % m
