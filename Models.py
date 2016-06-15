@@ -1178,15 +1178,18 @@ class StationaryLogistic(Stationary):
         self.fisher_information(network, inverse = True)
 
         z_score = norm().ppf(1.0 - alpha_level / 2.0)
-        I_inv_kappa = self.I_inv['kappa']
-        self.conf['kappa']['wald'] = \
-            (self.kappa - z_score * np.sqrt(I_inv_kappa),
-             self.kappa + z_score * np.sqrt(I_inv_kappa))
+        if 'kappa' in self.I_inv:
+            I_inv_kappa = self.I_inv['kappa']
+            self.conf['kappa']['wald'] = \
+                (self.kappa - z_score * np.sqrt(I_inv_kappa),
+                 self.kappa + z_score * np.sqrt(I_inv_kappa))
         for b in self.beta:
-            I_inv_b = self.I_inv['theta_{%s}' % b]
-            self.conf[b]['wald'] = \
-                (self.beta[b] - z_score * np.sqrt(I_inv_b),
-                 self.beta[b] + z_score * np.sqrt(I_inv_b))
+            b_name = 'theta_{%s}' % b
+            if b_name in self.I_inv:
+                I_inv_b = self.I_inv[b_name]
+                self.conf[b]['wald'] = \
+                    (self.beta[b] - z_score * np.sqrt(I_inv_b),
+                     self.beta[b] + z_score * np.sqrt(I_inv_b))
 
     def confidence_boot(self, network, n_bootstrap = 100, alpha_level = 0.05,
                         **fit_options):
@@ -1232,8 +1235,9 @@ class StationaryLogistic(Stationary):
 
     # Implementation of ideas from "Conservative Hypothesis Tests and
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
-    def confidence_harrison(self, network, b, alpha_level = 0.05, n_MC = 100,
-                            L = 601, beta_l_min = -6.0, beta_l_max = 6.0):
+    def confidence_cons(self, network, b, alpha_level = 0.05, n_MC = 100,
+                        L = 601, beta_l_min = -6.0, beta_l_max = 6.0,
+                        test = 'score'):
         M = network.M
         N = network.N
         A = network.as_dense()
@@ -1242,9 +1246,16 @@ class StationaryLogistic(Stationary):
         theta_grid = np.linspace(beta_l_min, beta_l_max, L)
 
         # Test statistic for CI
-        def t(z, theta):
-            #return np.sum(z * x)
-            return log_likelihood(z, theta) - log_likelihood(A, theta)
+        if test == 'score':
+            name = 'conservative-score'
+            two_sided = True
+            def t(z, theta):
+                return np.sum(z * x)
+        elif test == 'lr':
+            name = 'conservative-lr'
+            two_sided = False
+            def t(z, theta):
+                return log_likelihood(z, theta) - log_likelihood(A, theta)
 
         # Evaluate log-likelihood at specified parameter value
         def log_likelihood(z, theta):
@@ -1264,9 +1275,10 @@ class StationaryLogistic(Stationary):
             return Y_dense
 
         (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
-                                         x, log_likelihood, sample, t)
+                                         x, log_likelihood, sample, t,
+                                         two_sided = two_sided)
 
-        self.conf[b]['harrison'] = (l, u)
+        self.conf[b][name] = (l, u)
 
 # P_{ij} = Logit^{-1}(alpha_out_i + alpha_in_j + \sum_b x_{bij}*beta_b + kappa +
 #                     o_{ij})
@@ -1950,21 +1962,23 @@ class FixedMargins(IndependentBernoulli):
 
         z_score = norm().ppf(1.0 - alpha_level / 2.0)
         for b in self.base_model.beta:
-            I_inv_b = self.base_model.hess_inv['theta_{%s}' % b]
-            self.conf[b]['wald'] = \
-                (self.base_model.beta[b] - z_score * np.sqrt(I_inv_b),
-                 self.base_model.beta[b] + z_score * np.sqrt(I_inv_b))
-            
+            b_name = 'theta_{%s}' % b
+            if b_name in self.base_model.hess_inv:
+                I_inv_b = self.base_model.hess_inv[b_name]
+                self.conf[b]['wald'] = \
+                    (self.base_model.beta[b] - z_score * np.sqrt(I_inv_b),
+                     self.base_model.beta[b] + z_score * np.sqrt(I_inv_b))
+
     def confidence_boot(self, network, **opts):
         self.base_model.fit = self.fit
         self.base_model.generate = self.generate
         self.base_model.confidence_boot(network, **opts)
         lift_tree(self.base_model.conf, self.conf)
 
-    def confidence_harrison(self, network, b, **opts):
+    def confidence_cons(self, network, b, **opts):
         self.base_model.fit = self.fit
         self.base_model.generate = self.generate
-        self.base_model.confidence_harrison(network, b, **opts)
+        self.base_model.confidence_cons(network, b, **opts)
         lift_tree(self.base_model.conf, self.conf)
 
     def reset_confidence(self):
