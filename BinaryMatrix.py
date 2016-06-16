@@ -329,14 +329,14 @@ TODO: describe "rc" method.
     
     def sw_sums(a, b):
         abw = a * w * b
-        sw = abw / (1 + abw)
-        sw[np.isnan(sw)] = 1
-        swr = sw.sum(1).reshape((m,1))
-        swc = sw.sum(0).reshape((1,n))
+        np.divide(abw, 1 + abw, out = abw)
+        abw[np.isnan(abw)] = 1
+        swr = abw.sum(1).reshape((m,1))
+        swc = abw.sum(0).reshape((1,n))
         return swr, swc
 
     p_i_dot = (1 / n) * w.sum(1).reshape((m,1))
-    p_dot_j = (1/  m) * w.sum(0).reshape((1,n))
+    p_dot_j = (1 / m) * w.sum(0).reshape((1,n))
     a = np.sqrt((r / n) / (p_i_dot * (1 - (r / n))))
     b = np.sqrt((c / m) / (p_dot_j * (1 - (c / m))))
     a[np.isnan(a)] = 1
@@ -346,8 +346,10 @@ TODO: describe "rc" method.
     tol_check = np.Inf
     iter = 0
     while tol_check > tol and iter < max_iter:
-        a = a * r / (swr + eps0)
-        b = b * c / (swc + eps0)
+        np.multiply(a, r, out = a)
+        np.divide(a, swr + eps0, out = a)
+        np.multiply(b, c, out = b)
+        np.divide(b, swc + eps0, out = b)
         swr, swc = sw_sums(a, b)
 
         tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
@@ -561,7 +563,7 @@ B_sample can be recovered from B_sample_sparse via:
         return [do_sample() for t in xrange(T)]
     else:
         return do_sample()[0]
-    
+
 def approximate_conditional_nll(A, w, sort_by_wopt_var = True):
     """Return approximate row/column-conditional NLL of binary matrix.
     
@@ -576,7 +578,6 @@ Output:
   ncll: negative conditional log-likelihood
 """
     assert(A.shape == w.shape)
-    M, N = A.shape
 
     r = A.sum(1, dtype=np.int)
     c = A.sum(0, dtype=np.int)
@@ -613,11 +614,18 @@ Output:
     return _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G)
     
 
+_G_pool = {}
 def _compute_G(r, m, n, wopt):
     logwopt = np.log(wopt)
     r_max = max(1, np.max(r))
 
-    G = np.empty((r_max+1, m, n-1))
+    G_shape = (r_max+1, m, n-1)
+    if G_shape in _G_pool:
+        G = _G_pool[G_shape]
+    else:
+        G = np.empty(G_shape)
+        _G_pool[G_shape] = G
+
     G[:] = -np.inf
     G[0,:,:] = 0.0
     G[1,:,n-2] = logwopt[:,n-1]
@@ -660,7 +668,8 @@ def _compute_cnll(A, r, rsort, rndx, csort, cndx, m, n, G):
     count = np.sum(rsort)
 
     # Initialize B_sample_sparse
-    B_sample_sparse = -np.ones((count,2), dtype=np.int)
+    B_sample_sparse = np.empty((count,2), dtype=np.int)
+    B_sample_sparse[:] = -1
     
     # Initialize intermediate storage
     #
