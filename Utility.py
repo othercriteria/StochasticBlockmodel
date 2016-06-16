@@ -15,6 +15,9 @@ from collections import defaultdict
 def l2(x):
     return np.sqrt(np.sum(x ** 2))
 
+def apply_scale(w, a, b):
+    return np.multiply(w, a * b)
+
 def logsumexp(x):
     return reduce(np.logaddexp, x)
 

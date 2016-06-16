@@ -83,7 +83,7 @@ class IndependentBernoulli:
         log_Q = log_Q[log_Q_rest]
         A = A[log_Q_rest]
         Q = np.exp(log_Q)
-        return np.sum(np.log1p(Q)) - np.sum(log_Q[A])
+        return np.log1p(Q).sum() - log_Q[A].sum()
 
     def generate(self, network):
         M = network.M
@@ -203,7 +203,7 @@ class IndependentBernoulli:
 
             # Deal with 0/0 nan's
             active = [a for i, a in enumerate(active) if nan_free[i]]
-            A_nan_free = np.sum(nan_free)
+            A_nan_free = nan_free.sum()
             coverage_attained += A_nan_free
 
             # Update n according to calculated probabilities
@@ -319,7 +319,7 @@ class Stationary(IndependentBernoulli):
         def obj(kappa):
             self.kappa = kappa
             P = self.edge_probabilities(network)
-            exp_edges = np.sum(P)
+            exp_edges = P.sum()
             if target == 'sum':
                 return abs(exp_edges - val)
             elif target in 'row_sum':
@@ -344,7 +344,7 @@ class Stationary(IndependentBernoulli):
         # Calculate observed sufficient statistic
         T = np.empty(1)
         A = network.as_dense()
-        T[0] = np.sum(A, dtype=np.int)
+        T[0] = A.sum(dtype=np.int)
 
         theta = np.empty(1)
         theta[0] = logit(A.sum(dtype=np.int) / (1.0 * network.M * network.N))
@@ -365,7 +365,7 @@ class Stationary(IndependentBernoulli):
             self.kappa = theta[0]
             ET = np.empty(1)
             P = self.edge_probabilities(network)
-            ET[0] = np.sum(P)
+            ET[0] = P.sum()
             grad = ET - T
             self.fit_info['grad_nll_evals'] += 1
             self.fit_info['grad_nll_final'][:] = grad
@@ -458,14 +458,14 @@ class StationaryLogistic(Stationary):
         P_bar = P * (1.0 - P)
 
         I = np.zeros((1 + B, 1 + B))
-        I[0,0] = np.sum(P_bar)
+        I[0,0] = P_bar.sum()
         for b in range(B):
-            v = np.sum(x[b] * P_bar)
+            v = (x[b] * P_bar).sum()
             I[1 + b,0] = v
             I[0,1 + b] = v
         for b_1 in range(B):
             for b_2 in range(B):
-                v = np.sum(x[b_1] * x[b_2] * P_bar)
+                v = (x[b_1] * x[b_2] * P_bar).sum()
                 I[1 + b_1,1 + b_2] = v
                 I[1 + b_2,1 + b_1] = v
 
@@ -486,7 +486,7 @@ class StationaryLogistic(Stationary):
         self.I_inv = {}
 
         I_r_keep = (I.sum(1) != 0)
-        L = np.sum(I_r_keep)
+        L = I_r_keep.sum()
         I_keep = I[I_r_keep][:,I_r_keep]
 
         try:
@@ -547,8 +547,8 @@ class StationaryLogistic(Stationary):
         T = np.empty(B + 1)
         A = network.as_dense()
         for b, b_n in enumerate(self.beta):
-            T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
-        T[B] = np.sum(A, dtype=np.int)
+            T[b] = (A * network.edge_covariates[b_n].matrix()).sum()
+        T[B] = A.sum(dtype=np.int)
 
         # Initialize theta
         theta = np.zeros(B + 1)
@@ -582,8 +582,8 @@ class StationaryLogistic(Stationary):
                 ET[0:B] = 0.0
             else:
                 for b, b_n in enumerate(self.beta):
-                    ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
-            ET[B] = np.sum(P)
+                    ET[b] = (P * network.edge_covariates[b_n].matrix()).sum()
+            ET[B] = P.sum()
             g = ET - T
             if fix_beta:
                 g[0:B] = 0.0
@@ -640,7 +640,7 @@ class StationaryLogistic(Stationary):
 
             if T == 0:
                 if (np.all(w == 0.0) or np.all(w == np.Inf) or
-                    np.any(np.isnan(w))):
+                    np.isnan(w).any()):
                     cnll = np.Inf
                 else:
                     cnll = acnll(A, w, sort_by_wopt_var = False)
@@ -651,7 +651,7 @@ class StationaryLogistic(Stationary):
                 else:
                     logkappa, logcvsq = log_partition_is(z, cvsq = True)
                     print 'est. cv^2 = %.2f (T = %d)' % (np.exp(logcvsq), T)
-                cnll = logkappa - np.sum(np.log(w[A]))
+                cnll = logkappa - np.log(w[A]).sum()
 
             self.fit_info['cnll_evals'] += 1
             if verbose:
@@ -760,7 +760,7 @@ class StationaryLogistic(Stationary):
             found = False
             A_j_nonextreme = A[:,j_nonextreme]
             for i in i_nonextreme:
-                r = np.sum(A_j_nonextreme[i,:])
+                r = A_j_nonextreme[i,:].sum()
                 if r == 0 or r == len(j_nonextreme):
                     found = True
                     i_nonextreme.remove(i)
@@ -770,7 +770,7 @@ class StationaryLogistic(Stationary):
             found = False
             A_i_nonextreme = A[i_nonextreme,:]
             for j in j_nonextreme:
-                c = np.sum(A_i_nonextreme[:,j])
+                c = A_i_nonextreme[:,j].sum()
                 if c == 0 or c == len(i_nonextreme):
                     found = True
                     j_nonextreme.remove(j)
@@ -794,8 +794,8 @@ class StationaryLogistic(Stationary):
             self.kappa = theta[B]
             nll = self.nll(network)
             A_non = A[i_nonextreme][:,j_nonextreme]
-            r_non = np.sum(A_non,1)
-            c_non = np.sum(A_non,0)
+            r_non = A_non.sum(1)
+            c_non = A_non.sum(0)
             P = self.edge_probabilities(network)
             P_non = P[i_nonextreme][:,j_nonextreme]
             log_p_denom = log_p_margins_saddlepoint(r_non, c_non, P_non)
@@ -854,7 +854,8 @@ class StationaryLogistic(Stationary):
         # FIXME: this pruning is overly aggressive for conditional inference!
         if network.offset:
             robjects.r('dat <- dat[is.finite(dat$o),]')
-        robjects.r('write.csv(dat, file = "debug.csv")')
+        if verbose:
+            robjects.r('write.csv(dat, file = "debug.csv")')
         robjects.r('nr <- length(unique(dat$row))')
         robjects.r('nc <- length(unique(dat$col))')
 
@@ -894,7 +895,7 @@ class StationaryLogistic(Stationary):
         # Pre-compute column statistics
         T_c = {}
         A = network.as_dense()
-        c = np.sum(A, axis = 0, dtype=np.int)
+        c = A.sum(0, dtype=np.int)
         for b, b_n in enumerate(self.beta):
             T_b = A * network.edge_covariates[b_n].matrix()
             for j in range(N):
@@ -922,7 +923,7 @@ class StationaryLogistic(Stationary):
                 for b in range(B):
                     logit_P += theta[b] * T_c[(j,b)]
                 P = inv_logit(logit_P)
-                if np.sum(P) == 0:
+                if P.sum() == 0:
                     continue
 
                 log_P = np.log(P)
@@ -952,7 +953,7 @@ class StationaryLogistic(Stationary):
 
                 # Marginal probability of columns with given column sum
                 z_j = z[j]
-                c_cnll -= np.sum(log_P[z_j]) + np.sum(log1m_P[-z_j])
+                c_cnll -= log_P[z_j].sum() + log1m_P[-z_j].sum()
 
             self.fit_info['c_cnll_evals'] += 1
             if verbose:
@@ -1040,7 +1041,7 @@ class StationaryLogistic(Stationary):
                 if active > 8:
                     print 'Skipping row pair with excessive active columns.'
                     continue
-                if not (0 < np.sum(A_sub[0,:]) < active):
+                if not (0 < A_sub[0,:].sum() < active):
                     continue
 
                 logkappa = 0.0
@@ -1053,10 +1054,10 @@ class StationaryLogistic(Stationary):
                     if rep in seen: continue
                     seen.add(rep)
 
-                    logp_perm = np.sum(np.log(w_sub[A_sub_perm]))
+                    logp_perm = np.log(w_sub[A_sub_perm]).sum()
                     logkappa = np.logaddexp(logkappa, logp_perm)
                 
-                cnll += logkappa - np.sum(np.log(w_sub[A_sub]))
+                cnll += logkappa - np.log(w_sub[A_sub]).sum()
 
             if verbose:
                 print cnll, theta
@@ -1237,32 +1238,18 @@ class StationaryLogistic(Stationary):
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
     def confidence_cons(self, network, b, alpha_level = 0.05, n_MC = 100,
                         L = 601, beta_l_min = -6.0, beta_l_max = 6.0,
-                        test = 'score'):
+                        test = 'score', verbose = False):
         M = network.M
         N = network.N
         A = network.as_dense()
         x = network.edge_covariates[b].matrix()
 
-        theta_grid = np.linspace(beta_l_min, beta_l_max, L)
-
-        # Test statistic for CI
-        if test == 'score':
-            name = 'conservative-score'
-            two_sided = True
-            def t(z, theta):
-                return np.sum(z * x)
-        elif test == 'lr':
-            name = 'conservative-lr'
-            two_sided = False
-            def t(z, theta):
-                return log_likelihood(z, theta) - log_likelihood(A, theta)
+        # Row and column margins; the part of the data we can use to design Q
+        r, c = A.sum(1), A.sum(0)
 
         # Evaluate log-likelihood at specified parameter value
         def log_likelihood(z, theta):
             return -acnll(z, np.exp(theta * x), sort_by_wopt_var = False)
-
-        # Row and column margins; the part of the data we can use to design Q
-        r, c = A.sum(1), A.sum(0)
 
         # Generate sample from k-th component of mixture proposal distribution
         def sample(theta):
@@ -1274,9 +1261,26 @@ class StationaryLogistic(Stationary):
                 Y_dense[i,j] = 1
             return Y_dense
 
+        theta_grid = np.linspace(beta_l_min, beta_l_max, L)
+
+        # Test statistic for CI
+        if test == 'score':
+            name = 'conservative-score'
+            two_sided = True
+            def t(z):
+                return np.array([(z * x).sum() for theta_l in theta_grid])
+        elif test == 'lr':
+            name = 'conservative-lr'
+            two_sided = False
+            def t(z):
+                ll = np.array([log_likelihood(z, theta_l)
+                               for theta_l in theta_grid])
+                return ll - ll.max()
+
         (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
                                          x, log_likelihood, sample, t,
-                                         two_sided = two_sided)
+                                         two_sided = two_sided,
+                                         verbose = verbose)
 
         self.conf[b][name] = (l, u)
 
@@ -1379,11 +1383,11 @@ class NonstationaryLogistic(StationaryLogistic):
         # Calculate observed sufficient statistics
         T = np.empty(B + 1 + (M-1) + (N-1))
         A = network.as_dense()
-        r = np.sum(A, axis = 1, dtype=np.int)[0:(M-1)]
-        c = np.sum(A, axis = 0, dtype=np.int)[0:(N-1)]
-        A_sum = np.sum(A, dtype=np.int)
+        r = A.sum(1, dtype=np.int)[0:(M-1)]
+        c = A.sum(0, dtype=np.int)[0:(N-1)]
+        A_sum = A.sum(dtype=np.int)
         for b, b_n in enumerate(self.beta):
-            T[b] = np.sum(A * network.edge_covariates[b_n].matrix())
+            T[b] = (A * network.edge_covariates[b_n].matrix()).sum()
         T[B] = A_sum
         T[(B + 1):(B + 1 + (M-1))] = r
         T[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = c
@@ -1437,16 +1441,16 @@ class NonstationaryLogistic(StationaryLogistic):
             self.kappa = theta[B]
             ET = np.empty(B + 1 + (M-1) + (N-1))
             P = self.edge_probabilities(network)
-            Er = np.sum(P, axis = 1)[0:(M-1)]
-            Ec = np.sum(P, axis = 0)[0:(N-1)]
+            Er = P.sum(1)[0:(M-1)]
+            Ec = P.sum(0)[0:(N-1)]
             ET[(B + 1):(B + 1 + (M-1))] = Er
             ET[(B + 1 + (M-1)):(B + 1 + (M-1) + (N-1))] = Ec
             if fix_beta:
                 ET[0:B] = 0.0
             else:
                 for b, b_n in enumerate(self.beta):
-                    ET[b] = np.sum(P * network.edge_covariates[b_n].matrix())
-            ET[B] = np.sum(P)
+                    ET[b] = (P * network.edge_covariates[b_n].matrix()).sum()
+            ET[B] = P.sum()
             g = ET - T
             if fix_beta:
                 g[0:B] = 0.0
@@ -1639,31 +1643,31 @@ class NonstationaryLogistic(StationaryLogistic):
                 I[i,(M-1)+j] = v
                 I[(M-1)+j,i] = v
         for i in range(M-1):
-            v = np.sum(P_bar[i,:])
+            v = (P_bar[i,:]).sum()
             I[i,i] = v
             I[(M-1) + (N-1),i] = v
             I[i,(M-1) + (N-1)] = v
             for b in range(B):
-                v = np.sum(x[b,i,:] * P_bar[i,:])
+                v = (x[b,i,:] * P_bar[i,:]).sum()
                 I[(M-1) + (N-1) + 1 + b,i] = v
                 I[i,(M-1) + (N-1) + 1 + b] = v
         for j in range(N-1):
-            v = np.sum(P_bar[:,j])
+            v = (P_bar[:,j]).sum()
             I[(M-1) + j,(M-1) + j] = v
             I[(M-1) + (N-1),(M-1) + j] = v
             I[(M-1) + j,(M-1) + (N-1)] = v
             for b in range(B):
-                v = np.sum(x[b,:,j] * P_bar[:,j])
+                v = (x[b,:,j] * P_bar[:,j]).sum()
                 I[(M-1) + (N-1) + 1 + b,(M-1) + j] = v
                 I[(M-1) + j,(M-1) + (N-1) + 1 + b] = v
-        I[(M-1) + (N-1),(M-1) + (N-1)] = np.sum(P_bar)
+        I[(M-1) + (N-1),(M-1) + (N-1)] = P_bar.sum()
         for b in range(B):
-            v = np.sum(x[b] * P_bar)
+            v = (x[b] * P_bar).sum()
             I[(M-1) + (N-1) + 1 + b,(M-1) + (N-1)] = v
             I[(M-1) + (N-1),(M-1) + (N-1) + 1 + b] = v
         for b_1 in range(B):
             for b_2 in range(B):
-                v = np.sum(x[b_1] * x[b_2] * P_bar)
+                v = (x[b_1] * x[b_2] * P_bar).sum()
                 I[(M-1) + (N-1) + 1 + b_1,(M-1) + (N-1) + 1 + b_2] = v
                 I[(M-1) + (N-1) + 1 + b_2,(M-1) + (N-1) + 1 + b_1] = v
 
@@ -1798,7 +1802,7 @@ class Blockmodel(IndependentBernoulli):
                                    (Theta[k,k] * A[l,l]))
                 logprobs -= np.max(logprobs)
                 probs = np.exp(logprobs)
-                probs /= np.sum(probs)
+                probs /= probs.sum()
                 z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
 
             nll = self.nll(network, ignore_offset = self.ignore_inner_offset)
@@ -1911,18 +1915,18 @@ class FixedMargins(IndependentBernoulli):
         for b, b_n in enumerate(beta):
             b_mat = network.edge_covariates[b_n].matrix()
 
-            T_0 = np.sum(b_mat[A])
+            T_0 = b_mat[A].sum()
             T_samp = np.empty(2 * samples)
 
             beta[b_n] = -beta_scale
             for s in range(samples):
                 A_samp = self.generate(network)
-                T_samp[s] = np.sum(b_mat[A_samp])
+                T_samp[s] = b_mat[A_samp].sum()
 
             beta[b_n] = beta_scale
             for s in range(samples):
                 A_samp = self.generate(network)
-                T_samp[samples + s] = np.sum(b_mat[A_samp])
+                T_samp[samples + s] = b_mat[A_samp].sum()
 
             beta[b_n] = 0.0
 

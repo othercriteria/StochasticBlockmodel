@@ -7,7 +7,7 @@ from __future__ import division
 import numpy as np
 from scipy import optimize as opt
 
-from Utility import logsumexp, logabsdiffexp, digest
+from Utility import logsumexp, logabsdiffexp, digest, apply_scale
 
 # Get machine precision; used to prevent divide by zero
 eps0 = np.spacing(0)
@@ -328,7 +328,7 @@ TODO: describe "rc" method.
     c = c.reshape((1,n))
     
     def sw_sums(a, b):
-        abw = a * w * b
+        abw = apply_scale(w, a, b)
         np.divide(abw, 1 + abw, out = abw)
         abw[np.isnan(abw)] = 1
         swr = abw.sum(1).reshape((m,1))
@@ -403,7 +403,7 @@ def _prune(r, c, *arrays):
         m, n = len(r), len(c)
 
         r_0 = (r == 0)
-        if np.any(r_0):
+        if r_0.any():
             r = r[-r_0]
             for a in xrange(A):
                 arrays[a] = arrays[a][-r_0]
@@ -411,7 +411,7 @@ def _prune(r, c, *arrays):
             continue
 
         r_n = (r == n)
-        if np.any(r_n):
+        if r_n.any():
             r = r[-r_n]
             unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune[r_n]
@@ -423,7 +423,7 @@ def _prune(r, c, *arrays):
             continue
 
         c_0 = (c == 0)
-        if np.any(c_0):
+        if c_0.any():
             c = c[-c_0]
             for a in xrange(A):
                 arrays[a] = arrays[a][:,-c_0]
@@ -431,7 +431,7 @@ def _prune(r, c, *arrays):
             continue
 
         c_m = (c == m)
-        if np.any(c_m):
+        if c_m.any():
             c = c[-c_m]
             unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune
@@ -525,7 +525,7 @@ B_sample can be recovered from B_sample_sparse via:
 
     # Balance the weights
     a_scale, b_scale = canonical_scalings(w_prune, r_prune, c_prune)
-    wopt = a_scale * w_prune * b_scale
+    wopt = apply_scale(w_prune, a_scale, b_scale)
 
     # Reorder the columns
     if sort_by_wopt_var:
@@ -596,8 +596,8 @@ Output:
 
     # Balance the weights
     a_scale, b_scale = canonical_scalings(w, r, c)
-    wopt = a_scale * w * b_scale
-    if np.any(np.isnan(wopt)):
+    wopt = apply_scale(w, a_scale, b_scale)
+    if np.isnan(wopt).any():
         wopt = w
 
     # Reorder the columns
@@ -1103,7 +1103,7 @@ if __name__ == '__main__':
     r, c = np.ones((6,1)), np.ones((1,5))
     c[0] = 2
     a, b = canonical_scalings(m, r, c)
-    m_canonical = a * m * b
+    m_canonical = apply_scale(m, a, b)
     print m_canonical.sum(1)
     print m_canonical.sum(0)
 
