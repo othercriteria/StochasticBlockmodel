@@ -8,13 +8,13 @@ import numpy as np
 from Utility import logsumexp
 
 def invert_test(theta_grid, test_val, crit):
-    theta_l_min, theta_l_max = min(theta_grid), max(theta_grid)
+    theta_l_min, theta_l_max = theta_grid.min(), theta_grid.max()
 
     C_alpha = theta_grid[test_val > crit]
     if len(C_alpha) == 0:
         return 0, 0
 
-    C_alpha_l, C_alpha_u = np.min(C_alpha), np.max(C_alpha)
+    C_alpha_l, C_alpha_u = C_alpha.min(), C_alpha.max()
     if C_alpha_l == theta_l_min:
         C_alpha_l = -np.inf
     if C_alpha_u == theta_l_max:
@@ -32,7 +32,7 @@ def ci_conservative_generic(X, K, theta_grid, alpha_level,
     Y = [sample(theta_grid[np.random.randint(L)]) for k in range(K)]
 
     # Test statistic at observation, for each grid point
-    t_X = np.array([t(X, theta_l) for theta_l in theta_grid]).reshape((L, 1))
+    t_X = t(X).reshape((L, 1))
     if verbose:
         print 'X: t_min = %.2f, t_max = %.2f' % (t_X.min(), t_X.max())
         
@@ -41,8 +41,7 @@ def ci_conservative_generic(X, K, theta_grid, alpha_level,
     t_Y = np.empty((L, K+1))
     t_Y[:,K] = 0.0
     for k in range(K):
-        for l in range(L):
-            t_Y[l,k] = t(Y[k], theta_grid[l])
+        t_Y[:,k] = t(Y[k])
         if verbose:
             print 'Y_%d: t_min = %.2f, t_max = %.2f' % \
                 (k, t_Y[:,k].min(), t_Y[:,k].max())
@@ -80,13 +79,13 @@ def ci_conservative_generic(X, K, theta_grid, alpha_level,
 
         # X contribution
         if corrected:
-            log_w_l[K] = theta_l * np.sum(suff * X) - log_Q_sum_X
+            log_w_l[K] = theta_l * (suff * X).sum() - log_Q_sum_X
         else:
             log_w_l[K] = -np.inf
 
         # Y contribution
         for k in range(K):
-            log_w_l[k] = theta_l * np.sum(suff * Y[k]) - log_Q_sum_Y[k]
+            log_w_l[k] = theta_l * (suff * Y[k]).sum() - log_Q_sum_Y[k]
 
         if two_sided:
             log_p_num_plus = logsumexp(log_w_l[I_t_Y_plus[l]])
