@@ -514,10 +514,10 @@ class StationaryLogistic(Stationary):
             b_0 = b_mat[-A]
             b_1 = b_mat[A]
 
-            l_0 = np.min(b_0)
-            u_0 = np.max(b_0)
-            l_1 = np.min(b_1)
-            u_1 = np.max(b_1)
+            l_0 = b_0.min()
+            u_0 = b_0.max()
+            l_1 = b_1.min()
+            u_1 = b_1.max()
 
             if (((l_0 < u_1) and (l_1 < u_0)) or
                 (l_0 == u_0 == l_1 <  u_1) or
@@ -1800,7 +1800,7 @@ class Blockmodel(IndependentBernoulli):
                     logprobs[k] = (np.dot(Theta[k,z[:]], A[l,:]) +
                                    np.dot(Theta[z[:],k], A[:,l]) -
                                    (Theta[k,k] * A[l,l]))
-                logprobs -= np.max(logprobs)
+                logprobs -= logprobs.max()
                 probs = np.exp(logprobs)
                 probs /= probs.sum()
                 z[l] = np.where(np.random.multinomial(1, probs) == 1)[0][0]
@@ -1930,7 +1930,7 @@ class FixedMargins(IndependentBernoulli):
 
             beta[b_n] = 0.0
 
-            overlap[b] = np.min(T_samp) < T_0 < np.max(T_samp)
+            overlap[b] = T_samp.min() < T_0 < T_samp.max()
 
         self.base_model.fit_info['separated'] = np.any(~overlap)
 
