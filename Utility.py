@@ -7,6 +7,7 @@ import numpy as np
 from scipy.stats import norm
 from scipy.special import logit as logit
 from scipy.special import expit as inv_logit
+from scipy.misc import logsumexp
 
 import pickle
 from hashlib import sha1
@@ -16,10 +17,9 @@ def l2(x):
     return np.sqrt(np.sum(x ** 2))
 
 def apply_scale(w, a, b):
-    return np.multiply(w, a * b)
-
-def logsumexp(x):
-    return reduce(np.logaddexp, x)
+    v = a * b
+    np.multiply(v, w, out = v)
+    return v
 
 def logabsdiffexp(x, y):
     def f(x, y):
