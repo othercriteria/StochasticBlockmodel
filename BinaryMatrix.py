@@ -331,14 +331,14 @@ TODO: describe "rc" method.
         abw = apply_scale(w, a, b)
         np.divide(abw, 1 + abw, out = abw)
         abw[np.isnan(abw)] = 1
-        swr = abw.sum(1).reshape((m,1))
-        swc = abw.sum(0).reshape((1,n))
+        swr = abw.sum(1, keepdims = True)
+        swc = abw.sum(0, keepdims = True)
         return swr, swc
 
-    p_i_dot = (1 / n) * w.sum(1).reshape((m,1))
-    p_dot_j = (1 / m) * w.sum(0).reshape((1,n))
-    a = np.sqrt((r / n) / (p_i_dot * (1 - (r / n))))
-    b = np.sqrt((c / m) / (p_dot_j * (1 - (c / m))))
+    w_i_dot = w.sum(1, keepdims = True)
+    w_dot_j = w.sum(0, keepdims = True)
+    a = np.power(r / (w_i_dot * (n - r)), m / (m + n))
+    b = np.power(c / (w_dot_j * (m - c)), n / (m + n))
     a[np.isnan(a)] = 1
     b[np.isnan(b)] = 1
     swr, swc = sw_sums(a, b)
@@ -347,12 +347,12 @@ TODO: describe "rc" method.
     iter = 0
     while tol_check > tol and iter < max_iter:
         np.multiply(a, r, out = a)
-        np.divide(a, swr + eps0, out = a)
+        np.divide(a, swr, out = a)
         np.multiply(b, c, out = b)
-        np.divide(b, swc + eps0, out = b)
+        np.divide(b, swc, out = b)
         swr, swc = sw_sums(a, b)
 
-        tol_check = np.max(np.abs(swr - r)) + np.max(np.abs(swc - c))
+        tol_check = np.abs(swr - r).max() + np.abs(swc - c).max()
         iter += 1
 
     _dict_canonical_scalings[hash] = (a, b)
@@ -617,7 +617,7 @@ Output:
 _G_pool = {}
 def _compute_G(r, m, n, wopt):
     logwopt = np.log(wopt)
-    r_max = max(1, np.max(r))
+    r_max = max(1, r.max())
 
     G_shape = (r_max+1, m, n-1)
     if G_shape in _G_pool:
