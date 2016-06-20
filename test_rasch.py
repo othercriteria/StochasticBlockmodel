@@ -20,14 +20,14 @@ from Utility import logsumexp, logabsdiffexp
 
 
 # Parameters
-params = { 'fixed_example': 'data/rasch_covariates.json',
-           'M': 20,
-           'N': 10,
+params = { 'case': { 'fixed_example': 'data/rasch_covariates.json',
+                     'M': 20,
+                     'N': 10,
+                     'kappa': -1.628,
+                     'alpha_min': -0.4,
+                     'beta_min': -0.86,
+                     'v_min': -0.6 },
            'theta': 2.0,
-           'kappa': -1.628,
-           'alpha_min': -0.4,
-           'beta_min': -0.86,
-           'v_min': -0.6,
            'alpha_level': 0.05,
            'n_MC_levels': [10, 50, 100, 500],
            'wopt_sort': False,
@@ -62,16 +62,17 @@ def generate_data(params, seed):
     # Advance random seed for parameter and covariate construction
     seed.next()
 
-    if not params['fixed_example']:
+    case = params['case']
+    if not 'fixed_example' in case:
         # Generate parameters and covariates
-        M, N = params['M'], params['N']
-        alpha = np.random.uniform(size = (M,1)) + params['alpha_min']
-        beta = np.random.uniform(size = (1,N)) + params['beta_min']
-        kappa = params['kappa']
-        v = np.random.uniform(size = (M,N)) + params['v_min']
+        M, N = case['M'], case['N']
+        alpha = np.random.uniform(size = (M,1)) + case['alpha_min']
+        beta = np.random.uniform(size = (1,N)) + case['beta_min']
+        kappa = case['kappa']
+        v = np.random.uniform(size = (M,N)) + case['v_min']
     else:
         # Load parameters and covariates
-        with open(params['fixed_example'], 'r') as example_file:
+        with open(case['fixed_example'], 'r') as example_file:
             example = json.load(example_file)
 
             v = np.array(example['nu'])
