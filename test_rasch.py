@@ -147,7 +147,11 @@ def plot_statistics(ax, theta_grid, test_val, crit):
     ax.vlines(ci_u, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.set_ylim(2.0 * crit, 0)
 
-def plot_coverage(ax, theta_grid, crit, cis):
+def plot_coverage(ax, coverage_data):
+    theta_grid = coverage_data['theta_grid']
+    crit = coverage_data['crit']
+    cis = coverage_data['cis']
+
     intervals = zip(theta_grid[:-1], theta_grid[1:])
     coverage = np.zeros(len(intervals))
     for ci in cis:
@@ -170,6 +174,8 @@ def plot_coverage(ax, theta_grid, crit, cis):
 if params['plot']:
     fig_cmle_a, ax_cmle_a = plt.subplots()
     fig_cmle_is, ax_cmle_is = plt.subplots()
+    cmle_a_coverage_data = { 'cis': [] }
+    cmle_is_coverage_data = { 'cis': [] }
     cmle_a_cis = []
     cmle_is_cis = []
 
@@ -270,8 +276,9 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
     ci = invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
     if params['plot']:
         plot_statistics(ax_cmle_a, theta_grid, cmle_a - cmle_a.max(), crit)
-        cmle_a_cis.append(ci)
-        plot_coverage(ax_cmle_a, theta_grid, crit, cmle_a_cis)
+        cmle_a_coverage_data['cis'].append(ci)
+        cmle_a_coverage_data['theta_grid'] = theta_grid
+        cmle_a_coverage_data['crit'] = crit
     return ci
 
 @timing
@@ -303,8 +310,9 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
     ci = invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
     if params['plot']:
         plot_statistics(ax_cmle_is, theta_grid, cmle_is - cmle_is.max(), crit)
-        cmle_is_cis.append(ci)
-        plot_coverage(ax_cmle_is, theta_grid, crit, cmle_is_cis)
+        cmle_is_coverage_data['cis'].append(ci)
+        cmle_is_coverage_data['theta_grid'] = theta_grid
+        cmle_is_coverage_data['crit'] = crit
     return ci
 
 @timing
@@ -420,4 +428,6 @@ for method in results:
 if params['plot']:
     ax_cmle_a.set_title('CMLE-A confidence intervals')
     ax_cmle_is.set_title('CMLE-IS confidence intervals')
+    plot_coverage(ax_cmle_a, cmle_a_coverage_data)
+    plot_coverage(ax_cmle_is, cmle_is_coverage_data)
     plt.show()
