@@ -29,7 +29,7 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'beta_min': -0.86,
            'v_min': -0.6,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50],#[10, 50, 100, 500],
+           'n_MC_levels': [10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
            'n_rep': 100,
@@ -39,6 +39,7 @@ params = { 'fixed_example': 'data/rasch_covariates.json',
            'do_prune': False,
            'random_seed': 137,
            'verbose': True,
+           'plot': True,
            'clear_cache': False }
 
 terminated = False
@@ -138,22 +139,39 @@ def plot_statistics(ax, theta_grid, test_val, crit):
     ci_l, ci_u = invert_test(theta_grid, test_val, crit)
     ci_l = max(ci_l, params['theta_l'])
     ci_u = min(ci_u, params['theta_u'])
-    cov_alpha = min(1.0, 1.0 / ((1 - params['alpha_level']) * params['n_rep']))
 
     ax.plot(theta_grid, test_val, color = 'b')
     ax.hlines(crit, theta_grid[0], theta_grid[-1], linestyle = 'dotted')
     ax.hlines(crit, ci_l, ci_u, color = 'r')
-    ax.hlines(2.0 * crit, theta_grid[0], theta_grid[-1],
-              color = 'w', linewidth = 9, zorder = 99)
-    ax.hlines(2.0 * crit, ci_l, ci_u, color = 'r', linewidth = 9, zorder = 100,
-              alpha = cov_alpha)
     ax.vlines(ci_l, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.vlines(ci_u, 2.0 * crit, crit, color = 'r', linestyle = 'dotted')
     ax.set_ylim(2.0 * crit, 0)
 
+def plot_coverage(ax, theta_grid, crit, cis):
+    intervals = zip(theta_grid[:-1], theta_grid[1:])
+    coverage = np.zeros(len(intervals))
+    for ci in cis:
+        ci_l, ci_u = ci
+        for i, interval in enumerate(intervals):
+            i_l, i_u = interval
+            if (ci_l <= i_l) and (i_u <= ci_u):
+                coverage[i] += 1
+    coverage /= len(cis)
+        
+    ax.hlines(2.0 * crit, theta_grid[0], theta_grid[-1],
+              color = 'w', linewidth = 9, zorder = 9)
+
+    for i, interval in enumerate(intervals):
+        i_l, i_u = interval
+        ax.hlines(2.0 * crit, i_l, i_u, color = 'r',
+                  linewidth = 9, zorder = 10, alpha = coverage[i])
+
 # Set up plots
-fig_cmle_a, ax_cmle_a = plt.subplots()
-fig_cmle_is, ax_cmle_is = plt.subplots()
+if params['plot']:
+    fig_cmle_a, ax_cmle_a = plt.subplots()
+    fig_cmle_is, ax_cmle_is = plt.subplots()
+    cmle_a_cis = []
+    cmle_is_cis = []
 
 # For methods like Wald that can sometimes fail to produce CIs
 def safe_ci(model, name, method):
@@ -237,7 +255,7 @@ def ci_brazzale(X, v, alpha_level):
     fit_model.beta['x_0'] = None
     fit_model.fit_brazzale(arr, 'x_0', alpha_level = alpha_level)
 
-    return fit_model.conf['x_0']['brazzale']
+    return safe_ci(fit_model, 'x_0', 'brazzale')
 
 @timing
 @fresh_cache
@@ -249,8 +267,12 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
         logit_P_l = theta_l * v
         cmle_a[l] = -cond_a_nll(X, np.exp(logit_P_l))
 
-    plot_statistics(ax_cmle_a, theta_grid, cmle_a - cmle_a.max(), crit)
-    return invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
+    ci = invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
+    if params['plot']:
+        plot_statistics(ax_cmle_a, theta_grid, cmle_a - cmle_a.max(), crit)
+        cmle_a_cis.append(ci)
+        plot_coverage(ax_cmle_a, theta_grid, crit, cmle_a_cis)
+    return ci
 
 @timing
 @fresh_cache
@@ -278,8 +300,12 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
         cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
 
-    plot_statistics(ax_cmle_is, theta_grid, cmle_is - cmle_is.max(), crit)
-    return invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
+    ci = invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
+    if params['plot']:
+        plot_statistics(ax_cmle_is, theta_grid, cmle_is - cmle_is.max(), crit)
+        cmle_is_cis.append(ci)
+        plot_coverage(ax_cmle_is, theta_grid, crit, cmle_is_cis)
+    return ci
 
 @timing
 @fresh_cache
@@ -388,9 +414,10 @@ for method in results:
     print '%s:' % result['display']
     print 'Coverage probability: %.2f' % np.mean(result['in_interval'][0:R])
     print 'Median length: %.2f' % np.median(result['length'][0:R])
-    print 'Total time: %.2f sec' % result['total_time']
+    print 'Average time: %.2f sec' % (result['total_time'] / R)
     print
 
-ax_cmle_a.set_title('CMLE-A confidence intervals')
-ax_cmle_is.set_title('CMLE-IS confidence intervals')
-#plt.show()
+if params['plot']:
+    ax_cmle_a.set_title('CMLE-A confidence intervals')
+    ax_cmle_is.set_title('CMLE-IS confidence intervals')
+    plt.show()
