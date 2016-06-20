@@ -27,8 +27,8 @@ params = { 'use_gap': False,
            'file_landmarks': 'data/c_elegans_chen/NeuronFixedPoints.xls',
            'file_lineage_1': 'data/c_elegans_chen/NeuronLineage_Part1.xls',
            'file_lineage_2': 'data/c_elegans_chen/NeuronLineage_Part2.xls',
-           'n_samples': 2,
-           'n_bootstrap': 2,
+           'n_samples': 100,
+           'n_bootstrap': 100,
            'outfile': 'out.pdf' }
 
 # Import network connectivity from file
@@ -215,25 +215,6 @@ s_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
 s_model.confidence_wald(net)
 display_cis(s_model)
 
-# Offset extreme substructure after Stationary model is fit
-net.offset_extremes()
-
-print 'Fitting nonstationary model'
-ns_model = NonstationaryLogistic()
-for cov_name in cov_names:
-    ns_model.beta[cov_name] = None
-ns_model.fit(net)
-print 'NLL: %.2f' % ns_model.nll(net)
-print 'kappa: %.2f' % ns_model.kappa
-for cov_name in cov_names:
-    print '%s: %.2f' % (cov_name, ns_model.beta[cov_name])
-print
-for rep in range(params['n_samples']):
-    ns_samples[rep,:,:] = ns_model.generate(net)
-ns_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
-ns_model.confidence_wald(net)
-display_cis(ns_model)
-
 print 'Fitting conditional model'
 c_model = FixedMargins(StationaryLogistic())
 net.new_row_covariate('r', np.int)[:] = r
@@ -251,9 +232,28 @@ for rep in range(params['n_samples']):
 c_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
 c_model.confidence_wald(net)
 for cov_name in cov_names:
-    c_model.confidence_cons(net, cov_name, L = 7, test = 'score')
-    c_model.confidence_cons(net, cov_name, L = 7, test = 'lr')
+    c_model.confidence_cons(net, cov_name, L = 121, test = 'score')
+    c_model.confidence_cons(net, cov_name, L = 121, test = 'lr')
 display_cis(c_model)
+
+# Offset extreme substructure only for Nonstationary model
+net.offset_extremes()
+
+print 'Fitting nonstationary model'
+ns_model = NonstationaryLogistic()
+for cov_name in cov_names:
+    ns_model.beta[cov_name] = None
+ns_model.fit(net)
+print 'NLL: %.2f' % ns_model.nll(net)
+print 'kappa: %.2f' % ns_model.kappa
+for cov_name in cov_names:
+    print '%s: %.2f' % (cov_name, ns_model.beta[cov_name])
+print
+for rep in range(params['n_samples']):
+    ns_samples[rep,:,:] = ns_model.generate(net)
+ns_model.confidence_boot(net, n_bootstrap = params['n_bootstrap'])
+ns_model.confidence_wald(net)
+display_cis(ns_model)
 
 # Calculate sample means and variances
 s_samples_mean = np.mean(s_samples, axis = 0)
