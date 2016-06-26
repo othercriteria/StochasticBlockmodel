@@ -20,22 +20,24 @@ from Utility import logsumexp, logabsdiffexp
 
 
 # Parameters
-params = { 'case': { #'fixed_example': 'data/rasch_covariates.json',
-                     'M': 25,
-                     'N': 25,
+params = { 'case': { #'fixed_example': 'data/c_elegans_soma_dist.json',
+                     'M': 10,
+                     'N': 10,
                      'r': 1,
                      'c': 1,
-                     'kappa': -1.628,
-                     'alpha_min': -0.4,
-                     'beta_min': -0.86,
-                     'v_min': -0.6 },
+                     #'kappa': -1.628,
+                     #'alpha_min': -0.4,
+                     #'beta_min': -0.86,
+                     #'v_min': -0.6,
+                     'v_discrete': True
+                   },
            'theta': 2.0,
            'alpha_level': 0.05,
-           'n_MC_levels': [10, 50], #[10, 50, 100, 500],
-           'wopt_sort': True,
+           'n_MC_levels': [], #[10, 50, 100, 500],
+           'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 10,
-           'L': 61,
+           'n_rep': 100,
+           'L': 601,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'random_seed': 137,
@@ -64,7 +66,7 @@ def generate_data(case, theta, seed):
     seed.next()
 
     case = params['case']
-    alpha = beta = kappa = 0
+    alpha = beta = kappa = offset = 0
     conditional_sample = False
     if 'fixed_example' in case:
         # Load parameters and covariates
@@ -80,11 +82,14 @@ def generate_data(case, theta, seed):
                 beta = np.array(example['beta']).reshape((1,N))
             if 'kappa' in example:
                 kappa = example['kappa']
+            if 'offset' in example:
+                offset = example['offset']
 
             if ('r' in example) and ('c' in example):
                 conditional_sample = True
                 r = example['r']
                 c = example['c']
+
     else:
         # Generate parameters and covariates
         M, N = case['M'], case['N']
@@ -94,7 +99,10 @@ def generate_data(case, theta, seed):
             beta = np.random.uniform(size = (1,N)) + case['beta_min']
         if 'kappa' in case:
             kappa = case['kappa']
-        v = np.random.uniform(size = (M,N))
+        if case['v_discrete']:
+            v = np.random.random(size = (M,N)) < 0.5
+        else:
+            v = np.random.uniform(size = (M,N))
         if 'v_min' in case:
             v += case['v_min']
         
@@ -108,6 +116,7 @@ def generate_data(case, theta, seed):
     logit_P += alpha
     logit_P += beta
     logit_P += theta * v
+    logit_P += offset
 
     if conditional_sample:
         arr = Array(M, N)
@@ -125,7 +134,7 @@ def generate_data(case, theta, seed):
 
         # Generate data for this trial
         if conditional_sample:
-            X = data_model.generate(arr, coverage = 2)
+            X = data_model.generate(arr, coverage = 2.0)
         else:
             P = 1.0 / (1.0 + np.exp(-logit_P))
             X = np.random.random((M,N)) < P
@@ -357,12 +366,13 @@ def do_experiment(params):
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
     for method, disp in [('umle_wald', 'UMLE Wald'),
-                         ('umle_boot', 'UMLE bootstrap (pivotal)'),
+                         #('umle_boot', 'UMLE bootstrap (pivotal)'),
                          ('cmle_wald', 'CMLE Wald'),
-                         ('cmle_boot', 'CMLE bootstrap (pivotal)'),
+                         #('cmle_boot', 'CMLE bootstrap (pivotal)'),
                          ('brazzale', 'Conditional (Brazzale)'),
                          ('cmle_a', 'CMLE-A LR'),
-                         ('cmle_is', 'CMLE-IS (T = %d) LR' % T)] + \
+                         ('cmle_is', 'CMLE-IS (T = %d) LR' % T)
+                        ] + \
                         [('is_sc_c_%d' % n_MC, 'IS-score (n = %d)' % n_MC)
                          for n_MC in params['n_MC_levels']] + \
                         [('is_sc_u_%d' % n_MC, 'IS-score [un] (n = %d)' % n_MC)
@@ -397,11 +407,11 @@ def do_experiment(params):
 
         do(ci_umle_wald(X, v, alpha_level), 'umle_wald')
 
-        do(ci_umle_boot(X, v, alpha_level), 'umle_boot')
+        #do(ci_umle_boot(X, v, alpha_level), 'umle_boot')
 
         do(ci_cmle_wald(X, v, alpha_level), 'cmle_wald')
 
-        do(ci_cmle_boot(X, v, alpha_level), 'cmle_boot')
+        #do(ci_cmle_boot(X, v, alpha_level), 'cmle_boot')
 
         do(ci_brazzale(X, v, alpha_level), 'brazzale')
 
