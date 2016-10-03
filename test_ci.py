@@ -20,7 +20,7 @@ from Utility import logsumexp, logabsdiffexp
 
 
 # Parameters
-params = { 'case': { #'fixed_example': 'data/c_elegans_soma_dist.json',
+params = { 'case': { #'fixed_example': 'data/contrived.json',
                      'M': 10,
                      'N': 10,
                      'r': 1,
@@ -36,8 +36,8 @@ params = { 'case': { #'fixed_example': 'data/c_elegans_soma_dist.json',
            'n_MC_levels': [], #[10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 100,
-           'L': 601,
+           'n_rep': 5,
+           'L': 61,
            'theta_l': -6.0,
            'theta_u': 6.0,
            'random_seed': 137,
@@ -188,6 +188,7 @@ def plot_coverage(ax, coverage_data):
         
     ax.hlines(2.0 * crit, theta_grid[0], theta_grid[-1],
               color = 'w', linewidth = 9, zorder = 9)
+    ax.set_xlim(theta_grid[0], theta_grid[-1])
 
     for i, interval in enumerate(intervals):
         i_l, i_u = interval
@@ -196,12 +197,12 @@ def plot_coverage(ax, coverage_data):
 
 # Set up plots
 if params['plot']:
+    fig_umle, ax_umle = plt.subplots()
     fig_cmle_a, ax_cmle_a = plt.subplots()
     fig_cmle_is, ax_cmle_is = plt.subplots()
+    umle_coverage_data = { 'cis': [] }
     cmle_a_coverage_data = { 'cis': [] }
     cmle_is_coverage_data = { 'cis': [] }
-    cmle_a_cis = []
-    cmle_is_cis = []
 
 # For methods like Wald that can sometimes fail to produce CIs
 def safe_ci(model, name, method):
@@ -288,15 +289,37 @@ def ci_brazzale(X, v, alpha_level):
     return safe_ci(fit_model, 'x_0', 'brazzale')
 
 @timing
+def ci_umle(X, v, theta_grid, alpha_level):
+    arr = array_from_data(X, [v])
+    arr.offset_extremes()
+    alpha_zero(arr)
+
+    fit_model = NonstationaryLogistic()
+
+    umle = np.empty_like(theta_grid)
+    for l, theta_l in enumerate(theta_grid):
+        fit_model.beta['x_0'] = theta_l
+        fit_model.fit(arr, fix_beta = True)
+        umle[l] = -fit_model.nll(arr)
+
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
+    ci = invert_test(theta_grid, umle - umle.max(), crit)
+    if params['plot']:
+        plot_statistics(ax_umle, theta_grid, umle - umle.max(), crit)
+        umle_coverage_data['cis'].append(ci)
+        umle_coverage_data['theta_grid'] = theta_grid
+        umle_coverage_data['crit'] = crit
+    return ci
+
+@timing
 @fresh_cache
 def ci_cmle_a(X, v, theta_grid, alpha_level):
-    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
-
     cmle_a = np.empty_like(theta_grid)
     for l, theta_l in enumerate(theta_grid):
         logit_P_l = theta_l * v
         cmle_a[l] = -cond_a_nll(X, np.exp(logit_P_l))
 
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
     ci = invert_test(theta_grid, cmle_a - cmle_a.max(), crit)
     if params['plot']:
         plot_statistics(ax_cmle_a, theta_grid, cmle_a - cmle_a.max(), crit)
@@ -308,8 +331,6 @@ def ci_cmle_a(X, v, theta_grid, alpha_level):
 @timing
 @fresh_cache
 def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
-    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
-
     cmle_is = np.empty_like(theta_grid)
     r = X.sum(1)
     c = X.sum(0)
@@ -331,6 +352,7 @@ def ci_cmle_is(X, v, theta_grid, alpha_level, T = 100, verbose = False):
 
         cmle_is[l] = np.sum(np.log(w_l[X])) - logkappa
 
+    crit = -0.5 * chi2.ppf(1 - alpha_level, 1)
     ci = invert_test(theta_grid, cmle_is - cmle_is.max(), crit)
     if params['plot']:
         plot_statistics(ax_cmle_is, theta_grid, cmle_is - cmle_is.max(), crit)
@@ -365,11 +387,12 @@ def do_experiment(params):
     
     # Set up structure and methods for recording results
     results = { 'completed_trials': 0 }
-    for method, disp in [('umle_wald', 'UMLE Wald'),
+    for method, disp in [#('umle_wald', 'UMLE Wald'),
                          #('umle_boot', 'UMLE bootstrap (pivotal)'),
-                         ('cmle_wald', 'CMLE Wald'),
+                         #('cmle_wald', 'CMLE Wald'),
                          #('cmle_boot', 'CMLE bootstrap (pivotal)'),
-                         ('brazzale', 'Conditional (Brazzale)'),
+                         #('brazzale', 'Conditional (Brazzale)'),
+                         ('umle', 'UMLE LR'),
                          ('cmle_a', 'CMLE-A LR'),
                          ('cmle_is', 'CMLE-IS (T = %d) LR' % T)
                         ] + \
@@ -405,15 +428,17 @@ def do_experiment(params):
 
         theta_grid = np.linspace(params['theta_l'], params['theta_u'], L)
 
-        do(ci_umle_wald(X, v, alpha_level), 'umle_wald')
+        #do(ci_umle_wald(X, v, alpha_level), 'umle_wald')
 
         #do(ci_umle_boot(X, v, alpha_level), 'umle_boot')
 
-        do(ci_cmle_wald(X, v, alpha_level), 'cmle_wald')
+        #do(ci_cmle_wald(X, v, alpha_level), 'cmle_wald')
 
         #do(ci_cmle_boot(X, v, alpha_level), 'cmle_boot')
 
-        do(ci_brazzale(X, v, alpha_level), 'brazzale')
+        #do(ci_brazzale(X, v, alpha_level), 'brazzale')
+
+        do(ci_umle(X, v, theta_grid, alpha_level), 'umle')
 
         do(ci_cmle_a(X, v, theta_grid, alpha_level), 'cmle_a')
 
@@ -451,8 +476,10 @@ for method in results:
     print
 
 if params['plot']:
-    ax_cmle_a.set_title('CMLE-A confidence intervals')
-    ax_cmle_is.set_title('CMLE-IS confidence intervals')
+    ax_umle.set_title('UMLE LR test statistics and CIs')
+    ax_cmle_a.set_title('CMLE-A LR test statistics and CIs')
+    ax_cmle_is.set_title('CMLE-IS LR test statistics and CIs')
+    plot_coverage(ax_umle, umle_coverage_data)
     plot_coverage(ax_cmle_a, cmle_a_coverage_data)
     plot_coverage(ax_cmle_is, cmle_is_coverage_data)
     plt.show()
