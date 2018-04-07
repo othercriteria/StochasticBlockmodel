@@ -1,5 +1,6 @@
-# Convention for NixOS project-local virtual environment
+# Conventions for NixOS project-local virtual environment
 venv
+pip_packages
 
 .#*
 *~

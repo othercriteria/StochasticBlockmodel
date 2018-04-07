@@ -404,42 +404,42 @@ def _prune(r, c, *arrays):
 
         r_0 = (r == 0)
         if r_0.any():
-            r = r[-r_0]
+            r = r[~r_0]
             for a in xrange(A):
-                arrays[a] = arrays[a][-r_0]
-            r_unprune = r_unprune[-r_0]
+                arrays[a] = arrays[a][~r_0]
+            r_unprune = r_unprune[~r_0]
             continue
 
         r_n = (r == n)
         if r_n.any():
-            r = r[-r_n]
+            r = r[~r_n]
             unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune[r_n]
                                  for c_u in c_unprune])
             c -= np.sum(r_n)
             for a in xrange(A):
-                arrays[a] = arrays[a][-r_n]
-            r_unprune = r_unprune[-r_n]
+                arrays[a] = arrays[a][~r_n]
+            r_unprune = r_unprune[~r_n]
             continue
 
         c_0 = (c == 0)
         if c_0.any():
-            c = c[-c_0]
+            c = c[~c_0]
             for a in xrange(A):
-                arrays[a] = arrays[a][:,-c_0]
-            c_unprune = c_unprune[-c_0]
+                arrays[a] = arrays[a][:,~c_0]
+            c_unprune = c_unprune[~c_0]
             continue
 
         c_m = (c == m)
         if c_m.any():
-            c = c[-c_m]
+            c = c[~c_m]
             unprune_ones.extend([(r_u,c_u)
                                  for r_u in r_unprune
                                  for c_u in c_unprune[c_m]])
             r -= np.sum(c_m)
             for a in xrange(A):
-                arrays[a] = arrays[a][:,-c_m]
-            c_unprune = c_unprune[-c_m]
+                arrays[a] = arrays[a][:,~c_m]
+            c_unprune = c_unprune[~c_m]
             continue
 
         break

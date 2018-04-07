@@ -9,7 +9,10 @@ python27Packages.buildPythonApplication {
 		   freetype
        gmp
 		   libpng
+       pcre
 		   pkgconfig
+       R
+       readline
 		  ]) ++
     (with python27Packages;
 		 [
@@ -19,6 +22,7 @@ python27Packages.buildPythonApplication {
 
 		   jupyter
 		   matplotlib
+       networkx
 		   numpy
 		   pandas
        (scikitlearn.overridePythonAttrs (oldAttrs: { checkPhase = "true"; }))
@@ -34,6 +38,7 @@ python27Packages.buildPythonApplication {
     alias pip="PIP_PREFIX='$(pwd)/pip_packages' pip"
     export PYTHONPATH="$(pwd)/pip_packages/lib/python2.7/site-packages:$PYTHONPATH"
     export PATH="$(pwd)/pip_packages/bin:$PATH"
+    export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [ pkgs.readline ]}
     set +v
   '';
 }
