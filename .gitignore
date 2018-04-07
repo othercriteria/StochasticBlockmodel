@@ -1,3 +1,6 @@
+# Convention for NixOS project-local virtual environment
+venv
+
 .#*
 *~
 .DS_Store

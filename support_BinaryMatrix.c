@@ -43,14 +43,14 @@ void fill_G(int *r, int r_max, int m, int n,
       for(k = 0; k < r_max; ++k) {
 	Gk_num = G_ind(k,i,j);
 	Gk_den = G_ind(k+1,i,j);
-	if isinf(Gk_den) {
+	if (isinf(Gk_den)) {
 	  G_ind(k,i,j) = -1.0;
 	} else {
 	  G_ind(k,i,j) = wopt_ind(i,j) * exp(Gk_num-Gk_den) * \
 	    ((n-j-k-1.0)/(k+1.0));
 	}
       }
-      if isinf(Gk_den) {
+      if (isinf(Gk_den)) {
 	G_ind(r_max,i,j) = -1.0;
       }
     }
