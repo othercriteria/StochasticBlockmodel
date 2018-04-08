@@ -14,6 +14,9 @@ from BinaryMatrix import approximate_conditional_nll
 from BinaryMatrix import approximate_from_margins_weights
 from BinaryMatrix import log_partition_is
 from Utility import init_latex_rendering
+from Experiment import Seed
+
+seed = Seed(3)
 
 init_latex_rendering()
 
@@ -43,11 +46,11 @@ for name in theta_true:
 # Instantiate network according to data model
 data_model.match_kappa(net, ('row_sum', target_degree))
 net.generate(data_model)
-net.show_heatmap(order_by_row = 'alpha_out')
-net.show_heatmap(order_by_col = 'alpha_in')
+#net.show_heatmap(order_by_row = 'alpha_out')
+#net.show_heatmap(order_by_col = 'alpha_in')
 
 # Display network
-plt.figure(figsize = (17, 8.5))
+plt.figure(figsize = (11, 6))
 plt.subplot(241)
 plt.title('Network')
 graph = nx.DiGraph()
@@ -96,21 +99,23 @@ def grid_fit(fit_model, f_nll, profile = False, pre_offset = False):
     # plt.clabel(CS, inline = 1, fontsize = 10, fmt = '%1.1f')
     plt.xlabel(r'$\theta_2$', fontsize = 14)
     plt.ylabel(r'$\theta_1$', fontsize = 14)
+    plt.xticks(np.linspace(theta_star_1 - 2, theta_star_1 + 2, 5))
+    plt.yticks(np.linspace(theta_star_2 - 2, theta_star_2 + 2, 5))
 
     return theta_opt_1, theta_opt_2
 
 # Grid search for stationary and non-stationary fits
 plt.subplot(242)
-plt.title('Stationary')
+plt.title(r'UMLE ($\alpha = \beta = 0$)')
 grid_fit(StationaryLogistic(), lambda n, m: m.nll(n), profile = True)
 plt.subplot(243)
-plt.title('Nonstationary')
+plt.title('UMLE')
 grid_fit(NonstationaryLogistic(), lambda n, m: m.nll(n),
          profile = True, pre_offset = True)
 
 # Grid search for approximate conditional fit
 plt.subplot(244)
-plt.title('Approximate Conditional')
+plt.title('CMLE-A')
 def f_nll(n, m):
     P = m.edge_probabilities(n)
     w = P / (1.0 - P)
@@ -121,7 +126,7 @@ grid_fit(StationaryLogistic(), f_nll)
 # Grid search for importance-sampled conditional fit
 for i, T in enumerate([1, 3, 10, 30]):
     plt.subplot(2, 4, (5+i))
-    plt.title('IS Conditional (T = %d)' % T)
+    plt.title('CMLE-IS (T = %d)' % T)
 
     def f_nll(n, m):
         P = m.edge_probabilities(n)
@@ -136,9 +141,10 @@ for i, T in enumerate([1, 3, 10, 30]):
         return (logkappa - np.sum(np.log(w[A])))
     grid_fit(StationaryLogistic(), f_nll)
 
-for c in covariates:
-    plt.figure()
-    plt.scatter(net.edge_covariates[c].matrix(), net.as_dense())
+#for c in covariates:
+#    plt.figure()
+#    plt.scatter(net.edge_covariates[c].matrix(), net.as_dense())
 
 #plt.savefig('../grant/figs/simulated_data_no_wopt_sort_10.eps')
-plt.show()
+plt.tight_layout()
+plt.savefig('out.pdf')

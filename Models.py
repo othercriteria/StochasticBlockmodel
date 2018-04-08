@@ -440,11 +440,7 @@ class StationaryLogistic(Stationary):
 
     # The network is needed for its covariates, not for the observed
     # pattern of edges, etc.
-    #
-    # Typically, the inverse Fisher information matrix will be more
-    # useful (it gives a lower bound on the variances/covariances of
-    # an unbised estimator), so that is calculated by default.
-    def fisher_information(self, network, inverse = True):
+    def fisher_information(self, network, inverse = False):
         M = network.M
         N = network.N
         B = len(self.beta)
@@ -722,23 +718,27 @@ class StationaryLogistic(Stationary):
                     for b, b_n in enumerate(self.beta):
                         self.beta[b_n] = theta_opt[b]
                 else:
-                    theta_opt = opt.fmin(obj, theta)
+                    #theta_opt = opt.fmin(obj, theta)
                     res = opt.minimize(obj, theta, method = 'L-BFGS-B',
-                                       bounds = [(-10, 10)] * B)
+                                       bounds = [(-10.0, 10.0)] * B)
 
                     for b, b_n in enumerate(self.beta):
                         self.beta[b_n] = res.x[b]
 
-                    h_inv = res.hess_inv.todense()
+                    hess_inv = res.hess_inv.todense()
+                    hess = inv(hess_inv)
                     self.hess_inv = {}
+                    self.hess = {}
                     names = ['theta_{%s}' % b for b in self.beta]
                     for i in range(B):
                         for j in range(B):
                             if i == j:
-                                self.hess_inv[names[i]] = h_inv[i,i]
+                                self.hess_inv[names[i]] = hess_inv[i,i]
+                                self.hess[names[i]] = hess[i,i]
                             else:
                                 ij_name = (names[i],names[j])
-                                self.hess_inv[ij_name] = h_inv[i,j]
+                                self.hess_inv[ij_name] = hess_inv[i,j]
+                                self.hess[ij_name] = hess[i,j]
 
         self.fit_info['wall_time'] = time() - start_time
         
@@ -1174,21 +1174,29 @@ class StationaryLogistic(Stationary):
                 for s, p_2 in enumerate(parameters):
                     self.variance_covariance[(p_1,p_2)] = S_N[r,s]
 
-    def confidence_wald(self, network, alpha_level = 0.05, **fit_options):
+    def confidence_wald(self, network, alpha_level = 0.05, strict = True,
+                        **fit_options):
         self.fit(network, **fit_options)
-        self.fisher_information(network, inverse = True)
+        self.fisher_information(network, inverse = (not strict))
+        method = strict and 'wald' or 'wald_inverse'
 
         z_score = norm().ppf(1.0 - alpha_level / 2.0)
-        if 'kappa' in self.I_inv:
-            I_inv_kappa = self.I_inv['kappa']
-            self.conf['kappa']['wald'] = \
+        if 'kappa' in self.I:
+            if strict:
+                I_inv_kappa = 1.0 / self.I['kappa']
+            else:
+                I_inv_kappa = self.I_inv['kappa']
+            self.conf['kappa'][method] = \
                 (self.kappa - z_score * np.sqrt(I_inv_kappa),
                  self.kappa + z_score * np.sqrt(I_inv_kappa))
         for b in self.beta:
             b_name = 'theta_{%s}' % b
-            if b_name in self.I_inv:
-                I_inv_b = self.I_inv[b_name]
-                self.conf[b]['wald'] = \
+            if b_name in self.I:
+                if strict:
+                    I_inv_b = 1.0 / self.I['kappa']
+                else:
+                    I_inv_b = self.I_inv[b_name]
+                self.conf[b][method] = \
                     (self.beta[b] - z_score * np.sqrt(I_inv_b),
                      self.beta[b] + z_score * np.sqrt(I_inv_b))
 
@@ -1238,7 +1246,7 @@ class StationaryLogistic(Stationary):
     # Confidence Intervals using Importance Sampling" (Harrison, 2012).
     def confidence_cons(self, network, b, alpha_level = 0.05, n_MC = 100,
                         L = 601, beta_l_min = -6.0, beta_l_max = 6.0,
-                        test = 'score', verbose = False):
+                        test = 'score', corrected = True, verbose = False):
         M = network.M
         N = network.N
         A = network.as_dense()
@@ -1279,6 +1287,7 @@ class StationaryLogistic(Stationary):
 
         (l, u) = ci_conservative_generic(A, n_MC, theta_grid, alpha_level,
                                          x, log_likelihood, sample, t,
+                                         corrected = corrected,
                                          two_sided = two_sided,
                                          verbose = verbose)
 
@@ -1961,15 +1970,20 @@ class FixedMargins(IndependentBernoulli):
     def edge_probabilities(self, network, **opts):
         return self.base_model.edge_probabilities(network, **opts)
 
-    def confidence_wald(self, network, alpha_level = 0.05, **fit_options):
+    def confidence_wald(self, network, alpha_level = 0.05, strict = True,
+                        **fit_options):
         self.fit(network, **fit_options)
+        method = strict and 'wald' or 'wald_inverse'
 
         z_score = norm().ppf(1.0 - alpha_level / 2.0)
         for b in self.base_model.beta:
             b_name = 'theta_{%s}' % b
-            if b_name in self.base_model.hess_inv:
-                I_inv_b = self.base_model.hess_inv[b_name]
-                self.conf[b]['wald'] = \
+            if b_name in self.base_model.hess:
+                if strict:
+                    I_inv_b = 1.0 / self.base_model.hess[b_name]
+                else:
+                    I_inv_b = self.base_model.hess_inv[b_name]
+                self.conf[b][method] = \
                     (self.base_model.beta[b] - z_score * np.sqrt(I_inv_b),
                      self.base_model.beta[b] + z_score * np.sqrt(I_inv_b))
 

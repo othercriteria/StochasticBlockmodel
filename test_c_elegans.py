@@ -3,6 +3,8 @@
 # Application of network inference to C. elegans connectome
 # Daniel Klein, 4/10/2013
 
+import json
+
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -63,7 +65,7 @@ print '# Nodes: %d' % len(nodes)
 net = network_from_edges(edges)
 net.initialize_offset()
 for i in range(net.N):
-    net.offset[i,i] = -np.inf
+    net.offset[i,i] = -10.0
 A = net.as_dense()
 r = A.sum(1)
 c = A.sum(0)
@@ -222,7 +224,7 @@ net.new_col_covariate('c', np.int)[:] = c
 c_model.fit = c_model.base_model.fit_conditional
 for cov_name in cov_names:
     c_model.base_model.beta[cov_name] = None
-c_model.fit(net)
+c_model.fit(net, verbose = True)
 print 'NLL: %.2f' % c_model.nll(net)
 for cov_name in cov_names:
     print '%s: %.2f' % (cov_name, c_model.base_model.beta[cov_name])

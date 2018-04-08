@@ -20,29 +20,32 @@ from Utility import logsumexp, logabsdiffexp
 
 
 # Parameters
-params = { 'case': { #'fixed_example': 'data/contrived.json',
-                     'M': 10,
-                     'N': 10,
-                     'r': 1,
-                     'c': 1,
-                     #'kappa': -1.628,
-                     #'alpha_min': -0.4,
-                     #'beta_min': -0.86,
-                     #'v_min': -0.6,
-                     'v_discrete': True
+params = { 'case': { 'fixed_example': 'data/c_elegans_full_soma_dist.json',
+                     #'M': 20,
+                     #'N': 10,
+                     #'r': 1,
+                     #'c': 1,
+                     #'kappa': -3.0,
+                     #'alpha_min': 0.0,
+                     #'beta_min': 0.0,
+                     #'v_scale': 0.25,
+                     #'v_loc': -np.sqrt(3),
+                     #'v_discrete': False,
+                     #'v_uniform': False,
+                     #'v_normal': True
                    },
-           'theta': 2.0,
+           'theta': -1.0, #-2.24,
            'alpha_level': 0.05,
-           'n_MC_levels': [], #[10, 50, 100, 500],
+           'n_MC_levels': [10], #[10, 50, 100, 500],
            'wopt_sort': False,
            'is_T': 50,
-           'n_rep': 5,
-           'L': 61,
-           'theta_l': -6.0,
-           'theta_u': 6.0,
+           'n_rep': 100,
+           'L': 201,
+           'theta_l': -2.0,
+           'theta_u': 0.0,
            'random_seed': 137,
            'verbose': True,
-           'plot': True,
+           'plot': False,
            'clear_cache': False }
 
 terminated = False
@@ -100,11 +103,15 @@ def generate_data(case, theta, seed):
         if 'kappa' in case:
             kappa = case['kappa']
         if case['v_discrete']:
-            v = np.random.random(size = (M,N)) < 0.5
-        else:
+            v = np.sign(np.random.random(size = (M,N)) - 0.5) 
+        elif case['v_uniform']:
             v = np.random.uniform(size = (M,N))
-        if 'v_min' in case:
-            v += case['v_min']
+        elif case['v_normal']:
+            v = np.random.normal(size = (M,N))
+        if 'v_scale' in case:
+            v *= case['v_scale']
+        if 'v_loc' in case:
+            v += case['v_loc']
         
         if ('r' in case) and ('c' in case):
             conditional_sample = True
@@ -134,7 +141,7 @@ def generate_data(case, theta, seed):
 
         # Generate data for this trial
         if conditional_sample:
-            X = data_model.generate(arr, coverage = 2.0)
+            X = data_model.generate(arr, coverage = 100.0)
         else:
             P = 1.0 / (1.0 + np.exp(-logit_P))
             X = np.random.random((M,N)) < P
@@ -172,6 +179,10 @@ def plot_statistics(ax, theta_grid, test_val, crit):
     ax.set_ylim(2.0 * crit, 0)
 
 def plot_coverage(ax, coverage_data):
+    if not (('theta_grid' in coverage_data) and
+            ('crit' in coverage_data)):
+        return
+
     theta_grid = coverage_data['theta_grid']
     crit = coverage_data['crit']
     cis = coverage_data['cis']
@@ -197,9 +208,9 @@ def plot_coverage(ax, coverage_data):
 
 # Set up plots
 if params['plot']:
-    fig_umle, ax_umle = plt.subplots()
-    fig_cmle_a, ax_cmle_a = plt.subplots()
-    fig_cmle_is, ax_cmle_is = plt.subplots()
+    fig_umle, ax_umle = plt.subplots(figsize = (6.0, 3.0))
+    fig_cmle_a, ax_cmle_a = plt.subplots(figsize = (6.0, 3.0))
+    fig_cmle_is, ax_cmle_is = plt.subplots(figsize = (6.0, 3.0))
     umle_coverage_data = { 'cis': [] }
     cmle_a_coverage_data = { 'cis': [] }
     cmle_is_coverage_data = { 'cis': [] }
@@ -220,9 +231,9 @@ def ci_umle_wald(X, v, alpha_level):
 
     fit_model = NonstationaryLogistic()
     fit_model.beta['x_0'] = None
-    fit_model.confidence_wald(arr, alpha_level = alpha_level)
+    fit_model.confidence_wald(arr, strict = False, alpha_level = alpha_level)
 
-    return safe_ci(fit_model, 'x_0', 'wald')
+    return safe_ci(fit_model, 'x_0', 'wald_inverse')
 
 @timing
 def ci_umle_boot(X, v, alpha_level):
@@ -370,7 +381,8 @@ def ci_cons(X, v, alpha_level, L, theta_l, theta_u,
     fit_model = StationaryLogistic()
     fit_model.beta['x_0'] = None
     fit_model.confidence_cons(arr, 'x_0', alpha_level, K,
-                              L, theta_l, theta_u, test, verbose)
+                              L, theta_l, theta_u, test, corrected,
+                              verbose)
 
     method = 'conservative-%s' % test
     return fit_model.conf['x_0'][method]
@@ -392,18 +404,18 @@ def do_experiment(params):
                          #('cmle_wald', 'CMLE Wald'),
                          #('cmle_boot', 'CMLE bootstrap (pivotal)'),
                          #('brazzale', 'Conditional (Brazzale)'),
-                         ('umle', 'UMLE LR'),
-                         ('cmle_a', 'CMLE-A LR'),
-                         ('cmle_is', 'CMLE-IS (T = %d) LR' % T)
+                         #('umle', 'UMLE LR'),
+                         #('cmle_a', 'CMLE-A LR'),
+                         #('cmle_is', 'CMLE-IS (T = %d) LR' % T)
                         ] + \
                         [('is_sc_c_%d' % n_MC, 'IS-score (n = %d)' % n_MC)
                          for n_MC in params['n_MC_levels']] + \
-                        [('is_sc_u_%d' % n_MC, 'IS-score [un] (n = %d)' % n_MC)
-                         for n_MC in params['n_MC_levels']] + \
                         [('is_lr_c_%d' % n_MC, 'IS-LR (n = %d)' % n_MC)
-                         for n_MC in params['n_MC_levels']] + \
-                        [('is_lr_u_%d' % n_MC, 'IS-LR [un] (n = %d)' % n_MC)
                          for n_MC in params['n_MC_levels']]:
+                        #[('is_sc_u_%d' % n_MC, 'IS-score [un] (n = %d)' % n_MC)
+                        # for n_MC in params['n_MC_levels']] + \
+                        #[('is_lr_u_%d' % n_MC, 'IS-LR [un] (n = %d)' % n_MC)
+                        # for n_MC in params['n_MC_levels']] + \
         results[method] = { 'display': disp,
                             'in_interval': [],
                             'length': [],
@@ -438,15 +450,15 @@ def do_experiment(params):
 
         #do(ci_brazzale(X, v, alpha_level), 'brazzale')
 
-        do(ci_umle(X, v, theta_grid, alpha_level), 'umle')
+        #do(ci_umle(X, v, theta_grid, alpha_level), 'umle')
 
-        do(ci_cmle_a(X, v, theta_grid, alpha_level), 'cmle_a')
+        #do(ci_cmle_a(X, v, theta_grid, alpha_level), 'cmle_a')
 
-        do(ci_cmle_is(X, v, theta_grid, alpha_level, T, verbose), 'cmle_is')
+        #do(ci_cmle_is(X, v, theta_grid, alpha_level, T, verbose), 'cmle_is')
 
         for n_MC in params['n_MC_levels']:
             for test in ['lr', 'score']:
-                for corrected_str, corrected in [('c', True), ('u', False)]:
+                for corrected_str, corrected in [('c', True)]: #, ('u', False)]:
                     do(ci_cons(X, v, alpha_level, params['L'],
                                params['theta_l'], params['theta_u'],
                                n_MC, test = test, corrected = corrected,
@@ -477,9 +489,13 @@ for method in results:
 
 if params['plot']:
     ax_umle.set_title('UMLE LR test statistics and CIs')
-    ax_cmle_a.set_title('CMLE-A LR test statistics and CIs')
-    ax_cmle_is.set_title('CMLE-IS LR test statistics and CIs')
     plot_coverage(ax_umle, umle_coverage_data)
+    fig_umle.savefig('lr_ci_umle.pdf')
+
+    ax_cmle_a.set_title('CMLE-A LR test statistics and CIs')
     plot_coverage(ax_cmle_a, cmle_a_coverage_data)
+    fig_cmle_a.savefig('lr_ci_cmle_a.pdf')
+
+    ax_cmle_is.set_title('CMLE-IS LR test statistics and CIs')
     plot_coverage(ax_cmle_is, cmle_is_coverage_data)
-    plt.show()
+    fig_cmle_is.savefig('lr_ci_cmle_is.pdf')

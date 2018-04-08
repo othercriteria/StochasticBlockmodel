@@ -12,12 +12,15 @@ from Models import StationaryLogistic, NonstationaryLogistic
 from Models import FixedMargins, alpha_norm
 from BinaryMatrix import approximate_conditional_nll
 from Utility import init_latex_rendering
+from Experiment import Seed
+
+seed = Seed(3)
 
 init_latex_rendering()
 
 # Parameters
-N = 20
-G = 30
+N = 25
+G = 20
 alpha_sd = 2.0
 theta_true = { 'x_1': 2.0, 'x_2': -1.0 }
 target_degree = 2
@@ -41,11 +44,11 @@ for name in theta_true:
 # Instantiate network according to data model
 data_model.match_kappa(net, ('row_sum', target_degree))
 net.generate(data_model)
-net.show_heatmap(order_by_row = 'alpha_out')
-net.show_heatmap(order_by_col = 'alpha_in')
+#net.show_heatmap(order_by_row = 'alpha_out')
+#net.show_heatmap(order_by_col = 'alpha_in')
 
 # Display network
-plt.figure(figsize = (17, 4.25))
+plt.figure(figsize = (11, 3.2))
 plt.subplot(141)
 plt.title('Network')
 graph = nx.DiGraph()
@@ -93,21 +96,23 @@ def grid_fit(fit_model, f_nll, profile = False, pre_offset = False):
     # plt.clabel(CS, inline = 1, fontsize = 10, fmt = '%1.1f')
     plt.xlabel(r'$\theta_2$', fontsize = 14)
     plt.ylabel(r'$\theta_1$', fontsize = 14)
+    plt.xticks(np.linspace(theta_star_1 - 2, theta_star_1 + 2, 5))
+    plt.yticks(np.linspace(theta_star_2 - 2, theta_star_2 + 2, 5))
 
     return theta_opt_1, theta_opt_2
 
 # Grid search for stationary and non-stationary fits
 plt.subplot(142)
-plt.title('Stationary')
+plt.title('Ignore heterogeneity')
 grid_fit(StationaryLogistic(), lambda n, m: m.nll(n), profile = True)
 plt.subplot(143)
-plt.title('Nonstationary')
+plt.title('Ignore incidental\nparameter problem')
 grid_fit(NonstationaryLogistic(), lambda n, m: m.nll(n),
          profile = True, pre_offset = True)
 
 # Grid search for conditional fit
 plt.subplot(144)
-plt.title('Conditional')
+plt.title('Account for both')
 def f_nll(n, m):
     P = m.edge_probabilities(n)
     w = P / (1.0 - P)
@@ -115,10 +120,11 @@ def f_nll(n, m):
     return approximate_conditional_nll(A, w)
 grid_fit(StationaryLogistic(), f_nll)
 
-for c in covariates:
-    plt.figure()
-    plt.scatter(net.edge_covariates[c].matrix(), net.as_dense())
-    plt.show()
+# for c in covariates:
+#     plt.figure()
+#     plt.scatter(net.edge_covariates[c].matrix(), net.as_dense())
+#     plt.show()
 
 #plt.savefig('../grant/figs/simulated_data_no_wopt_sort_10.eps')
-plt.show()
+plt.tight_layout()
+plt.savefig('out.pdf')
