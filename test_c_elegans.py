@@ -179,7 +179,7 @@ ax.set_title('Observed connectome network')
 graph = nx.DiGraph()
 for n1, n2 in edges:
     graph.add_edge(n1, n2)
-pos = nx.graphviz_layout(graph, prog = 'fdp')
+pos = nx.nx_pydot.graphviz_layout(graph, prog = 'fdp')
 nx.draw(graph, pos, ax = ax, node_size = 50, with_labels = False)
 plt.show()
 

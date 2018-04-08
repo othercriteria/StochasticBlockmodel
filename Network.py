@@ -74,8 +74,9 @@ class Network(Array):
 
         for n_i, n_j in self.edges():
             graph.add_edge(n_i, n_j)
-        
-        nx.draw_graphviz(graph)
+
+        pos = nx.nx_pydot.graphviz_layout(graph, prog = 'neato')
+        nx.draw(graph, pos)
         plt.show()
 
     def show_graphviz(self, file = 'out.pdf', splines = True, labels = True):

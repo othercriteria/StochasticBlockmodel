@@ -99,7 +99,7 @@ plt.title('Network')
 graph = nx.DiGraph()
 for n1, n2 in edges:
     graph.add_edge(n1, n2)
-pos = nx.graphviz_layout(graph, prog = 'neato')
+pos = nx.nx_pydot.graphviz_layout(graph, prog = 'neato')
 nx.draw(graph, pos, node_size = 10, with_labels = False)
 
 print 'Fitting stationary model'

@@ -61,7 +61,7 @@ for i in range(N):
     for j in range(N):
         if A[i,j]:
             graph.add_edge(i,j)
-pos = nx.graphviz_layout(graph, prog = 'neato')
+pos = nx.nx_pydot.graphviz_layout(graph, prog = 'neato')
 nx.draw(graph, pos, node_size = 60, with_labels = False)
 
 def grid_fit(fit_model, f_nll, profile = False, pre_offset = False):

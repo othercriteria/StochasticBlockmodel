@@ -8,6 +8,7 @@ python27Packages.buildPythonApplication {
      [
 		   freetype
        gmp
+       graphviz
 		   libpng
        pcre
 		   pkgconfig
@@ -20,11 +21,15 @@ python27Packages.buildPythonApplication {
 		   setuptools
 		   virtualenv
 
+       ipython
 		   jupyter
+
+       graphviz
 		   matplotlib
        networkx
 		   numpy
 		   pandas
+       pydot
        (scikitlearn.overridePythonAttrs (oldAttrs: { checkPhase = "true"; }))
 		   scipy
 		   seaborn
