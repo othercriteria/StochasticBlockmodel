@@ -1100,7 +1100,7 @@ if __name__ == '__main__':
 
     # Test of "rc" balancing
     m = np.random.normal(10, 1, size = (6,5))
-    r, c = np.ones((6,1)), np.ones((1,5))
+    r, c = np.ones(6), np.ones(5)
     c[0] = 2
     a, b = canonical_scalings(m, r, c)
     m_canonical = apply_scale(m, a, b)

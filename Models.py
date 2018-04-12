@@ -874,12 +874,14 @@ class StationaryLogistic(Stationary):
                 if verbose:
                     print robjects.r('dat.cond.summ')
                 theta_opt = robjects.r('dat.cond.summ$coefficients[2,1]')[0]
+                # "Modified likelihood root (cont. corr.)"
                 theta_ci_l = robjects.r('dat.cond.summ$conf.int[1,5]')[0]
                 theta_ci_u = robjects.r('dat.cond.summ$conf.int[3,5]')[0]
                 self.beta[target_n] = theta_opt
                 self.conf[target_n]['brazzale'] = (theta_ci_l, theta_ci_u)
             except:
                 self.beta[target_n] = 0.0
+                self.conf[target_n]['brazzale'] = (0.0, 0.0)
 
         self.fit_convex_opt(network, fix_beta = True)
 
